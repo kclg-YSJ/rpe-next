@@ -2,12 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { WebSocket, WebSocketServer } from 'ws';
 import { startCollaborationServer } from '../server.mjs';
-import { createChart, createNote } from '../../src/core/chart.mjs';
-import { identifyChart, chartChanges, COLLAB_ID } from '../../src/core/collaboration.mjs';
-import { CollaborationTransport } from '../../src/platform/collaboration-transport.mjs';
-import { CollaborationClient } from '../../src/application/collaboration-client.mjs';
-import { EditorSession } from '../../src/application/session.mjs';
-import { CollaborationMessageReader } from '../../src/core/collaboration-wire.mjs';
+import { createChart, createNote } from '../../src/core/chart.ts';
+import { identifyChart, chartChanges, COLLAB_ID } from '../../src/core/collaboration.ts';
+import { CollaborationTransport } from '../../src/platform/collaboration-transport.ts';
+import { CollaborationClient } from '../../src/application/collaboration-client.ts';
+import { EditorSession } from '../../src/application/session.ts';
+import { CollaborationMessageReader } from '../../src/core/collaboration-wire.ts';
 
 async function peer(port) {
   const socket = new WebSocket(`ws://127.0.0.1:${port}/collab`); const inbox = []; const waiters = [];

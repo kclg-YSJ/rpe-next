@@ -2,9 +2,9 @@ import { createServer } from 'node:http';
 import { createHmac, randomBytes } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { WebSocketServer, WebSocket } from 'ws';
-import { applyChanges, changeResources, cleanProfile, COLLAB_ID, COLLAB_PROTOCOL, validateData, validateIdentities, validateNewEventOverlaps } from '../src/core/collaboration.mjs';
-import { assertChart } from '../src/core/chart.mjs';
-import { CollaborationMessageReader, CollaborationMessageSender, CollaborationSyncDeadline } from '../src/core/collaboration-wire.mjs';
+import { applyChanges, changeResources, cleanProfile, COLLAB_ID, COLLAB_PROTOCOL, validateData, validateIdentities, validateNewEventOverlaps } from '../src/core/collaboration.ts';
+import { assertChart } from '../src/core/chart.ts';
+import { CollaborationMessageReader, CollaborationMessageSender, CollaborationSyncDeadline } from '../src/core/collaboration-wire.ts';
 import { CollaborationAssetStore } from './asset-store.mjs';
 
 const token = () => randomBytes(24).toString('base64url');

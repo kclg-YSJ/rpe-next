@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import { randomBytes, createHash } from 'node:crypto';
 import { createServer, request as httpRequest } from 'node:http';
 import { startCollaborationServer } from '../server.mjs';
-import { createChart } from '../../src/core/chart.mjs';
-import { EditorSession } from '../../src/application/session.mjs';
-import { CollaborationClient } from '../../src/application/collaboration-client.mjs';
-import { CollaborationTransport } from '../../src/platform/collaboration-transport.mjs';
+import { createChart } from '../../src/core/chart.ts';
+import { EditorSession } from '../../src/application/session.ts';
+import { CollaborationClient } from '../../src/application/collaboration-client.ts';
+import { CollaborationTransport } from '../../src/platform/collaboration-transport.ts';
 
 const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 async function until(predicate) {

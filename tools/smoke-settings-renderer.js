@@ -1,14 +1,14 @@
-(async () => {
+﻿(async () => {
   const check = (value, message) => { if (!value) throw new Error(message); };
   const waitFor = async predicate => {
     for (let attempt = 0; attempt < 100; attempt++) { if (await predicate()) return; await new Promise(resolve => setTimeout(resolve, 50)); }
     throw new Error('设置测试等待超时');
   };
-  const { showHotkeySettings } = await import('/src/ui/hotkey-settings.mjs');
-  const { migratePreferences, shortcutAction } = await import('/src/core/preferences.mjs');
-  const library = await import('/src/platform/library.mjs');
-  const { createChart } = await import('/src/core/chart.mjs');
-  const { readEditorPreferences } = await import('/src/platform/editor-preferences.mjs');
+  const { showHotkeySettings } = await import('/src/ui/hotkey-settings.ts');
+  const { migratePreferences, shortcutAction } = await import('/src/core/preferences.ts');
+  const library = await import('/src/platform/library.ts');
+  const { createChart } = await import('/src/core/chart.ts');
+  const { readEditorPreferences } = await import('/src/platform/editor-preferences.ts');
   const previousPreferences = await library.readPreferences();
   const previousEditor = localStorage.getItem('rpe-next-editor-v1');
   const modal = document.querySelector('#modal');

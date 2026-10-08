@@ -1,0 +1,32 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    // `types` is an explicit allow-list, so every ambient package the project relies on must be
+    // named here: `vite/client` supplies `import.meta.env`, and `node` supplies the test runner and
+    // `assert` modules that the suite imports.
+    "types": ["vite/client", "node"],
+
+    // Node runs the test suite by stripping types rather than compiling, and it refuses syntax
+    // that needs real code generation. `erasableSyntaxOnly` makes tsc reject the same constructs
+    // (enums, parameter properties, namespaces) at type-check time, so a construct that passes
+    // `npm run typecheck` is guaranteed to still run under `npm test`.
+    "erasableSyntaxOnly": true,
+    // Sources and tests import each other with explicit `.ts` extensions, which is what Node's
+    // resolver requires at runtime; this keeps `tsc` in agreement with it.
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+
+    "strict": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "jsx": "preserve"
+  },
+  "include": ["src/**/*.ts", "src/**/*.vue", "test/**/*.ts", "tools/**/*.ts", "*.ts"]
+}
