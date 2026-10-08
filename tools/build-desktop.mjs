@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
+import { build } from 'vite';
 
 if (process.platform !== 'win32' || process.arch !== 'x64') throw new Error('当前打包脚本需要在 Windows x64 上运行。');
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -11,14 +12,28 @@ const runtime = dirname(require('electron'));
 const metadata = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
 const stamp = new Date().toISOString().replace(/[-:]/g, '').slice(0, 15).replace('T', '-');
 const output = join(root, 'release', `rpe-next-${metadata.version}-win-x64-${stamp}`);
+
+// The desktop shell serves the Vite build verbatim, so rebuild it here rather than packaging a
+// stale dist/ from an earlier run. Going through Vite's JS API keeps this identical under node and
+// bun, with no dependency on how the CLI happens to be launched.
+await build({ root });
+
 await mkdir(output, { recursive: true });
 await cp(runtime, output, { recursive: true, filter: path => !path.endsWith('default_app.asar') });
 await rename(join(output, 'electron.exe'), join(output, 'RePhiEdit-Next.exe'));
 const application = join(output, 'resources', 'app');
-for (const name of ['desktop', 'src/core', 'src/application', 'src/platform', 'src/ui', 'assets', 'index.html', 'styles.css', 'LICENSE', 'NOTICE']) {
-  await mkdir(dirname(join(application, name)), { recursive: true });
-  await cp(join(root, name), join(application, name), { recursive: true });
-}
+await mkdir(application, { recursive: true });
+// desktop/main.cjs serves resources/app itself as the site root, so the Vite output has to land
+// directly there — packaging it under a nested dist/ would 404 every request.
+await cp(join(root, 'dist'), application, { recursive: true });
+await cp(join(root, 'desktop'), join(application, 'desktop'), { recursive: true });
+// `desktop/main.cjs` builds its Content-Security-Policy with `collaborationConnectSources`, which it
+// imports from the source tree. The Vite output carries no source tree of its own, so that one
+// dependency-free module is copied in at the path the shell resolves it from. Everything else the
+// renderer needs is already bundled into dist/.
+const policy = join(application, 'src', 'core');
+await mkdir(policy, { recursive: true });
+await cp(join(root, 'src', 'core', 'collaboration-policy.mjs'), join(policy, 'collaboration-policy.mjs'));
 await writeFile(join(application, 'package.json'), JSON.stringify({
   name: metadata.name, version: metadata.version, author: metadata.author, license: metadata.license,
   description: metadata.description, main: 'desktop/main.cjs'

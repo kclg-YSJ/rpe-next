@@ -1,0 +1,2 @@
+# Windows batch launchers must keep CRLF endings to run reliably under cmd.exe.
+*.cmd text eol=crlf

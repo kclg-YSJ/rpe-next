@@ -8,13 +8,18 @@
   "license": "PolyForm-Noncommercial-1.0.0",
   "homepage": "https://kclg-ysj.github.io/rpe-next/",
   "repository": { "type": "git", "url": "https://github.com/kclg-YSJ/rpe-next.git" },
-  "engines": { "node": ">=22" },
+  "engines": { "node": ">=22.12" },
   "scripts": {
-    "start": "node tools/serve.mjs --open",
+    "start": "vite --open",
+    "dev": "vite",
+    "build": "vite build",
+    "build:pages": "vite build --mode pages",
+    "preview": "vite preview",
+    "test": "node --test test/*.test.mjs",
+    "smoke-build": "node tools/smoke-build.mjs",
+    "smoke-pages": "node tools/smoke-pages.mjs",
     "copy-assets": "node tools/copy-rpe-assets.mjs",
     "generate-easings": "node tools/generate-easings.mjs",
-    "serve": "node tools/serve.mjs",
-    "test": "node --test test/*.test.mjs",
     "test:collaboration-server": "npm --prefix collaboration-server test",
     "build:collaboration-server": "node tools/build-collaboration-server.mjs",
     "benchmark": "node tools/benchmark.mjs",
@@ -24,11 +29,8 @@
     "legacy-audit": "node tools/legacy-audit.mjs",
     "migration-audit": "node tools/migration-audit.mjs",
     "scene-audit": "node tools/scene-audit.mjs",
-    "build": "node tools/build.mjs",
-    "build:pages": "node tools/build.mjs --pages",
     "build:desktop": "node tools/build-desktop.mjs",
-    "desktop": "electron desktop/main.cjs",
-    "smoke-build": "node tools/smoke-build.mjs"
+    "desktop": "vite build && electron desktop/main.cjs --dist"
   },
-  "devDependencies": { "electron": "44.5.1" }
+  "devDependencies": { "electron": "44.5.1", "vite": "^8.3.3" }
 }

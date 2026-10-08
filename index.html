@@ -1,9 +1,9 @@
 <!doctype html>
 <html lang="zh-CN">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Re:PhiEdit Next</title><link rel="stylesheet" href="./styles.css"></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Re:PhiEdit Next</title><link rel="stylesheet" href="/styles.css"></head>
 <body>
   <header>
-    <div class="brand"><img src="./assets/rpe/icons/rpelogo.png" alt="RPE"><span>Re:PhiEdit <small>NEXT</small></span></div>
+    <div class="brand"><img src="/assets/rpe/icons/rpelogo.png" alt="RPE"><span>Re:PhiEdit <small>NEXT</small></span></div>
     <div id="document-name">未命名谱面</div>
     <nav aria-label="文件">
       <button id="new">新建</button><button id="open" data-icon="folder">打开 JSON / PEZ</button>
@@ -24,7 +24,7 @@
     <main class="editor panel">
       <div class="editor-toolbar">
         <button id="toolbar-mode" type="button" title="切换工具栏显示模式" aria-label="切换工具栏显示模式">☷</button>
-        <div class="tools" aria-label="音符工具"><button data-tool="0" class="active">选择</button><button data-tool="1"><img src="./assets/rpe/Texture/Tap2.png" alt="">Tap</button><button data-tool="4"><img src="./assets/rpe/Texture/Drag2.png" alt="">Drag</button><button data-tool="3"><img src="./assets/rpe/Texture/Flick2.png" alt="">Flick</button><button data-tool="2"><img src="./assets/rpe/Texture/HoldHead.png" alt="">Hold</button></div>
+        <div class="tools" aria-label="音符工具"><button data-tool="0" class="active">选择</button><button data-tool="1"><img src="/assets/rpe/Texture/Tap2.png" alt="">Tap</button><button data-tool="4"><img src="/assets/rpe/Texture/Drag2.png" alt="">Drag</button><button data-tool="3"><img src="/assets/rpe/Texture/Flick2.png" alt="">Flick</button><button data-tool="2"><img src="/assets/rpe/Texture/HoldHead.png" alt="">Hold</button></div>
         <div class="view-buttons"><button id="notes-only" data-icon="switch" aria-pressed="false" title="切换音符与事件布局 · Alt+N"></button><button id="game-ui" data-icon="layout" aria-pressed="false" title="在实时预览中显示游戏 UI"></button></div>
         <label>横线 <input id="division" aria-label="横线每拍分格" type="number" min="1" max="100" value="4"></label>
         <label>竖线 <input id="grid-count" aria-label="竖线数量" type="number" min="2" max="100" step="any" value="11"></label>
@@ -36,7 +36,7 @@
         <label title="原版 ViewScaled：值越大，可见范围越广"><span>缩放</span><input id="view-divisor" type="number" min="0.1" max="100" step="0.1" value="1" aria-label="实时预览尺度"></label>
         <button id="reset-camera" data-icon="return" title="重置视区"></button>
       </div>
-        <label class="y-scale-control">Y 缩放 <input id="y-scale" aria-label="Y 轴缩放" title="绝对像素/秒" type="number" min="20" max="2000" step="1" value="500"></label><input id="y-scale-slider" class="y-scale-control" aria-label="Y 轴缩放滑条" type="range" min="20" max="2000" step="1" value="500"><button id="mute-current-line" type="button" class="toolbar-mute" aria-pressed="false" title="仅当前判定线播放打击音效"><img src="./assets/rpe/Texture/icon/mute.png" alt="静音"></button>
+        <label class="y-scale-control">Y 缩放 <input id="y-scale" aria-label="Y 轴缩放" title="绝对像素/秒" type="number" min="20" max="2000" step="1" value="500"></label><input id="y-scale-slider" class="y-scale-control" aria-label="Y 轴缩放滑条" type="range" min="20" max="2000" step="1" value="500"><button id="mute-current-line" type="button" class="toolbar-mute" aria-pressed="false" title="仅当前判定线播放打击音效"><img src="/assets/rpe/Texture/icon/mute.png" alt="静音"></button>
       </div>
       <div class="timeline-head"><span>音符 <small id="note-count">0 notes</small><output id="cursor-position"></output><span id="line-group-label" class="line-group-label" aria-live="polite"></span></span><span>事件 <span id="layer" class="layer-buttons" aria-label="事件层"></span></span><span class="multi-line-head-controls"><button id="multi-line-toggle" title="开启多线并打开右侧页面">多线</button><button id="multi-line-prev-add" title="加入最小线号的上一条">◀＋</button><button id="multi-line-prev-remove" title="移除最小线号">◀−</button><button id="multi-line-next-remove" title="移除最大线号">−▶</button><button id="multi-line-next-add" title="加入最大线号的下一条">＋▶</button><button id="multi-line-merge" title="合并多线音符视图">合并</button><button id="multi-line-open" title="打开多线编辑页面">☷ <small id="multi-line-count">0</small></button></span></div>
       <div class="stage">
@@ -73,14 +73,14 @@
     </aside>
   </div>
   <section id="home" aria-label="开始与谱面管理">
-    <div class="home-heading"><div><img src="./assets/rpe/icons/rpelogo.png" alt=""><h1>Re:PhiEdit <small>NEXT</small></h1><p>谱面项目 · 作者 cmdysj · 基于原 RPE 使用 AI（GPT）重构</p></div><button id="resume-editor">返回当前编辑</button></div>
+    <div class="home-heading"><div><img src="/assets/rpe/icons/rpelogo.png" alt=""><h1>Re:PhiEdit <small>NEXT</small></h1><p>谱面项目 · 作者 cmdysj · 基于原 RPE 使用 AI（GPT）重构</p></div><button id="resume-editor">返回当前编辑</button></div>
     <div class="home-actions"><button id="home-new" class="primary">新建谱面</button><button id="home-open">打开 JSON / PEZ</button><button id="home-migrate">迁移原 RPE 项目</button></div>
     <div class="home-filters"><input id="project-search" type="search" placeholder="搜索曲名、谱师或分组" aria-label="搜索谱面"><select id="project-group" aria-label="项目分组"><option value="">全部分组</option></select><select id="project-sort" aria-label="谱面排序"><option value="recent">最近编辑</option><option value="name">曲名</option></select><label><input id="show-archived" type="checkbox">显示归档</label><output id="project-count"></output></div>
     <div id="project-cards"></div><p id="home-empty" class="hint"></p>
   </section>
-  <footer><button id="chart-info-toggle" type="button" aria-expanded="false">谱面信息</button><dl id="chart-info" class="chart-info" aria-label="谱面信息" hidden></dl><span id="status" role="status">就绪</span><span id="performance"></span><span id="tips" aria-live="polite"></span><span>Re:PhiEdit Next · 0.9.0</span></footer>
+  <footer><button id="chart-info-toggle" type="button" aria-expanded="false">谱面信息</button><dl id="chart-info" class="chart-info" aria-label="谱面信息" hidden></dl><span id="status" role="status">就绪</span><span id="performance"></span><span id="tips" aria-live="polite"></span><span>Re:PhiEdit Next · %APP_VERSION%</span></footer>
   <div id="timeline-context-menu" class="timeline-context-menu" hidden><button id="timeline-add-marker" type="button">添加时间标记</button><button id="trajectory-context-split" hidden>拆分曲线轨迹</button><button id="timeline-delete-marker" type="button">删除此标记</button></div>
   <input id="file-input" type="file" multiple accept=".json,.pec,.pez,.zip,audio/*,image/*" hidden><input id="music-input" type="file" accept="audio/*" hidden><input id="background-input" type="file" accept="image/*" hidden><input id="directory-input" type="file" webkitdirectory multiple hidden>
   <dialog id="modal"><form method="dialog"><div class="modal-heading"><h2 id="modal-title"></h2><button value="cancel" aria-label="关闭" formnovalidate>×</button></div><p id="modal-description"></p><div id="modal-content"></div><p id="modal-error" role="alert"></p><div class="modal-actions"><button value="cancel" formnovalidate>取消 / 关闭</button><button id="modal-delete" type="button" hidden>删除</button><button id="modal-apply" type="button" class="primary">应用</button></div></form></dialog>
-  <script type="module" src="./src/ui/app.mjs"></script>
+  <script type="module" src="/src/ui/app.mjs"></script>
 </body></html>
