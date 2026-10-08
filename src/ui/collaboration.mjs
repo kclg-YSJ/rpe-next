@@ -8,6 +8,7 @@ import { download } from '../platform/files.mjs';
 const node = (tag, text, className) => { const element = document.createElement(tag); if (text) element.textContent = text; if (className) element.className = className; return element; };
 const button = (text, run) => { const element = node('button', text); element.type = 'button'; element.onclick = run; return element; };
 const input = (host, text, type = 'text', value = '') => { const label = node('label', text, 'field'); const field = node('input'); field.type = type; field.value = value; field.setAttribute('aria-label', text); label.append(field); host.append(label); return field; };
+const safeColor = color => /^#[0-9a-f]{6}$/i.test(color) ? color : '#fff';
 const hex = bytes => [...bytes].map(value => value.toString(16).padStart(2, '0')).join('');
 const hash = async bytes => hex(new Uint8Array(await crypto.subtle.digest('SHA-256', bytes)));
 
@@ -100,7 +101,7 @@ export class CollaborationPanel {
     if (signature !== this.userSignature) {
       this.userSignature = signature; this.users.replaceChildren();
       for (const member of client.members) {
-        const row = node('div', '', 'collaboration-user'); const name = node('strong', `${member.name}${member.host ? ' · 房主' : ''}${member.id === client.id ? '（我）' : ''}`); name.style.color = member.color;
+        const row = node('div', '', 'collaboration-user'); const name = node('strong', `${member.name}${member.host ? ' · 房主' : ''}${member.id === client.id ? '（我）' : ''}`); name.style.color = safeColor(member.color);
         row.append(name, node('span', `${member.online ? '在线' : '离线'} · ${Math.round(member.id === client.id ? client.latency ?? 0 : member.presence?.latency ?? 0)} ms`), node('small', `本次操作涉及：音符 ${member.stats.notes} · 事件 ${member.stats.events} · 提交 ${member.stats.operations}`));
         if (host && member.id !== client.id) row.append(button('移出', () => this.transport.send({ type: 'kick', id: member.id })));
         this.users.append(row);
@@ -130,7 +131,7 @@ export class CollaborationPanel {
   renderChat() {
     const signature = JSON.stringify(this.client.chat); if (signature === this.chatSignature) return;
     this.chatSignature = signature; this.chatLog.replaceChildren();
-    for (const item of this.client.chat) { const row = node('div'); const name = node('strong', `${item.name}：`); name.style.color = /^#[0-9a-f]{6}$/i.test(item.color) ? item.color : '#fff'; row.append(name, node('span', item.text)); this.chatLog.append(row); }
+    for (const item of this.client.chat) { const row = node('div'); const name = node('strong', `${item.name}：`); name.style.color = safeColor(item.color); row.append(name, node('span', item.text)); this.chatLog.append(row); }
     this.chatLog.scrollTop = this.chatLog.scrollHeight;
     const last = this.client.chat.at(-1); if (last) { this.toast.textContent = `${last.name}：${last.text}`; this.toast.hidden = false; clearTimeout(this.toastTimer); this.toastTimer = setTimeout(() => { this.toast.hidden = true; }, 6000); }
   }
@@ -164,11 +165,11 @@ export class CollaborationPanel {
       let row = markerRows.findIndex(end => position - 65 > end); if (row < 0) row = markerRows.length; markerRows[row] = position + 65;
       let marker = [...this.markers.children].find(marker => marker.dataset.member === member.id);
       if (!marker) { marker = button(label, () => { const current = client.members.find(entry => entry.id === member.id)?.presence; if (current) seek(current.seconds); }); marker.dataset.member = member.id; this.markers.append(marker); }
-      marker.textContent = label; marker.style.left = `${position}px`; marker.style.top = `${-row * 17}px`; marker.style.color = member.color; marker.title = `${label} · ${presence.seconds.toFixed(2)} s`;
+      marker.textContent = label; marker.style.left = `${position}px`; marker.style.top = `${-row * 17}px`; marker.style.color = safeColor(member.color); marker.title = `${label} · ${presence.seconds.toFixed(2)} s`;
       const cursor = presence.cursor; if (!cursor || !Number.isFinite(cursor.x)) continue;
       if (cursor.area === 'preview' && Number.isFinite(cursor.y)) {
         const preview = document.querySelector('.preview-wrap').hidden ? document.querySelector('#realtime-preview') : document.querySelector('#preview');
-        const bounds = preview.getBoundingClientRect(); const pointer = node('div', `➤ ${label}`, 'collaboration-pointer'); pointer.style.color = member.color;
+        const bounds = preview.getBoundingClientRect(); const pointer = node('div', `➤ ${label}`, 'collaboration-pointer'); pointer.style.color = safeColor(member.color);
         pointer.style.opacity = Math.abs(presence.seconds - seconds) < 1 ? '1' : '.35';
         pointer.style.left = `${bounds.left + Math.max(0, Math.min(1, cursor.x)) * bounds.width}px`; pointer.style.top = `${bounds.top + Math.max(0, Math.min(1, cursor.y)) * bounds.height}px`; this.cursors.append(pointer); continue;
       }
@@ -182,7 +183,7 @@ export class CollaborationPanel {
       const ownRange = [timeline.timeAt(rectangle.height), timeline.timeAt(0)];
       const timeVisible = presence.seconds >= Math.min(...ownRange) && presence.seconds <= Math.max(...ownRange);
       const inView = timeVisible && lineVisible && vertical >= 0 && vertical <= rectangle.height && horizontal >= 0 && horizontal <= rectangle.width;
-      const pointer = node('div', `➤ ${label}`, 'collaboration-pointer'); pointer.style.color = member.color; pointer.style.opacity = inView ? '1' : '.35';
+      const pointer = node('div', `➤ ${label}`, 'collaboration-pointer'); pointer.style.color = safeColor(member.color); pointer.style.opacity = inView ? '1' : '.35';
       pointer.style.left = `${rectangle.left + Math.max(2, Math.min(rectangle.width - 40, horizontal))}px`; pointer.style.top = `${rectangle.top + Math.max(2, Math.min(rectangle.height - 20, vertical))}px`; this.cursors.append(pointer);
     }
     if (!client.active) { this.chatBox.hidden = true; this.toast.hidden = true; }
