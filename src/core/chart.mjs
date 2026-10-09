@@ -2,6 +2,7 @@ import { beatValue, fromNumber } from './beat.mjs';
 import { TempoMap } from './tempo.mjs';
 import { sampleCurveTrajectory } from './curve-trajectory.mjs';
 import { trajectorySplitSettings } from './trajectory-simplify.mjs';
+import { assertNoiseAreas } from './noise-domain.mjs';
 
 export const EVENT_TYPES = ['moveXEvents', 'moveYEvents', 'rotateEvents', 'alphaEvents', 'speedEvents'];
 export const EXTENDED_TYPES = ['scaleXEvents', 'scaleYEvents', 'colorEvents', 'paintEvents', 'textEvents', 'inclineEvents', 'gifEvents'];
@@ -20,7 +21,7 @@ export function createLine(name = '判定线') {
 
 export function createChart() {
   return { META: { RPEVersion: 170, name: '未命名谱面', composer: '', charter: '', illustration: '', level: '', song: '', background: '', offset: 0 },
-    BPMList: [{ bpm: 120, startTime: [0, 0, 1] }], judgeLineGroup: ['Default'], judgeLineList: [createLine('Line 1')] };
+    BPMList: [{ bpm: 120, startTime: [0, 0, 1] }], judgeLineGroup: ['Default'], judgeLineList: [createLine('Line 1')], blockAreaList: [] };
 }
 
 export function createNote(type, beat, positionX, endBeat = beat + 1) {
@@ -57,6 +58,7 @@ export function assertChart(chart) {
   if (chart.judgeLineList != null && !Array.isArray(chart.judgeLineList)) throw new Error('judgeLineList 必须为数组');
   new TempoMap(chart.BPMList);
   if (chart.META.offset !== undefined && !Number.isFinite(chart.META.offset)) throw new Error('META.offset 必须为毫秒数');
+  assertNoiseAreas(chart);
   (chart.judgeLineList ?? []).forEach((line, lineIndex) => {
     const path = `judgeLineList[${lineIndex}]`;
     if (!line || typeof line !== 'object') throw new Error(`${path}: 无效判定线`);

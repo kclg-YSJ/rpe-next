@@ -9,6 +9,7 @@ import { lineGuides, mergeGuides, pickGuide, formatLineNumbers } from '../core/p
 import { ShaderRuntime } from '../core/shader.mjs';
 import { ShaderPipeline } from './shader-pipeline.mjs';
 import { PreviewBackground, textureInViewport } from './preview-background.mjs';
+import { NoiseDomainRenderer } from './noise-domain-renderer.mjs';
 
 const clamp = value => Math.max(0, Math.min(1, value));
 
@@ -16,6 +17,7 @@ export class Preview {
   constructor(canvas) {
     this.canvas = canvas; this.scene = new SceneRuntime(); this.shaderRuntime = new ShaderRuntime(() => this.invalidate?.()); this.shaderPipeline = new ShaderPipeline(() => this.invalidate?.());
     this.backgroundFrame = new PreviewBackground();
+    this.noiseDomains = new NoiseDomainRenderer();
     this.allLines = true; this.visible = false; this.noteSize = 175; this.lineScale = 1.5; this.backgroundAlpha = 0.35; this.backgroundBlur = 10.5; this.effectsSince = Infinity; this.applyShaders = true; this.opacity = 1; this.showHitEffects = true;
     this.noteHitAreas = [];
     if (typeof document === 'undefined') { this.overlayCanvas = null; this.shaderCanvas = null; return; }
@@ -132,6 +134,8 @@ export class Preview {
         }
       }
     }
+    this.noiseDomains.selected = Number.isInteger(this.noiseSelection) ? this.noiseSelection : -1;
+    this.noiseDomains.draw(context, chart.blockAreaList, seconds, viewport);
     const shaderEffects = this.applyShaders ? this.shaderRuntime.active(seconds) : [];
     const globalShader = shaderEffects.some(effect => effect.global);
     if (!shaderEffects.length && this.showGameUI) drawGameUi(context, chart, states, this.completionTimes, seconds, selectedLine, viewport, scale, this.skin, this.duration ?? 600);

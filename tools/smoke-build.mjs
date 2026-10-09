@@ -19,7 +19,7 @@ try {
     if (response.status !== 200 || !(await response.text()).length) throw new Error(`${path} 不可读取`);
   }
   const denied = await fetch(`http://127.0.0.1:${port}/docs/original-baseline.json`);
-  for (const path of ['/src/ui/home.mjs', '/src/ui/settings.mjs', '/src/application/autosave.mjs', '/src/core/editor-display.mjs', '/src/platform/recovery.mjs', '/src/platform/thumbnail.mjs', '/src/application/playback.mjs', '/src/core/edit-grid.mjs', '/src/platform/editor-preferences.mjs', '/assets/rpe/Texture/img-31.png', '/assets/easing/29.svg']) {
+  for (const path of ['/src/ui/home.mjs', '/src/ui/settings.mjs', '/src/application/autosave.mjs', '/src/core/editor-display.mjs', '/src/platform/recovery.mjs', '/src/platform/thumbnail.mjs', '/src/application/playback.mjs', '/src/core/edit-grid.mjs', '/src/platform/editor-preferences.mjs', '/assets/rpe/Texture/img-31.png', '/assets/rpe/Texture/NoiseDomain/BlockNoise1.png', '/assets/easing/29.svg']) {
     const response = await fetch(`http://127.0.0.1:${port}${path}`);
     if (response.status !== 200 || !(await response.arrayBuffer()).byteLength) throw new Error(`${path} 不可读取`);
     if (path.endsWith('.svg') && !response.headers.get('content-type')?.includes('image/svg+xml')) throw new Error('缓动 SVG 类型错误');

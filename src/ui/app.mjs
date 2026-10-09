@@ -58,6 +58,7 @@ import { assetUrl } from '../core/asset-url.mjs';
 import { AudioAnalysis } from './audio-analysis.mjs';
 import { TrajectoryPanel } from './trajectory-panel.mjs';
 import { CollaborationPanel } from './collaboration.mjs';
+import { NoiseDomainPanel } from './noise-domain-panel.mjs';
 
 const element = selector => document.querySelector(selector);
 const displayFields = [
@@ -185,6 +186,9 @@ const multiEdit = new MultiEditPanel(element('#multi-editor'), () => session, ti
 const trajectoryPanel = new TrajectoryPanel(element('#trajectory-editor'), () => ({ session, timeline, tempo, previewVisible: preview.visible }), { invalidate, notify, activate: activatePane });
 const multiLinePanel = new MultiLinePanel(element('#multi-line-editor'), () => session, { timeline, render: renderSession, notify, persist: persistEditor });
 const linePanel = new LinePanel(element('#line-panel'), () => session, { render: renderSession, notify, getAssets: () => assets, afterTexture: () => images.load(session.chart, assets, chartName) });
+const noiseDomainPanel = new NoiseDomainPanel(element('#noise-domain-editor'), () => ({ session, tempo, division: timeline.division, seconds: chartSeconds, preview, realtimePreview }), {
+  close: () => activatePane('chart'), invalidate, reportError: error => reportError(error),
+});
 const assetLibrary = new AssetLibraryPanel(element('#asset-library'), () => ({ assets, folders: assetFolders, chart: session.chart, chartName }), {
   notify,
   onChange: (nextAssets, nextFolders) => {
@@ -543,6 +547,7 @@ function persistEditor() {
 function activatePane(name) {
   if (name !== 'multi') multiEdit.hide();
   if (name !== 'trajectory') trajectoryPanel.hide();
+  if (name !== 'noise') preview.noiseSelection = realtimePreview.noiseSelection = -1;
   activePaneName = name;
   for (const panel of document.querySelectorAll('[data-panel]')) panel.hidden = panel.dataset.panel !== name;
   for (const button of document.querySelectorAll('[data-pane]')) button.classList.toggle('active', button.dataset.pane === name);
@@ -735,6 +740,7 @@ function renderSession() {
   if (activePaneName === 'multi-line') multiLinePanel.render();
   if (activePaneName === 'metadata') renderMetadataPanel(session, element('#metadata-editor'), () => { activatePane('chart'); renderSession(); });
   if (activePaneName === 'bpm') renderBpmPanel(session, element('#bpm-editor'), () => { activatePane('chart'); renderSession(); });
+  if (activePaneName === 'noise') noiseDomainPanel.render();
   session.eventLayer = timeline.layer;
   renderProperties(session, reportError);
   if (!session.liveEventEdit) renderEventInspector(session, tempo, currentBeat, reportError, notify);
@@ -1139,6 +1145,7 @@ listen('#mirror', () => {
 });
 listen('#metadata', () => { activatePane('metadata'); renderMetadataPanel(session, element('#metadata-editor'), () => { activatePane('chart'); renderSession(); }); });
 listen('#bpm', () => { activatePane('bpm'); renderBpmPanel(session, element('#bpm-editor'), () => { activatePane('chart'); renderSession(); }); });
+listen('#noise-domains', () => { activatePane('noise'); noiseDomainPanel.render(); });
 listen('#assets', () => { activatePane('assets'); assetLibrary.render(); });
 listen('#audio-analysis-tool', () => {
   audioAnalysis.enabled = true; activatePane('audio-analysis'); audioAnalysis.render(element('#audio-analysis-panel')); audioAnalysis.draw(offsetSeconds()); persistEditor();
@@ -1439,6 +1446,7 @@ function frame(timestamp) {
     const beat = currentBeat();
     session.editSeconds = Math.max(0, chartSeconds());
     updateLineInfo();
+    if (activePaneName === 'noise') noiseDomainPanel.tick();
     if (audio.playing) timeline.origin = beat;
     if (!preview.visible) {
       timeline.draw(beat);

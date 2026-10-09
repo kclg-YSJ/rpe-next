@@ -4,3 +4,8 @@ Required Notice: Re:PhiEdit Next is reconstructed from the original Re:PhiEdit (
 作者：cmdysj。本项目基于原 Re:PhiEdit（RPE）项目，使用 AI（GPT）进行重构。
 原项目及独立第三方内容的权利归相应权利人所有；保留其适用的许可及来源声明。
 本项目采用 PolyForm Noncommercial License 1.0.0，商业用途需另行取得授权。
+
+Phigros BlockArea preview textures under assets/rpe/Texture/NoiseDomain are extracted
+from Phigros 4.0.1 for noncommercial technical research and preview compatibility.
+Copyright Nanjing Pigeon Games Network Co., Ltd. Source documentation:
+https://docs.chcat1320.top/knowladge/phigros/tex/

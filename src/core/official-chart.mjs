@@ -6,6 +6,7 @@ export function parseOfficialChart(original) {
   const baseBpm = original.judgeLineList[0].bpm;
   chart.BPMList = [{ bpm: baseBpm, startTime: [0, 0, 1] }];
   chart.META.offset = (original.offset ?? 0) * 1000;
+  chart.blockAreaList = structuredClone(original.blockAreaList ?? []);
   chart.rpeNextLegacySource = { format: 'phigros-v3', document: original };
   const beat = ticks => Math.max(-100, Math.floor(ticks + 0.1)) / 32;
   chart.judgeLineList = original.judgeLineList.map((source, index) => {
