@@ -17,7 +17,8 @@ export function createSettingsPanel() {
   group('音频与播放', [['volume', '音乐音量', 'range', 0.75, 0, 1, 0.01], ['hit-volume', '打击音效音量', 'range', 0.3, 0, 1, 0.01], ['hit-enabled', '启用打击音效', 'checkbox', true], ['autoplay-view', '进入预览自动播放', 'checkbox', true], ['scroll-speed', '滚轮时间调整速度', 'range', 5, 0.1, 100, 0.1]]);
   group('实时预览判定线', [['line-numbers', '显示判定线编号', 'checkbox', true], ['line-arrows', '显示方向箭头', 'checkbox', true], ['line-tint', '当前判定线染色', 'checkbox', true], ['merge-line-numbers', '合并相近且同向的编号', 'checkbox', true], ['pick-preview-lines', '点击预览判定线切换编辑线', 'checkbox', true]]);
   group('提示与通知', [['tips-enabled', '显示右下角 Tips', 'checkbox', true], ['success-notifications', '显示绿色完成通知', 'checkbox', true], ['note-source-hover', '悬停音符显示来源线', 'checkbox', true]]);
-  group('事件编辑', [['event-cut-density', '事件切割密度（每横线间隔的段数）', 'number', 4, 0.1, 128, 0.1]]);
+  group('噪域预览', [['pick-preview-noise-areas', '点击预览噪域进入编辑（优先于音符和判定线）', 'checkbox', true], ['seamless-noise-areas', '融合连贯噪域，隐藏内部接缝', 'checkbox', true]]);
+  group('事件编辑', [['event-cut-density', '事件切割密度（每横线间隔的段数）', 'number', 4, 0.1, 128, 0.1], ['sample-auto-fit', '取样时自动扩大视野（结束后恢复）', 'checkbox', true]]);
   group('判定线切换', [['line-switcher-enabled', 'Ctrl+滚轮切线时显示附近线缩略图', 'checkbox', true]]);
   group('剪贴板', [['clipboard-history-enabled', '启用剪贴板历史（长按 Ctrl+V）', 'checkbox', true]]);
   const clipboardHint = document.createElement('p'); clipboardHint.className = 'hint'; clipboardHint.textContent = '历史仅保存在本机浏览器。固定项不会被新记录挤出；关闭功能暂停记录，保留已有历史。'; body.lastElementChild.append(clipboardHint);

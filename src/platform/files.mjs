@@ -22,6 +22,10 @@ export async function openFiles(fileList) {
   }
   if (!candidates.length) throw new Error(errors.join('\n') || '找不到 RPE JSON 谱面');
   attachExternalEffects(candidates, assets);
+  for (const candidate of candidates) if (candidate.chart.rpeNextLegacySource?.format === 'phigros-v3') {
+    const references = resourceReferences(candidate.chart, assets, candidate.name);
+    candidate.chart.META = { ...candidate.chart.META, name: candidate.name.replaceAll('\\', '/').split('/').at(-1).replace(/\.json$/i, ''), ...references };
+  }
   return { candidates, assets };
 }
 
@@ -72,7 +76,10 @@ export function exportChart(chart, name) {
 }
 
 export function legacyChart(chart, splitSettings = {}) {
+  if (chart.blockAreaList?.length) throw new Error('原 RPE 不支持噪域，请在导出窗口明确选择移除噪域后导出');
   const next = structuredClone(chart);
+  delete next.blockAreaList;
+  delete next.noiseAreaOptions;
   if (next.META.RPEVersion >= 200) next.META = { ...next.META, RPEVersion: 170 };
   const tempo = new TempoMap(next.BPMList);
   for (const line of next.judgeLineList ?? []) {
@@ -174,7 +181,8 @@ export function exportPackage(chart, assets, chartName) {
 export function createChartExport(chart, assets, chartName, options = {}) {
   const { format = 'pez', compatibility = 'next', name = chartName, split = {} } = options;
   if (!['json', 'pez'].includes(format) || !['next', 'rpe'].includes(compatibility)) throw new Error('导出格式无效');
-  const snapshot = compatibility === 'rpe' ? legacyChart(chart, split) : { ...chart };
+  const source = compatibility === 'rpe' && options.removeNoiseAreas ? { ...chart, blockAreaList: [] } : chart;
+  const snapshot = compatibility === 'rpe' ? legacyChart(source, split) : { ...chart };
   delete snapshot.chartTime;
   const stem = String(name).trim().replace(/\.(json|pez|pec|zip)$/i, '');
   if (!stem) throw new Error('请输入导出文件名');

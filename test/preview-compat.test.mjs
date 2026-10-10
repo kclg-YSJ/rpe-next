@@ -5,6 +5,20 @@ import { LineRuntime } from '../src/core/scene.mjs';
 import { TempoMap } from '../src/core/tempo.mjs';
 import { lineGuides, pickGuide } from '../src/core/preview-guides.mjs';
 import { Preview } from '../src/ui/preview.mjs';
+import { normalizeEditorPreferences } from '../src/platform/editor-preferences.mjs';
+
+test('噪域点击默认开启、可持久关闭，命中坐标遵循预览范围且编辑背景不穿透', () => {
+  const preview = new Preview({ getBoundingClientRect: () => ({ left: 10, top: 20 }) });
+  preview.viewport = { left: 50, top: 40, width: 900, height: 520 };
+  preview.noisePreview.pick = (horizontal, vertical) => horizontal === 500 && vertical === 300 ? 7 : null;
+  assert.equal(preview.pickNoiseArea(510, 320), null);
+  preview.visible = true;
+  assert.equal(preview.pickNoiseArea(510, 320), 7);
+  assert.equal(preview.pickNoiseArea(0, 320), null);
+  preview.pickPreviewNoiseAreas = false;
+  assert.equal(preview.pickNoiseArea(510, 320), null);
+  for (const pickPreviewNoiseAreas of [true, false]) assert.deepEqual(normalizeEditorPreferences({ pickPreviewNoiseAreas }), { pickPreviewNoiseAreas });
+});
 
 function previewSurface() {
   const context = new Proxy({ calls: [] }, { get(target, key) {

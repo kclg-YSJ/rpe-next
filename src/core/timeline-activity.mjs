@@ -32,6 +32,7 @@ export class TimelineActivity {
     if (this.chart === chart && this.tempo === tempo) return;
     if (this.tempo !== tempo) this.cache = new WeakMap();
     this.chart = chart; this.tempo = tempo; this.densityCache = null; this.duration = 1;
+    for (const area of chart.blockAreaList ?? []) this.duration = Math.max(this.duration, tempo.seconds(area.disappearTime));
     this.lines = chart.judgeLineList.map((line, index) => {
       if (!this.cache.has(line)) this.cache.set(line, new LineActivity(line, tempo));
       const activity = this.cache.get(line);

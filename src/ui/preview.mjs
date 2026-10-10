@@ -9,6 +9,7 @@ import { lineGuides, mergeGuides, pickGuide, formatLineNumbers } from '../core/p
 import { ShaderRuntime } from '../core/shader.mjs';
 import { ShaderPipeline } from './shader-pipeline.mjs';
 import { PreviewBackground, textureInViewport } from './preview-background.mjs';
+import { NoisePreview } from './noise-preview.mjs';
 
 const clamp = value => Math.max(0, Math.min(1, value));
 
@@ -16,6 +17,7 @@ export class Preview {
   constructor(canvas) {
     this.canvas = canvas; this.scene = new SceneRuntime(); this.shaderRuntime = new ShaderRuntime(() => this.invalidate?.()); this.shaderPipeline = new ShaderPipeline(() => this.invalidate?.());
     this.backgroundFrame = new PreviewBackground();
+    this.noisePreview = new NoisePreview();
     this.allLines = true; this.visible = false; this.noteSize = 175; this.lineScale = 1.5; this.backgroundAlpha = 0.35; this.backgroundBlur = 10.5; this.effectsSince = Infinity; this.applyShaders = true; this.opacity = 1; this.showHitEffects = true;
     this.noteHitAreas = [];
     if (typeof document === 'undefined') { this.overlayCanvas = null; this.shaderCanvas = null; return; }
@@ -49,6 +51,7 @@ export class Preview {
       context.globalAlpha = 1;
     } else this.backgroundFrame.clear();
     const states = this.scene.sample(seconds);
+    this.noisePreview.draw(context, chart, tempo, seconds, width, height, scale, this.selectedNoiseArea);
     const order = this.allLines ? this.scene.order : [selectedLine];
     this.viewport = viewport; this.selectedLine = selectedLine;
     this.guides = lineGuides(states, chart.judgeLineList, order, width, height, scale);
@@ -171,6 +174,15 @@ export class Preview {
     return pickGuide(this.guides ?? [], point, this.selectedLine);
   }
 
+  pickNoiseArea(clientX, clientY) {
+    if (!this.visible || this.pickPreviewNoiseAreas === false || !this.viewport) return null;
+    const rectangle = this.canvas.getBoundingClientRect();
+    const point = { x: clientX - rectangle.left, y: clientY - rectangle.top };
+    const view = this.viewport;
+    if (point.x < view.left || point.x > view.left + view.width || point.y < view.top || point.y > view.top + view.height) return null;
+    return this.noisePreview.pick(point.x, point.y);
+  }
+
   pickNote(clientX, clientY) {
     if (!this.visible || !this.noteHitAreas?.length) return null;
     const rectangle = this.canvas.getBoundingClientRect();
@@ -185,6 +197,7 @@ export class Preview {
   }
 
   drawGuides(context, scale, selectedLine) {
+    this.noisePreview.drawGuides(context, scale, this.selectedNoiseArea, this.lineNumbers);
     if (!this.lineNumbers && !this.lineArrows) return;
     for (const group of mergeGuides(this.guides, scale, this.mergeLineNumbers)) {
       context.save(); context.translate(group.x, group.y); context.rotate(group.rotation * Math.PI / 180);

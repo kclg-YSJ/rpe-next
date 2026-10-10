@@ -1,4 +1,6 @@
 import { createChart, createLine, createNote, createEvent, assertChart } from './chart.mjs';
+import { convertOfficialNoiseAreas } from './official-noise.mjs';
+import { NOISE_VERSION } from './noise-areas.mjs';
 
 export function parseOfficialChart(original) {
   if (original.formatVersion !== 3 || !original.judgeLineList?.length) throw new Error('目前仅支持非空官方 formatVersion 3 谱面');
@@ -6,6 +8,9 @@ export function parseOfficialChart(original) {
   const baseBpm = original.judgeLineList[0].bpm;
   chart.BPMList = [{ bpm: baseBpm, startTime: [0, 0, 1] }];
   chart.META.offset = (original.offset ?? 0) * 1000;
+  chart.blockAreaList = convertOfficialNoiseAreas(original.blockAreaList, baseBpm, original.offset ?? 0);
+  chart.noiseAreaOptions = { ignoreTripleInversion: true };
+  if (chart.blockAreaList.length) chart.META.RPEVersion = NOISE_VERSION;
   chart.rpeNextLegacySource = { format: 'phigros-v3', document: original };
   const beat = ticks => Math.max(-100, Math.floor(ticks + 0.1)) / 32;
   chart.judgeLineList = original.judgeLineList.map((source, index) => {

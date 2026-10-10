@@ -50,8 +50,11 @@ export function renderMetadataPanel(session, host, onCommit) {
     const label = document.createElement('label'); label.className = 'field'; label.append(title);
     const input = document.createElement('input'); input.type = key === 'offset' ? 'number' : 'text'; input.value = session.chart.META[key] ?? ''; label.append(input); fields.set(key, input); host.append(label);
   }
+  const compatibility = document.createElement('label'); compatibility.className = 'field'; compatibility.append('噪域：三次及以上反转无效');
+  const ignoreTripleInversion = document.createElement('input'); ignoreTripleInversion.type = 'checkbox'; ignoreTripleInversion.setAttribute('aria-label', '噪域：三次及以上反转无效'); ignoreTripleInversion.checked = session.chart.noiseAreaOptions?.ignoreTripleInversion === true; compatibility.append(ignoreTripleInversion); host.append(compatibility);
+  const compatibilityHint = document.createElement('p'); compatibilityHint.className = 'hint'; compatibilityHint.textContent = '仅作用于此谱面。各状态层分别计算反转，激活层显示在未激活层上方。开启后，同一状态层中，同一点被两个或更多反转块覆盖时保留该层普通噪域的覆盖；关闭时按奇偶次数反转。官谱导入默认开启。'; host.append(compatibilityHint);
   const apply = document.createElement('button'); apply.className = 'wide-button'; apply.textContent = '应用谱面信息';
-  apply.onclick = () => { try { const metadata = { ...session.chart.META }; for (const [key, input] of fields) metadata[key] = key === 'offset' ? Number(input.value) : input.value; const next = { ...session.chart, META: metadata }; assertChart(next); session.commit('谱面信息', next); onCommit?.(); } catch (error) { apply.textContent = error.message; } };
+  apply.onclick = () => { try { const metadata = { ...session.chart.META }; for (const [key, input] of fields) metadata[key] = key === 'offset' ? Number(input.value) : input.value; const next = { ...session.chart, META: metadata, noiseAreaOptions: { ...session.chart.noiseAreaOptions, ignoreTripleInversion: ignoreTripleInversion.checked } }; assertChart(next); session.commit('谱面信息', next); onCommit?.(); } catch (error) { apply.textContent = error.message; } };
   host.append(apply);
 }
 

@@ -2,6 +2,7 @@ import { beatValue, fromNumber } from './beat.mjs';
 import { TempoMap } from './tempo.mjs';
 import { sampleCurveTrajectory } from './curve-trajectory.mjs';
 import { trajectorySplitSettings } from './trajectory-simplify.mjs';
+import { validateNoiseAreas, diagnoseNoiseAreas, normalizeNoiseAreas, NOISE_VERSION } from './noise-areas.mjs';
 
 export const EVENT_TYPES = ['moveXEvents', 'moveYEvents', 'rotateEvents', 'alphaEvents', 'speedEvents'];
 export const EXTENDED_TYPES = ['scaleXEvents', 'scaleYEvents', 'colorEvents', 'paintEvents', 'textEvents', 'inclineEvents', 'gifEvents'];
@@ -20,7 +21,7 @@ export function createLine(name = '判定线') {
 
 export function createChart() {
   return { META: { RPEVersion: 170, name: '未命名谱面', composer: '', charter: '', illustration: '', level: '', song: '', background: '', offset: 0 },
-    BPMList: [{ bpm: 120, startTime: [0, 0, 1] }], judgeLineGroup: ['Default'], judgeLineList: [createLine('Line 1')] };
+    BPMList: [{ bpm: 120, startTime: [0, 0, 1] }], judgeLineGroup: ['Default'], judgeLineList: [createLine('Line 1')], blockAreaList: [] };
 }
 
 export function createNote(type, beat, positionX, endBeat = beat + 1) {
@@ -32,6 +33,7 @@ export function parseChart(text) {
   let chart;
   try { chart = JSON.parse(text.replace(/^\uFEFF/, '')); }
   catch { throw new Error('无效的 RPE JSON 文档'); }
+  if (chart.blockAreaList != null) chart.blockAreaList = normalizeNoiseAreas(chart.blockAreaList);
   assertChart(chart);
   return chart;
 }
@@ -42,7 +44,8 @@ export function noteIsAbove(note) {
 
 export function serializeChart(chart) {
   assertChart(chart);
-  return stringifyPreservingNumbers(chart) + '\n';
+  const snapshot = chart.blockAreaList?.length ? { ...chart, META: { ...chart.META, RPEVersion: Math.max(chart.META.RPEVersion ?? 0, NOISE_VERSION) } } : chart;
+  return stringifyPreservingNumbers(snapshot) + '\n';
 }
 
 export function stringifyPreservingNumbers(value) {
@@ -57,6 +60,11 @@ export function assertChart(chart) {
   if (chart.judgeLineList != null && !Array.isArray(chart.judgeLineList)) throw new Error('judgeLineList 必须为数组');
   new TempoMap(chart.BPMList);
   if (chart.META.offset !== undefined && !Number.isFinite(chart.META.offset)) throw new Error('META.offset 必须为毫秒数');
+  if (chart.blockAreaList != null) validateNoiseAreas(chart.blockAreaList);
+  if (chart.noiseAreaOptions !== undefined) {
+    if (!chart.noiseAreaOptions || typeof chart.noiseAreaOptions !== 'object' || Array.isArray(chart.noiseAreaOptions)) throw new Error('noiseAreaOptions 必须为对象');
+    for (const key of ['ignoreTripleInversion']) if (chart.noiseAreaOptions[key] !== undefined && typeof chart.noiseAreaOptions[key] !== 'boolean') throw new Error('noiseAreaOptions.' + key + ' 必须为布尔值');
+  }
   (chart.judgeLineList ?? []).forEach((line, lineIndex) => {
     const path = `judgeLineList[${lineIndex}]`;
     if (!line || typeof line !== 'object') throw new Error(`${path}: 无效判定线`);
@@ -106,6 +114,7 @@ export function assertChart(chart) {
 
 export function diagnose(chart) {
   const issues = [];
+  issues.push(...diagnoseNoiseAreas(chart.blockAreaList ?? []));
   const addIssue = (issue, severity = 'warning') => issues.push({ severity, ...issue });
   const bpmBeats = new Set();
   for (const [index, entry] of chart.BPMList.entries()) {
