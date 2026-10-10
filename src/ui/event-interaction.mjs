@@ -10,7 +10,7 @@ export class EventInteraction {
     this.canvas.addEventListener('pointerdown', event => this.down(event));
     this.canvas.addEventListener('pointermove', event => this.move(event));
     this.canvas.addEventListener('pointerup', event => this.up(event));
-    this.canvas.addEventListener('pointercancel', () => { this.drag = null; timeline.changed(); });
+    this.canvas.addEventListener('pointercancel', () => { const tracing = this.drag?.kind === 'stroke' && this.drag.tracing; this.drag = null; if (tracing) timeline.getSession().notify(); timeline.changed(); });
     this.canvas.addEventListener('pointerleave', () => { if (!this.drag) this.timeline.eventCursor = null; });
   }
 
@@ -118,10 +118,10 @@ export class EventInteraction {
       if (this.drag.kind === 'stroke' && (this.drag.tracing || Math.hypot(point.x - this.drag.start.x, point.y - this.drag.start.y) > 3)) {
         this.drag.tracing = true;
         this.drag.points.push(point); const session = this.timeline.getSession();
-        for (const rectangle of this.timeline.eventRects) if (rectangle.lineIndex === session.lineIndex && strokeIntersects(previous, point, { left: rectangle.x, right: rectangle.x + rectangle.width, top: rectangle.y, bottom: rectangle.y + rectangle.height })) {
+        session.multiSelectionIntent = 'events';
+        for (const rectangle of this.timeline.eventRects) if ((rectangle.lineIndex === undefined || rectangle.lineIndex === session.lineIndex) && strokeIntersects(previous, point, { left: rectangle.x, right: rectangle.x + rectangle.width, top: rectangle.y, bottom: rectangle.y + rectangle.height })) {
           const key = eventKey(rectangle.type, rectangle.index); this.drag.remove ? session.eventSelection.delete(key) : session.eventSelection.add(key);
         }
-        session.notify();
       }
     }
     const hit = this.hit(point);
@@ -131,6 +131,7 @@ export class EventInteraction {
 
   up(event) {
     if (!this.drag) return;
+    if (this.drag.kind === 'stroke') this.move(event);
     if (this.drag.kind === 'multi-pan') { this.drag = null; this.timeline.changed(); return; }
     if (this.drag.kind === 'stroke' && !this.drag.remove && !this.drag.tracing && this.timeline.previewPick?.(event)) { this.drag = null; this.timeline.changed(); return; }
     this.drag.current = this.timeline.point(event, this.canvas);
@@ -174,6 +175,8 @@ export class EventInteraction {
             const key = eventKey(type, index); drag.remove ? session.eventSelection.delete(key) : session.eventSelection.add(key);
           });
         });
+        session.notify();
+      } else if (drag.kind === 'stroke') {
         session.notify();
       } else if (delta && Math.abs(drag.current.y - drag.start.y) > 5 && (session.multiLineActive && session.multiLineMode === 'events' ? [...session.multiEventSelection.values()].some(values => values.size) : selectedEvents(session).length)) {
         const change = current => ({ ...current,

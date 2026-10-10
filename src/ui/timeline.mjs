@@ -78,7 +78,7 @@ export class Timeline {
     notesCanvas.addEventListener('pointerleave', () => { if (!this.drag) this.cursor = null; this.onNoteHover?.(null); changed(); });
     notesCanvas.addEventListener('pointerdown', event => this.down(event));
     notesCanvas.addEventListener('pointerup', event => this.up(event));
-    notesCanvas.addEventListener('pointercancel', () => { this.drag = null; changed(); });
+    notesCanvas.addEventListener('pointercancel', () => { const tracing = this.drag?.kind === 'stroke' && this.drag.tracing; this.drag = null; if (tracing) this.getSession().notify(); changed(); });
   }
 
   point(event, canvas = this.notesCanvas) {
@@ -331,12 +331,12 @@ export class Timeline {
       }
       if (this.drag.kind === 'stroke' && (this.drag.tracing || Math.hypot(this.cursor.x - this.drag.start.x, this.cursor.y - this.drag.start.y) > 3)) {
         this.drag.tracing = true;
+        this.getSession().multiSelectionIntent = 'notes';
         this.drag.points.push(this.cursor);
         for (const entry of this.visible(this.cursorLineIndex)) if (strokeIntersects(previous, this.cursor, {
-          left: this.noteHorizontal(entry.item.positionX, this.cursorLineIndex) - 34 * this.renderNoteScale, right: this.noteHorizontal(entry.item.positionX, this.cursorLineIndex) + 34 * this.renderNoteScale,
-          top: this.vertical(entry.end), bottom: this.vertical(entry.start),
+          left: this.noteHorizontal(entry.item.positionX, this.cursorLineIndex) - this.noteWidth(entry.item) / 2, right: this.noteHorizontal(entry.item.positionX, this.cursorLineIndex) + this.noteWidth(entry.item) / 2,
+          top: this.vertical(entry.end) - 7, bottom: this.vertical(entry.start) + 7,
         })) this.drag.remove ? this.getSession().selection.delete(entry.index) : this.getSession().selection.add(entry.index);
-        this.getSession().notify();
       }
     }
     const hover = !this.drag ? this.hit(this.cursor) : null;
@@ -406,6 +406,7 @@ export class Timeline {
 
   up(event) {
     if (!this.drag) return;
+    if (this.drag.kind === 'stroke') this.move(event);
     if (this.drag.kind === 'multi-pan') { this.drag = null; this.changed(); return; }
     if (this.drag.kind === 'stroke' && !this.drag.remove && !this.drag.tracing && this.previewPick?.(event)) { this.drag = null; this.changed(); return; }
     if (this.drag.kind === 'stroke' && this.drag.remove && !this.drag.tracing) {
@@ -450,6 +451,7 @@ export class Timeline {
       }
     }
     this.drag = null;
+    if (drag.kind === 'stroke' && drag.tracing) session.notify();
     this.changed();
   }
 

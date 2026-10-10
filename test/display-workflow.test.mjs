@@ -84,6 +84,44 @@ test('Shift 框选和左拖轨迹生效，右键保留给上下文菜单；Y 缩
   for (const bpm of [60, 120, 240]) { timeline.tempo = new TempoMap([{ bpm, startTime: [0, 0, 1] }]); assert.equal(timeline.vertical(0) - timeline.vertical(bpm / 60), 333); }
 });
 
+test('事件编辑区左拖轨迹选择事件，拖动过程中不触发会话级重绘', () => {
+  const chart = createChart();
+  chart.judgeLineList[0].eventLayers[0] = { moveXEvents: [createEvent(0, 10, 0.5, 0.8)] };
+  const session = new EditorSession(chart);
+  const timeline = new Timeline(canvas(), canvas(), () => session, () => {}, () => {});
+  timeline.eventRects = [{ type: 'moveXEvents', index: 0, x: 110, y: 350, width: 60, height: 100 }];
+  let changes = 0; session.addEventListener('change', () => changes++);
+  const interaction = timeline.eventInteraction;
+  const point = (clientX, clientY) => ({ clientX, clientY, button: 0, pointerId: 1, preventDefault() {} });
+  interaction.down(point(50, 500));
+  const initialChanges = changes;
+  interaction.move(point(120, 430));
+  interaction.move(point(140, 380));
+  for (let index = 0; index < 500; index++) interaction.move(point(140 + index % 2, 380));
+  assert.equal(changes, initialChanges);
+  assert.deepEqual([...session.eventSelection], ['moveXEvents:0']);
+  assert.equal(session.multiSelectionIntent, 'events');
+  interaction.up(point(140, 380));
+  assert.equal(changes, initialChanges + 1);
+});
+
+test('音符划线实时选择但只在结束时通知面板，单物件仍保留多选意图', () => {
+  const session = new EditorSession(); session.insertNotes([createNote(1, 0.5, 0)]); session.selection.clear();
+  const timeline = new Timeline(canvas(), canvas(), () => session, () => {}, () => {});
+  let changes = 0; session.addEventListener('change', () => changes++);
+  const point = (clientX, clientY) => ({ clientX, clientY, button: 0, pointerId: 1 });
+  const vertical = timeline.vertical(0.5);
+  timeline.down(point(50, vertical)); const initialChanges = changes;
+  timeline.move(point(250, vertical));
+  for (let index = 0; index < 500; index++) timeline.move(point(250 + index % 2, vertical));
+  assert.deepEqual([...session.selection], [0]);
+  assert.equal(session.multiSelectionIntent, 'notes');
+  assert.equal(changes, initialChanges);
+  timeline.up(point(250, vertical));
+  assert.equal(changes, initialChanges + 1);
+  assert.equal(timeline.drag, null);
+});
+
 test('自动保存固定间隔而非输入防抖，并隔离并发写入', async () => {
   let saved = 0; let finish; const clock = new AutoSaveClock(() => { saved++; return new Promise(resolve => { finish = resolve; }); }, assert.fail);
   clock.reset(0); await clock.tick(59000, true, 60, true); assert.equal(saved, 0);
