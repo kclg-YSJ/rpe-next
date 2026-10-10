@@ -1,5 +1,6 @@
 import { noiseRuntime, NOISE_AREA_COLORS } from '../core/noise-areas.mjs';
 import { IntervalIndex } from '../core/interval-index.mjs';
+import { NoiseEdgeFilter } from './noise-edge-filter.mjs';
 
 const rank = { disabled: 0, ready: 1, active: 2 };
 function polygon(points, width, height, scale) {
@@ -11,7 +12,7 @@ function polygon(points, width, height, scale) {
 }
 
 export class NoisePreview {
-  constructor() { this.layers = new Map(); }
+  constructor() { this.layers = new Map(); this.edgeFilter = new NoiseEdgeFilter(); }
   layer(name, width, height, ratio) {
     let canvas = this.layers.get(name);
     if (!canvas) { canvas = document.createElement('canvas'); this.layers.set(name, canvas); }
@@ -107,6 +108,12 @@ export class NoisePreview {
     material.context.globalCompositeOperation = 'destination-in'; material.context.drawImage(coverage.canvas, 0, 0, width, height);
     if (edges) {
       const radius = Math.max(1, scale * 2.5);
+      const edgeQuality = entries.length > 48 ? 0.5 : 1;
+      const filtered = this.edgeFilter.render(coverage.canvas, edges.canvas, radius / width, radius / height, NOISE_AREA_COLORS.edge, edgeQuality);
+      if (filtered) {
+        material.context.globalCompositeOperation = 'source-over'; material.context.drawImage(filtered, 0, 0, width, height);
+        return { material: material.canvas, coverage: coverage.canvas };
+      }
       const interior = this.layer('interior', width, height, ratio);
       interior.context.drawImage(coverage.canvas, 0, 0, width, height);
       interior.context.globalCompositeOperation = 'destination-in';
