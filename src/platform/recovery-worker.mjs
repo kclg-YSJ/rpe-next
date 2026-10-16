@@ -1,4 +1,4 @@
-import { saveSnapshotDirect } from './recovery.mjs';
+import { saveSnapshotDirect } from './recovery.ts';
 import { applySnapshotPart } from './recovery-transfer.mjs';
 
 let snapshot; let chart;

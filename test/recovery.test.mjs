@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { saveSnapshot } from '../src/platform/recovery.mjs';
-import { createChart } from '../src/core/chart.mjs';
+import { saveSnapshot } from '../src/platform/recovery.ts';
+import { createChart } from '../src/core/chart.ts';
 import { snapshotParts, applySnapshotPart } from '../src/platform/recovery-transfer.mjs';
 
 function workers(context, postMessage) {

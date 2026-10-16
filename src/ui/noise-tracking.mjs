@@ -1,8 +1,8 @@
-import { formatBeat, fromNumber, parseBeat } from '../core/beat.mjs';
-import { lineDisplayLabel } from '../core/line-groups.mjs';
+import { formatBeat, fromNumber, parseBeat } from '../core/beat.ts';
+import { lineDisplayLabel } from '../core/line-groups.ts';
 import { noiseLayers } from '../core/noise-skin.mjs';
 import { trackedNoiseArea, noiseTrackingChart } from '../core/noise-tracking.mjs';
-import { beatInputControl } from './beat-input.mjs';
+import { beatInputControl } from './beat-input.ts';
 
 const button = (text, action) => { const node = document.createElement('button'); node.type = 'button'; node.textContent = text; node.onclick = action; return node; };
 

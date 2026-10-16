@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createChart, createLine, createEvent, createNote, assertChart, serializeChart, parseChart } from '../src/core/chart.mjs';
-import { fromNumber, beatValue } from '../src/core/beat.mjs';
-import { TempoMap } from '../src/core/tempo.mjs';
+import { createChart, createLine, createEvent, createNote, assertChart, serializeChart, parseChart } from '../src/core/chart.ts';
+import { fromNumber, beatValue } from '../src/core/beat.ts';
+import { TempoMap } from '../src/core/tempo.ts';
 import { trackedNoiseArea, noiseTrackingTarget, noiseTrackingChart } from '../src/core/noise-tracking.mjs';
-import { noiseRuntime } from '../src/core/noise-areas.mjs';
-import { EditorSession } from '../src/application/session.mjs';
-import { Preview } from '../src/ui/preview.mjs';
+import { noiseRuntime } from '../src/core/noise-areas.ts';
+import { EditorSession } from '../src/application/session.ts';
+import { Preview } from '../src/ui/preview.ts';
 import { NoiseTrackingPanel } from '../src/ui/noise-tracking.mjs';
 
 const options = { start: 0, end: 8, width: 320, height: 80, active: true, target: { mode: 'line', lineIndex: 0 } };

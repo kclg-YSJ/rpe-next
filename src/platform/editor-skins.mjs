@@ -1,6 +1,6 @@
-import { readZip, writeZip } from './archive.mjs';
+import { readZip, writeZip } from './archive.ts';
 import { parseEditorSkin, EDITOR_SKIN_LIMITS } from '../core/editor-skin.mjs';
-import { assetUrl } from '../core/asset-url.mjs';
+import { assetUrl } from '../core/asset-url.ts';
 
 async function access(mode, action) {
   const connection = await new Promise((resolve, reject) => {

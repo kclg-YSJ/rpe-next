@@ -1,5 +1,5 @@
 import { compileEditorSkin, editorSkinSelector, EDITOR_SKIN_COMPONENTS, EDITOR_SKIN_BUILTINS } from '../core/editor-skin.mjs';
-import { assetUrl } from '../core/asset-url.mjs';
+import { assetUrl } from '../core/asset-url.ts';
 import { baseEditorSkinCss } from './editor-skin-base.mjs';
 import { setEditorCanvasSkin } from './editor-skin-canvas.mjs';
 

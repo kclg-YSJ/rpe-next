@@ -1,13 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { binaryNoiseMask, fitNoiseRectangles, orderedNoiseRectangles, noiseAppearanceOffsets, NOISE_REVEALS } from '../src/core/noise-fit.mjs';
-import { easing } from '../src/core/easing.mjs';
+import { easing } from '../src/core/easing.ts';
 import { fittedNoiseAreas, noiseFitChart } from '../src/application/noise-fit.mjs';
-import { createChart, assertChart, serializeChart, parseChart } from '../src/core/chart.mjs';
-import { createNoiseArea, noiseRuntime } from '../src/core/noise-areas.mjs';
-import { EditorSession } from '../src/application/session.mjs';
-import { TempoMap } from '../src/core/tempo.mjs';
-import { beatValue } from '../src/core/beat.mjs';
+import { createChart, assertChart, serializeChart, parseChart } from '../src/core/chart.ts';
+import { createNoiseArea, noiseRuntime } from '../src/core/noise-areas.ts';
+import { EditorSession } from '../src/application/session.ts';
+import { TempoMap } from '../src/core/tempo.ts';
+import { beatValue } from '../src/core/beat.ts';
 
 const defaults = { first: 4, last: 8, duration: 6, width: 800, x: 100, y: -80, rotation: 0, layerId: 'default', reveal: 'left', easingType: 1 };
 function raster(rows) { return { mask: Uint8Array.from(rows.join(''), Number), width: rows[0].length, height: rows.length }; }

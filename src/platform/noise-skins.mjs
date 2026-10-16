@@ -1,4 +1,4 @@
-import { assetUrl } from '../core/asset-url.mjs';
+import { assetUrl } from '../core/asset-url.ts';
 import { parseNoiseSkin, skinPath } from '../core/noise-skin.mjs';
 
 export async function loadBuiltinNoiseSkins(request = url => fetch(url)) {

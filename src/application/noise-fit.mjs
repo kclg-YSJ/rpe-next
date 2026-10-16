@@ -1,6 +1,6 @@
-import { assertChart } from '../core/chart.mjs';
-import { fromNumber } from '../core/beat.mjs';
-import { createNoiseArea, createNoiseEvent, withNoiseAreas } from '../core/noise-areas.mjs';
+import { assertChart } from '../core/chart.ts';
+import { fromNumber } from '../core/beat.ts';
+import { createNoiseArea, createNoiseEvent, withNoiseAreas } from '../core/noise-areas.ts';
 import { noiseLayers } from '../core/noise-skin.mjs';
 import { orderedNoiseRectangles, noiseAppearanceOffsets } from '../core/noise-fit.mjs';
 

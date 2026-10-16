@@ -1,8 +1,8 @@
-import { SceneRuntime } from '../core/scene.mjs';
-import { previewViewport } from '../core/editor-display.mjs';
-import { fitNoiseSampleView } from '../core/noise-sampling.mjs';
-import { chartWithEventLists, eventListAt } from '../application/event-commands.mjs';
-import { prepareCanvas } from './timeline.mjs';
+import { SceneRuntime } from '../core/scene.ts';
+import { previewViewport } from '../core/editor-display.ts';
+import { fitNoiseSampleView } from '../core/noise-sampling.ts';
+import { chartWithEventLists, eventListAt } from '../application/event-commands.ts';
+import { prepareCanvas } from './timeline.ts';
 
 const sampledTypes = new Set(['moveXEvents', 'moveYEvents', 'rotateEvents']);
 const round = value => Math.round(value * 10000) / 10000;

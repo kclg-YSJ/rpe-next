@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventSampler } from '../src/ui/event-sampler.mjs';
-import { EditorSession } from '../src/application/session.mjs';
-import { createChart, createLine, createEvent } from '../src/core/chart.mjs';
-import { TempoMap } from '../src/core/tempo.mjs';
-import { SceneRuntime } from '../src/core/scene.mjs';
+import { EditorSession } from '../src/application/session.ts';
+import { createChart, createLine, createEvent } from '../src/core/chart.ts';
+import { TempoMap } from '../src/core/tempo.ts';
+import { SceneRuntime } from '../src/core/scene.ts';
 
 function fixture(chart = createChart(), autoFit = true) {
   const sampler = Object.create(EventSampler.prototype);

@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { noiseLayers, noiseLayerId, withNoiseLayers, validateNoiseLayers, parseNoiseSkin, noiseSkinAuthor, noiseSkinLabel, skinParameters, skinTextures, skinPath, skinSize, maskWord } from '../src/core/noise-skin.mjs';
-import { createChart, parseChart, serializeChart } from '../src/core/chart.mjs';
-import { createNoiseArea } from '../src/core/noise-areas.mjs';
-import { packageEntries, legacyChart } from '../src/platform/files.mjs';
-import { normalizeEditorPreferences } from '../src/platform/editor-preferences.mjs';
+import { createChart, parseChart, serializeChart } from '../src/core/chart.ts';
+import { createNoiseArea } from '../src/core/noise-areas.ts';
+import { packageEntries, legacyChart } from '../src/platform/files.ts';
+import { normalizeEditorPreferences } from '../src/platform/editor-preferences.ts';
 import { noiseSkinModified, rememberedNoiseSkinSettings, switchNoiseSkin, updateNoiseSkinSettings } from '../src/core/noise-skin.mjs';
-import { EditorSession } from '../src/application/session.mjs';
+import { EditorSession } from '../src/application/session.ts';
 
 const main = 'precision highp float; varying highp vec2 uv; uniform float touchReleaseDuration; // %0.1% 0..1\nuniform vec4 tint; // %1,0,0,1% 0..1\nvoid main(){gl_FragColor=tint;}';
 const files = config => new Map([['main.glsl', main], ...(config ? [['config.json', JSON.stringify(config)]] : [])]);

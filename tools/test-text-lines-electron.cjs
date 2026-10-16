@@ -40,11 +40,11 @@ app.whenReady().then(async () => {
     await window.loadURL('rpe://app/'); await pause(800);
     await evaluate(async () => {
       window.addEventListener('error', event => { window.textTestErrors ??= []; window.textTestErrors.push(event.message); });
-      const { TextLinesPanel } = await import('./src/ui/text-lines.mjs'); const open = TextLinesPanel.prototype.open;
+      const { TextLinesPanel } = await import('./src/ui/text-lines.ts'); const open = TextLinesPanel.prototype.open;
       TextLinesPanel.prototype.open = function (...args) { window.textTestPanel = this; return open.apply(this, args); };
-      const { Preview } = await import('./src/ui/preview.mjs'); const draw = Preview.prototype.draw;
+      const { Preview } = await import('./src/ui/preview.ts'); const draw = Preview.prototype.draw;
       Preview.prototype.draw = function (...args) { const result = draw.apply(this, args); if (window.textTestPanel?.previewChart === args[0] && this.visible) window.textTestPreview = { chart: args[0], count: this.noteHitAreas.length, seconds: args[2] }; return result; };
-      const { createChart, createLine, createEvent } = await import('./src/core/chart.mjs'); const chart = createChart();
+      const { createChart, createLine, createEvent } = await import('./src/core/chart.ts'); const chart = createChart();
       chart.judgeLineList = Array.from({ length: 160 }, (_, index) => { const line = createLine('Text ' + index); line.eventLayers[0].alphaEvents = [createEvent(0)]; return line; });
       const transfer = new DataTransfer(); transfer.items.add(new File([JSON.stringify(chart)], 'text-test.json', { type: 'application/json' }));
       const input = document.querySelector('#file-input'); input.files = transfer.files; input.dispatchEvent(new Event('change', { bubbles: true }));
@@ -92,7 +92,7 @@ app.whenReady().then(async () => {
     await evaluate(() => { window.textTestExpected = window.textTestPanel.result.strokes; });
     await click('#text-lines-editor .text-lines-footer button:last-child');
     const applied = await evaluate(async () => {
-      const panel = window.textTestPanel; const session = panel.getContext().session; const { SceneRuntime } = await import('./src/core/scene.mjs');
+      const panel = window.textTestPanel; const session = panel.getContext().session; const { SceneRuntime } = await import('./src/core/scene.ts');
       const scene = new SceneRuntime(); scene.compile(session.chart, panel.getContext().tempo); const states = scene.sample(2);
       return { history: session.history.undoStack.length, count: session.chart.judgeLineList.reduce((sum, line) => sum + line.notes.length, 0), matches: window.textTestExpected.every((stroke, index) => Math.hypot(states[index].x - stroke.x, states[index].y - stroke.y) < 0.000001), active: panel.active };
     });

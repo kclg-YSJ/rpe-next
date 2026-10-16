@@ -1,4 +1,4 @@
-import { easing, bezier } from '../core/easing.mjs';
+import { easing, bezier } from '../core/easing.ts';
 
 const shapes = new Map();
 const eventShapes = new WeakMap();

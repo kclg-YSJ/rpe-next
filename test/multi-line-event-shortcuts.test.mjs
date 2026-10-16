@@ -1,11 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { EditorSession } from '../src/application/session.mjs';
-import { createChart, createLine, createEvent } from '../src/core/chart.mjs';
-import { Timeline } from '../src/ui/timeline.mjs';
-import { applyNumberShortcut } from '../src/application/number-shortcuts.mjs';
-import { eventListAt, selectEvent, selectAllEvents, selectedEventEntries, deleteEvents, insertEventAt } from '../src/application/event-commands.mjs';
-import { deleteObjects } from '../src/application/clipboard.mjs';
+import { EditorSession } from '../src/application/session.ts';
+import { createChart, createLine, createEvent } from '../src/core/chart.ts';
+import { Timeline } from '../src/ui/timeline.ts';
+import { applyNumberShortcut } from '../src/application/number-shortcuts.ts';
+import { eventListAt, selectEvent, selectAllEvents, selectedEventEntries, deleteEvents, insertEventAt } from '../src/application/event-commands.ts';
+import { deleteObjects } from '../src/application/clipboard.ts';
 
 function fixture() {
   const chart = createChart(); chart.judgeLineList = Array.from({ length: 3 }, () => createLine());

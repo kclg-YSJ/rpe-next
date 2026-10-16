@@ -2,10 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { WebSocket, WebSocketServer } from 'ws';
 import { startCollaborationServer } from '../server.mjs';
-import { createChart } from '../../src/core/chart.mjs';
-import { EditorSession } from '../../src/application/session.mjs';
-import { CollaborationClient } from '../../src/application/collaboration-client.mjs';
-import { CollaborationTransport } from '../../src/platform/collaboration-transport.mjs';
+import { createChart } from '../../src/core/chart.ts';
+import { EditorSession } from '../../src/application/session.ts';
+import { CollaborationClient } from '../../src/application/collaboration-client.ts';
+import { CollaborationTransport } from '../../src/platform/collaboration-transport.ts';
 
 test('6.6 MB 谱面双向限速且不回 Pong 时，数据及分片确认仍保持连接存活', { timeout: 90000 }, async context => {
   const diagnostics = []; const service = await startCollaborationServer({ port: 0, onDiagnostic: entry => diagnostics.push(entry) });

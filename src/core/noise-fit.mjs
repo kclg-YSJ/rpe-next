@@ -1,4 +1,4 @@
-import { easing } from './easing.mjs';
+import { easing } from './easing.ts';
 
 export const NOISE_REVEALS = [
   ['left', '从左到右'], ['right', '从右到左'], ['top', '从上到下'], ['bottom', '从下到上'],

@@ -1,16 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createChart, createEvent, createLine } from '../src/core/chart.mjs';
-import { EditorSession } from '../src/application/session.mjs';
-import { Timeline } from '../src/ui/timeline.mjs';
-import { NoiseAreaEditor } from '../src/ui/noise-area.mjs';
-import { createNoiseArea, createNoiseEvent } from '../src/core/noise-areas.mjs';
-import { TempoMap } from '../src/core/tempo.mjs';
+import { createChart, createEvent, createLine } from '../src/core/chart.ts';
+import { EditorSession } from '../src/application/session.ts';
+import { Timeline } from '../src/ui/timeline.ts';
+import { NoiseAreaEditor } from '../src/ui/noise-area.ts';
+import { createNoiseArea, createNoiseEvent } from '../src/core/noise-areas.ts';
+import { TempoMap } from '../src/core/tempo.ts';
 import { drawEventCurve } from '../src/ui/event-curve.mjs';
-import { easing, bezier } from '../src/core/easing.mjs';
+import { easing, bezier } from '../src/core/easing.ts';
 import { eventDisplayIndex } from '../src/ui/event-display-index.mjs';
-import { migratePreferences } from '../src/core/preferences.mjs';
-import { readEditorPreferences, writeEditorPreferences } from '../src/platform/editor-preferences.mjs';
+import { migratePreferences } from '../src/core/preferences.ts';
+import { readEditorPreferences, writeEditorPreferences } from '../src/platform/editor-preferences.ts';
 
 function surface() {
   const calls = []; const paths = []; let currentPath = []; let subpaths = [];

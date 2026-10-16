@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { readFile, readdir } from 'node:fs/promises';
 import { loadBuiltinNoiseSkins, installBuiltinNoiseSkin } from '../src/platform/noise-skins.mjs';
 import { parseNoiseSkin } from '../src/core/noise-skin.mjs';
-import { createChart, serializeChart, parseChart } from '../src/core/chart.mjs';
-import { packageEntries } from '../src/platform/files.mjs';
+import { createChart, serializeChart, parseChart } from '../src/core/chart.ts';
+import { packageEntries } from '../src/platform/files.ts';
 
 const readAsset = async url => new Response(await readFile(new URL(url)));
 

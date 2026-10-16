@@ -1,5 +1,5 @@
 import { noiseLayers, noiseLayerId, withNoiseLayers, parseNoiseSkin, skinPath, noiseSkinAuthor, noiseSkinLabel, noiseSkinModified, rememberedNoiseSkinSettings, switchNoiseSkin, updateNoiseSkinSettings } from '../core/noise-skin.mjs';
-import { readZip } from '../platform/archive.mjs';
+import { readZip } from '../platform/archive.ts';
 import { loadBuiltinNoiseSkins, installBuiltinNoiseSkin, builtinNoiseSkinRoot } from '../platform/noise-skins.mjs';
 
 const action = (text, run) => { const button = document.createElement('button'); button.type = 'button'; button.textContent = text; button.onclick = run; return button; };

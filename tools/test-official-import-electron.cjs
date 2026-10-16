@@ -30,9 +30,9 @@ app.whenReady().then(async () => {
     await window.loadURL(process.env.RPE_TEST_URL ?? 'http://127.0.0.1:4173');
     await evaluate(async () => {
       window.addEventListener('error', event => { window.officialTestErrors ??= []; window.officialTestErrors.push(event.message); });
-      const { NoiseAreaEditor } = await import('./src/ui/noise-area.mjs'); const draw = NoiseAreaEditor.prototype.draw;
+      const { NoiseAreaEditor } = await import('./src/ui/noise-area.ts'); const draw = NoiseAreaEditor.prototype.draw;
       NoiseAreaEditor.prototype.draw = function (...args) { window.officialTestEditor = this; return draw.apply(this, args); };
-      const { NoisePreview } = await import('./src/ui/noise-preview.mjs'); const render = NoisePreview.prototype.draw;
+      const { NoisePreview } = await import('./src/ui/noise-preview.ts'); const render = NoisePreview.prototype.draw;
       NoisePreview.prototype.draw = function (...args) { const start = performance.now(); const result = render.apply(this, args); this.testSeconds = args[3]; window.officialTestDraws ??= []; window.officialTestDraws.push({ milliseconds: performance.now() - start, count: this.guides.length }); return result; };
     });
     window.webContents.debugger.attach('1.3');
@@ -69,14 +69,14 @@ app.whenReady().then(async () => {
       const editor = window.officialTestEditor; const tempo = editor.context.tempo;
       const index = editor.areas().findIndex(area => Math.abs(tempo.beat(tempo.seconds(area.appearTime)) - 240) < 0.001 && Math.abs(tempo.beat(tempo.seconds(area.disappearTime)) - 251) < 0.001);
       if (index < 0) return null;
-      const { NoiseAreaRuntime } = await import('./src/core/noise-areas.mjs'); const { SceneRuntime } = await import('./src/core/scene.mjs');
+      const { NoiseAreaRuntime } = await import('./src/core/noise-areas.ts'); const { SceneRuntime } = await import('./src/core/scene.ts');
       const area = new NoiseAreaRuntime(editor.areas()[index], tempo); const scene = new SceneRuntime(); scene.compile(editor.chart, tempo);
       return { index, samples: [244.01, 246, 248, 250].map(beat => { const seconds = tempo.seconds(beat); return { beat, top: Math.max(...area.sample(seconds).points.map(point => point.y)), lineY: scene.sampler(seconds)(0).y }; }) };
     });
     if (fallingBlock) { for (const sample of fallingBlock.samples) assert.ok(Math.abs(sample.top - sample.lineY) < 0.002); console.log('PASS: falling noise edge matches simultaneously descending line. ' + JSON.stringify(fallingBlock)); }
     if (stats.areas > 14121 && Math.abs(source.blockAreaList[14121].appearTime - 114.0136) < 0.001) {
       const orbit = await evaluate(async () => {
-        const editor = window.officialTestEditor; const { NoiseAreaRuntime } = await import('./src/core/noise-areas.mjs');
+        const editor = window.officialTestEditor; const { NoiseAreaRuntime } = await import('./src/core/noise-areas.ts');
         const runtime = new NoiseAreaRuntime(editor.areas()[14121], editor.context.tempo);
         return [420, 422, 424, 426].map(beat => { const state = runtime.sample(editor.context.tempo.seconds(beat)); return { beat, center: state.center, anchor: state.anchorR, radius: Math.hypot(state.center.x, state.center.y - 450) }; });
       });
@@ -108,7 +108,7 @@ app.whenReady().then(async () => {
     assert.equal(await evaluate(() => window.officialTestEditor.area().Name), '导入编辑测试');
     await click('#undo'); assert.equal(await evaluate(() => window.officialTestEditor.areas()[window.officialTestEditor.selected].Name), originalName);
     const restored = await evaluate(async () => {
-      const editor = window.officialTestEditor; const { serializeChart, parseChart } = await import('./src/core/chart.mjs');
+      const editor = window.officialTestEditor; const { serializeChart, parseChart } = await import('./src/core/chart.ts');
       const chart = parseChart(serializeChart(editor.chart));
       return { areas: chart.blockAreaList.length, selectedArea: chart.blockAreaList[editor.selected], savedSourceAreas: chart.rpeNextLegacySource.document.blockAreaList.length };
     });

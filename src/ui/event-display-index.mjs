@@ -1,6 +1,6 @@
-import { beatValue } from '../core/beat.mjs';
-import { eventChains } from '../core/editor-display.mjs';
-import { IntervalIndex } from '../core/interval-index.mjs';
+import { beatValue } from '../core/beat.ts';
+import { eventChains } from '../core/editor-display.ts';
+import { IntervalIndex } from '../core/interval-index.ts';
 
 // Chart edits replace event lists. Keep geometry-independent work until that chart changes.
 export function eventDisplayIndex(owner, events, chart) {

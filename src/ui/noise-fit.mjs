@@ -1,11 +1,11 @@
-import { beatValue, formatBeat, fromNumber, parseBeat } from '../core/beat.mjs';
+import { beatValue, formatBeat, fromNumber, parseBeat } from '../core/beat.ts';
 import { NOISE_REVEALS } from '../core/noise-fit.mjs';
 import { noiseLayers } from '../core/noise-skin.mjs';
-import { previewViewport } from '../core/editor-display.mjs';
+import { previewViewport } from '../core/editor-display.ts';
 import { fittedNoiseAreas, noiseFitChart } from '../application/noise-fit.mjs';
-import { beatInputControl } from './beat-input.mjs';
-import { createEasingPicker, EASING_NAMES } from './easing-picker.mjs';
-import { prepareCanvas } from './timeline.mjs';
+import { beatInputControl } from './beat-input.ts';
+import { createEasingPicker, EASING_NAMES } from './easing-picker.ts';
+import { prepareCanvas } from './timeline.ts';
 import { editorSkinContext } from './editor-skin-canvas.mjs';
 
 const button = (text, run) => { const element = document.createElement('button'); element.type = 'button'; element.textContent = text; element.onclick = run; return element; };

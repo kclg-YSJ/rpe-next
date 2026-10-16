@@ -5,7 +5,7 @@ import { parseEditorSkin, compileEditorSkin, resolveEditorSkin, editorSkinSelect
 import { EDITOR_SKIN_DEFAULT_TOKENS } from '../src/ui/editor-skin-base.mjs';
 import { importEditorSkin, exportEditorSkin, builtinEditorSkins } from '../src/platform/editor-skins.mjs';
 import { editorSkinContext, setEditorCanvasSkin } from '../src/ui/editor-skin-canvas.mjs';
-import { readZip, writeZip } from '../src/platform/archive.mjs';
+import { readZip, writeZip } from '../src/platform/archive.ts';
 import { editorSkinFixture } from './fixtures/editor-skin.mjs';
 
 const encode = value => new TextEncoder().encode(typeof value === 'string' ? value : JSON.stringify(value));

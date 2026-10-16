@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { NoiseAreaEditor } from '../src/ui/noise-area.mjs';
-import { createNoiseArea, createNoiseEvent } from '../src/core/noise-areas.mjs';
-import { fromNumber } from '../src/core/beat.mjs';
-import { TempoMap } from '../src/core/tempo.mjs';
+import { NoiseAreaEditor } from '../src/ui/noise-area.ts';
+import { createNoiseArea, createNoiseEvent } from '../src/core/noise-areas.ts';
+import { fromNumber } from '../src/core/beat.ts';
+import { TempoMap } from '../src/core/tempo.ts';
 
 const interval = (start, end, readyFlash) => ({ startTime: fromNumber(start), endTime: fromNumber(end), readyFlash });
 const near = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-7, `${actual} != ${expected}`);

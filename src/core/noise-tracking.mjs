@@ -1,6 +1,6 @@
-import { beatValue, fromNumber } from './beat.mjs';
-import { SceneRuntime } from './scene.mjs';
-import { createNoiseArea, createNoiseEvent, withNoiseAreas } from './noise-areas.mjs';
+import { beatValue, fromNumber } from './beat.ts';
+import { SceneRuntime } from './scene.ts';
+import { createNoiseArea, createNoiseEvent, withNoiseAreas } from './noise-areas.ts';
 import { noiseLayers } from './noise-skin.mjs';
 
 const MAX_SAMPLES = 60000;

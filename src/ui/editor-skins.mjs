@@ -1,8 +1,8 @@
 import { parseEditorSkin, resolveEditorSkin, EDITOR_SKIN_BUILTINS } from '../core/editor-skin.mjs';
 import { importEditorSkin, readEditorSkins, storeEditorSkin, deleteEditorSkin, builtinEditorSkins, exportEditorSkin } from '../platform/editor-skins.mjs';
 import { EditorSkinRuntime } from './editor-skin-runtime.mjs';
-import { download } from '../platform/files.mjs';
-import { assetUrl } from '../core/asset-url.mjs';
+import { download } from '../platform/files.ts';
+import { assetUrl } from '../core/asset-url.ts';
 
 const ACTIVE_KEY = 'rpe-next-active-editor-skin-v1';
 const OPTIONS_KEY = 'rpe-next-editor-skin-options-v1';

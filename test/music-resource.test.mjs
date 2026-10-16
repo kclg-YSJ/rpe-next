@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { EditorSession } from '../src/application/session.mjs';
-import { createChart, createNote } from '../src/core/chart.mjs';
+import { EditorSession } from '../src/application/session.ts';
+import { createChart, createNote } from '../src/core/chart.ts';
 
 test('不可撤销的音乐替换不新增历史，撤销重做其他编辑仍保留新音乐', () => {
   const chart = createChart(); chart.META.song = 'music.ogg'; chart.META.offset = 375;
