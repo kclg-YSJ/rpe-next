@@ -6,7 +6,9 @@ import { parseNoiseSkin } from '../src/core/noise-skin.mjs';
 import { createChart, serializeChart, parseChart } from '../src/core/chart.mjs';
 import { packageEntries } from '../src/platform/files.mjs';
 
-const readAsset = async url => new Response(await readFile(new URL(url)));
+// `assetUrl` returns a document-relative path (`/assets/...`, or a subdirectory build prefix),
+// so resolve it against the repository root the same way a browser would against the origin.
+const readAsset = async url => new Response(await readFile(new URL(String(url).replace(/^\/+/, ''), new URL('../', import.meta.url))));
 
 test('两套内置皮肤资源完整、作者正确、可解析且普通与低性能通道互相独立', async () => {
   const skins = await loadBuiltinNoiseSkins(readAsset);

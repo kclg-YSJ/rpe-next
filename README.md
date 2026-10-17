@@ -47,13 +47,19 @@
 
 ## 本地运行
 
-安装 Node.js 22 或更新版本，下载源码后在项目目录运行：
+安装 Node.js 22.12 或更新版本，下载源码后在项目目录运行：
 
 ```sh
+npm install
 npm start
 ```
 
-Windows 也可双击 `start.cmd`。无需安装 npm 依赖。默认打开 `http://127.0.0.1:4173`，关闭终端会停止本地服务。
+Windows 也可双击 `start.cmd`（首次运行会自动安装依赖）。开发服务器默认打开 `http://127.0.0.1:5173`，关闭终端会停止服务。想预览生产构建：
+
+```sh
+npm run build
+npm run preview
+```
 
 ## Windows 桌面测试版
 
@@ -90,16 +96,14 @@ Windows 也可双击 `start.cmd`。无需安装 npm 依赖。默认打开 `http:
 
 大贴图按需解码，并按当前显示尺度选择缓存分辨率；缩放放大时自动补充更高分辨率。该缓存不改变贴图坐标、逻辑尺寸或导出的原始素材。
 
-仅在需要桌面包时手动运行（不会随网页构建或部署自动生成）：
+仅在需要桌面包时手动运行（不会随网页构建或部署自动生成，脚本会先重新构建 `dist/`）：
 
 ```sh
 npm ci
 npm run build:desktop
 ```
 
-产物位于 `release/`，只包含程序、内置素材与许可文件；不包含个人谱面和开发记录。开发调试可运行 `npm run desktop`。
-
-`npm run build:release` 在当前系统与架构上构建发布包，读取 Git 已提交的公开素材，保留中英文运行资源，实测包内程序后生成压缩文件与校验清单。Windows 可额外运行 `npm run build:release -- --server` 生成联机服务器 GUI。GitHub Actions 中的 `Build release packages` 工作流可同时构建并验证六个平台组合。
+产物位于 `release/`，只包含程序、内置素材与许可文件；不包含个人谱面和开发记录。开发调试可运行 `npm run desktop`（会先构建 `dist/`，再用 Electron 打开构建产物）。
 
 ## 数据与隐私
 
@@ -127,6 +131,8 @@ npm run build:desktop
 
 ## 开发与验证
 
+开发服务器与构建使用 [Vite](https://vite.dev/)。源码本身仍是不经编译的原生 ES 模块，`npm test` 直接用 Node 内置测试运行 `src/`。
+
 编辑器支持在“设置 → 编辑器皮肤”中导入、预览和切换独立皮肤包，涵盖界面样式、字体、图片、动画、命令分组和编辑画布色板。当前 API 3 保留响应式变量、容器规则、状态信号、分区画布、可调参数和同包明暗变体，并允许画布色板引用颜色参数，与界面配色一同调整。参见 [编辑器皮肤协议 v1](protocols/EDITOR-SKIN-PROTOCOL.zh-CN.md) 和 [机器可读组件目录](schemas/editor-skin-components.v1.json)。自定义皮肤可运行 `node tools/pack-editor-skin.mjs <皮肤目录> [输出文件]` 打包。
 
 新配置默认使用内置“墨线 Inkline(cmdysj)”，可在设置中切换皮肤、修改及恢复原始参数。原始皮肤仍保留；Inkline 的名称、作者、字体声明与素材均来自其皮肤包。网页端与桌面端共用 `src/core/default-settings.mjs` 中的初始配置；已有个人设置优先。
@@ -136,9 +142,10 @@ npm test
 npm run build
 npm run smoke-build
 npm run build:pages
+npm run smoke-pages
 ```
 
-`build` 生成可本地运行的 `dist/`；`build:pages` 仅生成静态网站。推送到 `main` 后，GitHub Actions 自动测试并部署 GitHub Pages。
+`public/` 下的素材会原样复制进 `dist/`：编辑器在运行时才按需解析贴图、缓动曲线、shader 与音效，所以这些文件不做哈希改名。`build` 生成从域名根路径提供服务的 `dist/`；`build:pages` 生成部署在 `/rpe-next/` 子目录的静态网站。推送到 `main` 后，GitHub Actions 自动测试并部署 GitHub Pages。
 
 ## 许可与来源
 

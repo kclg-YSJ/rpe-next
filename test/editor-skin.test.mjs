@@ -23,7 +23,8 @@ test('协议测试数据可打包、导入并往返导出', async () => {
 });
 
 test('Inkline 内置资源完整且可以直接加载，保留作者、颜色参数与字体', async context => {
-  context.mock.method(globalThis, 'fetch', async url => new Response(await readFile(new URL(url))));
+  // `assetUrl` returns a document-relative path, so resolve it against the repository root.
+  context.mock.method(globalThis, 'fetch', async url => new Response(await readFile(new URL(String(url).replace(/^\/+/, ''), new URL('../', import.meta.url)))));
   const skins = await builtinEditorSkins();
   assert.deepEqual(skins.map(record => record.skin.id), ['inkline']);
   const skin = skins[0]; assert.equal(skin.builtin, true);

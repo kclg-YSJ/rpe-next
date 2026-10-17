@@ -59,7 +59,7 @@ test('重叠的同类 shader 按 order 独立叠加，相接边界只应用后�
 });
 
 test('shader 参数标量、向量、默认值、绝对拍数及原版 clone 类型', async () => {
-  const source = await readFile(new URL('../assets/rpe/shaders/pr/rain_pr.glsl', import.meta.url), 'utf8');
+  const source = await readFile(new URL('../public/assets/rpe/shaders/pr/rain_pr.glsl', import.meta.url), 'utf8');
   const definitions = shaderParameters(source);
   assert.deepEqual(definitions.find(entry => entry.name === 'rainColor').value, [0.7, 0.8, 0.9, 0.6]);
   assert.ok(!definitions.some(entry => ['screenSize', 'time'].includes(entry.name)));

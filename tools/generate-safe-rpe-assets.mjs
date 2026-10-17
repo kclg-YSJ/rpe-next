@@ -6,13 +6,18 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { deflateSync } from 'node:zlib';
 
+// `--output` redirects generation into a scratch directory: it names the folder standing in for this
+// project's `public/`, so the assets land at `<output>/assets/rpe`. That keeps the relative contract
+// the generator's own test relies on, while a normal run targets the checkout's `public/` — which is
+// where Vite expects static resources to live, and the one place it copies into the build verbatim.
 const outputIndex = process.argv.indexOf('--output');
-const root = outputIndex >= 0 ? process.argv[outputIndex + 1] : fileURLToPath(new URL('../', import.meta.url));
+const publicRoot = outputIndex >= 0 ? process.argv[outputIndex + 1] : fileURLToPath(new URL('../public/', import.meta.url));
+const assetRoot = join(publicRoot, 'assets', 'rpe');
 const notesOnly = process.argv.includes('--notes-only');
 const effectsOnly = process.argv.includes('--effects-only');
 if (notesOnly && effectsOnly) throw new Error('Choose either --notes-only or --effects-only');
-const textureRoot = join(root, 'assets', 'rpe', 'Texture');
-const soundRoot = join(root, 'assets', 'rpe', 'SE');
+const textureRoot = join(assetRoot, 'Texture');
+const soundRoot = join(assetRoot, 'SE');
 mkdirSync(textureRoot, { recursive: true });
 const clamp = value => Math.max(0, Math.min(1, value));
 const blend = (pixels, index, red, green, blue, alpha) => {
@@ -76,11 +81,11 @@ const noteAssets = effectsOnly ? {} : {
 };
 for (const [name, image] of Object.entries(noteAssets)) writePng(join(textureRoot, `${name}.png`), image);
 if (notesOnly) {
-  const manifestFile = join(root, 'assets', 'rpe', 'manifest.json');
+  const manifestFile = join(assetRoot, 'manifest.json');
   const manifest = JSON.parse(readFileSync(manifestFile, 'utf8'));
   for (const entry of manifest.files) {
     if (!Object.keys(noteAssets).some(name => entry.path === `Texture/${name}.png`)) continue;
-    const bytes = readFileSync(join(root, 'assets', 'rpe', entry.path));
+    const bytes = readFileSync(join(assetRoot, entry.path));
     entry.bytes = bytes.length;
     entry.sha256 = createHash('sha256').update(bytes).digest('hex');
   }
@@ -97,11 +102,11 @@ for (let frame = 1; !notesOnly && frame <= 31; frame++) {
   writePng(join(textureRoot, `img-${frame}.png`), image);
 }
 if (effectsOnly) {
-  const manifestFile = join(root, 'assets', 'rpe', 'manifest.json');
+  const manifestFile = join(assetRoot, 'manifest.json');
   const manifest = JSON.parse(readFileSync(manifestFile, 'utf8'));
   for (const entry of manifest.files) {
     if (!/^Texture\/img-(?:[1-9]|[12]\d|3[01])\.png$/.test(entry.path)) continue;
-    const bytes = readFileSync(join(root, 'assets', 'rpe', entry.path));
+    const bytes = readFileSync(join(assetRoot, entry.path));
     entry.bytes = bytes.length;
     entry.sha256 = createHash('sha256').update(bytes).digest('hex');
   }
@@ -112,4 +117,4 @@ const wav = (name, duration, tone) => { const sampleRate = 44100; const count = 
 wav('tap', 0.09, (time, duration) => Math.sin(2 * Math.PI * (920 - 280 * time / duration) * time) * Math.exp(-time * 34));
 wav('drag', 0.14, (time, duration) => (Math.sin(2 * Math.PI * (340 + 520 * time / duration) * time) * 0.7 + Math.sin(2 * Math.PI * 1170 * time) * 0.18) * Math.exp(-time * 17));
 wav('flick', 0.13, (time, duration) => (Math.sin(2 * Math.PI * (1250 - 650 * time / duration) * time) + Math.sin(2 * Math.PI * 2100 * time) * 0.22) * Math.exp(-time * 23));
-const manifestFile = join(root, 'assets', 'rpe', 'manifest.json'); const manifest = JSON.parse(readFileSync(manifestFile, 'utf8')); manifest.source = 'Generated replacement assets for public distribution; local builds may use the original RPE resources.'; const replaced = new Set([...Object.keys(noteAssets).map(name => `Texture/${name}.png`), ...Array.from({ length: 31 }, (unused, index) => `Texture/img-${index + 1}.png`), 'SE/tap.ogg', 'SE/drag.ogg', 'SE/flick.ogg']); for (const entry of manifest.files) if (replaced.has(entry.path)) { const bytes = readFileSync(join(root, 'assets', 'rpe', entry.path)); entry.bytes = bytes.length; entry.sha256 = createHash('sha256').update(bytes).digest('hex'); } writeFileSync(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`);
+const manifestFile = join(assetRoot, 'manifest.json'); const manifest = JSON.parse(readFileSync(manifestFile, 'utf8')); manifest.source = 'Generated replacement assets for public distribution; local builds may use the original RPE resources.'; const replaced = new Set([...Object.keys(noteAssets).map(name => `Texture/${name}.png`), ...Array.from({ length: 31 }, (unused, index) => `Texture/img-${index + 1}.png`), 'SE/tap.ogg', 'SE/drag.ogg', 'SE/flick.ogg']); for (const entry of manifest.files) if (replaced.has(entry.path)) { const bytes = readFileSync(join(assetRoot, entry.path)); entry.bytes = bytes.length; entry.sha256 = createHash('sha256').update(bytes).digest('hex'); } writeFileSync(manifestFile, `${JSON.stringify(manifest, null, 2)}\n`);

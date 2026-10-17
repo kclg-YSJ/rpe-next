@@ -26,12 +26,12 @@ const shaderFixes = {
   'shaders/heat_distortion.glsl': text => text.replace(') * 2 - 1.0;', ') * 2.0 - 1.0;'),
 };
 for (const path of paths) {
-  const destination = join(project, 'assets/rpe', path);
+  const destination = join(project, 'public/assets/rpe', path);
   await mkdir(resolve(destination, '..'), { recursive: true });
   await copyFile(join(source, path), destination);
   if (shaderFixes[path]) await writeFile(destination, shaderFixes[path](await readFile(destination, 'utf8')));
   const bytes = await readFile(destination);
   manifest.files.push({ path, bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') });
 }
-await writeFile(join(project, 'assets/rpe/manifest.json'), JSON.stringify(manifest, null, 2));
+await writeFile(join(project, 'public/assets/rpe/manifest.json'), JSON.stringify(manifest, null, 2));
 console.log(`Copied ${paths.length} original assets into the independent project.`);
