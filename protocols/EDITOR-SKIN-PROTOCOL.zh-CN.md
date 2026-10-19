@@ -502,13 +502,13 @@ CSS 仍有很大的布局自由，错误主题可能遮挡按钮、制造低对�
 在仓库目录运行：
 
 ```sh
-node tools/pack-editor-skin.mjs path/to/my-skin release/editor-skins/my-skin.rpenskin
+node tools/pack-editor-skin.ts path/to/my-skin release/editor-skins/my-skin.rpenskin
 # 省略输出文件时，生成 release/editor-skins/<皮肤id>.rpenskin
 ```
 
-打包器进行与导入器相同的纯数据校验；浏览器导入继续验证 CSS 选择器和媒体解码。`node tools/editor-skin-spec.mjs` 从运行时组件/变量定义重新生成 schema 与目录。`npm test` 包含协议解析、安全、打包导入和画布隔离测试。
+打包器进行与导入器相同的纯数据校验；浏览器导入继续验证 CSS 选择器和媒体解码。`node tools/editor-skin-spec.ts` 从运行时组件/变量定义重新生成 schema 与目录。`npm test` 包含协议解析、安全、打包导入和画布隔离测试。
 
-程序化界面回归可先设置环境变量 `RPE_PORT=4187` 并运行 `node tools/serve.mjs`，再用 `electron tools/test-editor-skin-electron.cjs`。测试使用最小合成测试数据和独立本机数据目录，不依赖额外主题包，输出截图到忽略提交的 `.local-tools/`。服务地址可用 `RPE_SKIN_TEST_URL` 指定。
+程序化界面回归可先设置环境变量 `RPE_PORT=4187` 并运行 `node tools/serve.ts`，再用 `electron tools/test-editor-skin-electron.ts`。测试使用最小合成测试数据和独立本机数据目录，不依赖额外主题包，输出截图到忽略提交的 `.local-tools/`。服务地址可用 `RPE_SKIN_TEST_URL` 指定。
 
 建议人类或 AI agent 按以下顺序制作：
 

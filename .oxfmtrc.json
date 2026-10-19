@@ -1,0 +1,11 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "singleQuote": true,
+  "printWidth": 200,
+  "semi": true,
+  "trailingComma": "all",
+  "endOfLine": "lf",
+  "sortPackageJson": false,
+  "sortImports": false,
+  "ignorePatterns": ["dist/**", "node_modules/**", "assets/mods/**", "tmp-probe/**", ".kilo/**"]
+}

@@ -15,3 +15,17 @@ examples/editor-skins/daybreak/
 Thumbs.db
 *.zip
 *.pez
+
+# Throwaway scripts, directories and typecheck logs used to probe behaviour by hand; never part of
+# the project.
+*errors.txt
+*errs.txt
+.probe*
+.scratch/
+.scratch-*/
+.tmp-*/
+**/.scratch/
+**/tmp-probe/
+scratch-probe.ts
+_resolve-probe.ts
+.kilo/

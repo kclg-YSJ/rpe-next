@@ -23,8 +23,8 @@ export interface Frame {
   chartSeconds: number; musicSeconds: number; playing: boolean;
 }
 export interface PreviewFrame {
-  renderer: any; target: 'preview' | 'realtime';
-  chart: any; tempo: any; seconds: number; timestamp: number;
+  renderer: unknown; target: 'preview' | 'realtime';
+  chart: unknown; tempo: unknown; seconds: number; timestamp: number;
 }
 export interface Command {
   /** Unique within this mod. */
@@ -37,33 +37,33 @@ export interface Command {
 }
 export type GlobalEventSource = {kind: 'builtin' | 'mod'; id: string; name: string; author?: string; version?: string};
 export interface GlobalEvent {
-  startTime: Beat; endTime: Beat; start: any; end: any;
+  startTime: Beat; endTime: Beat; start: unknown; end: unknown;
   easingType?: number; easingLeft?: number; easingRight?: number;
   bezier?: number | boolean; bezierPoints?: [number, number, number, number];
   inst?: number | boolean; linkgroup?: number;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 export interface GlobalEventInspectorContext {
   /** Property inspectors are mounted only for one selected global event. */
   container: HTMLElement; event: GlobalEvent;
   entries: Array<{type: string; index: number; event: GlobalEvent}>;
-  type: any; column: GlobalEventColumn; editor: any; document: any;
+  type: unknown; column: GlobalEventColumn; editor: unknown; document: unknown;
   /** Immutable transaction, supports undo/redo. */
-  update(change: (event: GlobalEvent, entry: any) => GlobalEvent, label?: string): void;
+  update(change: (event: GlobalEvent, entry: unknown) => GlobalEvent, label?: string): void;
 }
 export interface GlobalEventColumn {
   /** Local stable identifier, unique within its type. */
   id: string; name: string;
   /** Optional compact title used by the fixed-width timeline column. */
   timelineLabel?: string;
-  valueType?: 'number' | 'text' | 'boolean' | 'color' | 'json'; defaultValue?: any;
+  valueType?: 'number' | 'text' | 'boolean' | 'color' | 'json'; defaultValue?: unknown;
   min?: number; max?: number; step?: number; overlap?: boolean;
   /** CSS pixels, 24–2048. Inherits type width, then ordinary event column width. */
   width?: number;
-  create?(context: {event: GlobalEvent; previous?: GlobalEvent; type: any; column: GlobalEventColumn}): GlobalEvent | null;
+  create?(context: {event: GlobalEvent; previous?: GlobalEvent; type: unknown; column: GlobalEventColumn}): GlobalEvent | null;
   validate?(event: GlobalEvent): void | boolean | string;
-  formatValue?(value: any): string;
-  draw?(context: {context: CanvasRenderingContext2D; rectangle: {x: number; y: number; width: number; height: number}; event: GlobalEvent; selected: boolean; tempo: any; seconds: number; timeline: any; type: any; column: GlobalEventColumn}): void;
+  formatValue?(value: unknown): string;
+  draw?(context: {context: CanvasRenderingContext2D; rectangle: {x: number; y: number; width: number; height: number}; event: GlobalEvent; selected: boolean; tempo: unknown; seconds: number; timeline: unknown; type: unknown; column: GlobalEventColumn}): void;
   inspector?(context: GlobalEventInspectorContext): void | Dispose;
   shortcut?(context: {action: 'NumberMirror' | 'NumberFill'; event: GlobalEvent}): GlobalEvent | null;
 }
@@ -85,7 +85,7 @@ export interface GlobalEventsApi {
   open(): void;
 }
 export interface CommitHook {
-  session: any; label: string; chart: any; beforeSelection: any;
+  session: unknown; label: string; chart: unknown; beforeSelection: unknown;
   cancel: boolean; normalizeAlpha: boolean;
 }
 export interface HookPayloads {
@@ -93,37 +93,32 @@ export interface HookPayloads {
   /** Runs before ordinary editor input and mod shortcuts. Set handled to consume. */
   'input:before': {event: Event; handled: boolean};
   'session:before-commit': CommitHook;
-  'session:after-commit': {session: any; label: string; chart: any};
-  'chart:parse': {text: string; chart: any | null};
-  'chart:parsed': {chart: any};
-  'chart:validate': {chart: any; handled: boolean};
-  'chart:serialize': {chart: any; compact: boolean; text: string | null};
-  /** Add project asset paths required by custom chart data before PEZ pruning. */
-  'chart:export-assets': {chart: any; chartName: string; assets: Map<string, Uint8Array>; required: Set<string>};
-  'preview:before': {chart: any; seconds: number; lineIndex: number};
+  'chart:serialize': {chart: unknown; compact: boolean; text: string | null};
+  'chart:export-assets': {chart: unknown; chartName: string; assets: Map<string, Uint8Array>; required: Set<string>};
+  'preview:before': {chart: unknown; seconds: number; lineIndex: number};
 }
 export interface Editor {
-  readonly session: any; readonly chart: any; readonly tempo: any;
+  readonly session: unknown; readonly chart: unknown; readonly tempo: unknown;
   readonly assets: Map<string, Uint8Array>;
-  readonly preferences: any; readonly editorPreferences: any;
+  readonly preferences: unknown; readonly editorPreferences: unknown;
   readonly chartName: string; readonly hasDocument: boolean;
   readonly home: boolean; readonly activePane: string; readonly dirty: boolean;
   /** Backend-neutral record. id and storageRevision are opaque identifiers, not paths. */
-  readonly libraryProject: any;
+  readonly libraryProject: unknown;
   loop: {start: number; end: number} | null;
-  audio: any; playback: any; preview: any; realtimePreview: any; timeline: any;
-  skin: any; images: any; hitSounds: any; editorSkins: any; noteSkins: any; noiseEditor: any; eventSampler: any;
-  trajectoryPanel: any; textLinesPanel: any; noiseFitPanel: any;
-  noiseTrackingPanel: any; multiEdit: any; batchControls: any; collaboration: any;
-  globalEvents: any; globalEventRegistry: any; openGlobalEvents(): void;
+  audio: unknown; playback: unknown; preview: unknown; realtimePreview: unknown; timeline: unknown;
+  skin: unknown; images: unknown; hitSounds: unknown; editorSkins: unknown; noteSkins: unknown; noiseEditor: unknown; eventSampler: unknown;
+  trajectoryPanel: unknown; textLinesPanel: unknown; noiseFitPanel: unknown;
+  noiseTrackingPanel: unknown; multiEdit: unknown; batchControls: unknown; collaboration: unknown;
+  globalEvents: unknown; globalEventRegistry: unknown; openGlobalEvents(): void;
   chartSeconds(): number; offsetSeconds(): number; currentBeat(): number;
   invalidate(): void; render(): void;
   notify(message: string, level?: string): void;
   /** Await the active save queue; rejects on write/conflict errors. New edits can remain dirty. */
   save(): Promise<unknown>;
   activatePane(name: string): void;
-  commit(label: string, chart: any): unknown;
-  replace(chart: any, name?: string): unknown;
+  commit(label: string, chart: unknown): unknown;
+  replace(chart: unknown, name?: string): unknown;
   seek(seconds: number, options?: {music?: boolean; pause?: boolean}): void;
   seekBeat(beat: number, pause?: boolean): void;
   selectLine(index: number): void;
@@ -133,8 +128,8 @@ export interface Editor {
   /** Changes preview state temporarily; returned function restores view and pauses. */
   beginPreviewSession(): Dispose;
   raw: {
-    readonly session: any; chart: any; readonly assets: Map<string, Uint8Array>;
-    tempo: any; renderSession: Function; replaceChart: Function; activatePane: Function;
+    readonly session: unknown; chart: unknown; readonly assets: Map<string, Uint8Array>;
+    tempo: unknown; renderSession: Function; replaceChart: Function; activatePane: Function;
     togglePlayback: Function; togglePreview: Function; save: Function;
     applyDisplaySettings: Function; persistEditor: Function; setHome: Function;
   };
@@ -145,10 +140,10 @@ export interface ModApi {
   dispose(cleanup: () => unknown): Dispose;
   log(...values: unknown[]): void;
   notify(message: string, level?: 'success' | 'warning' | 'error' | string): void;
-  listen(target: EventTarget, type: string, callback: (event: any) => unknown,
+  listen(target: EventTarget, type: string, callback: (event: unknown) => unknown,
     options?: boolean | AddEventListenerOptions): Dispose;
   /** Receives detail directly, not the DOM event. */
-  on(type: string, callback: (detail: any) => unknown): Dispose;
+  on(type: string, callback: (detail: unknown) => unknown): Dispose;
   /** Emits mod:<id>:<type>. */
   emit(type: string, detail?: unknown): void;
   /** Callbacks must edit payload synchronously. */
@@ -177,17 +172,17 @@ export interface ModApi {
   };
   package: {
     files(): string[]; bytes(path: string): Uint8Array | null; text(path: string): string;
-    url(path: string, mime?: string): string; import(path: string): Promise<any>;
+    url(path: string, mime?: string): string; import(path: string): Promise<unknown>;
   };
   commands: {register(command: Command): Dispose};
   globalEvents: GlobalEventsApi;
   lockEditing(options?: {reason?: string; roots?: string[]}): Dispose;
-  importInternal(path: string): Promise<any>;
+  importInternal(path: string): Promise<unknown>;
 }
 export interface ModHost {
   apiVersion: 1; editor: Editor;
   /** Advanced mutable internals, see src/ui/mod-runtime.mjs and mod-manager.mjs. */
-  runtime: any; manager: any;
+  runtime: unknown; manager: unknown;
   resolveModule(loadId: string, specifier: string, from: string): string;
   disableAll(): Promise<void>;
 }

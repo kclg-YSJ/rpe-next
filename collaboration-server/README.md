@@ -57,6 +57,6 @@
 
 此目录运行 `npm ci` 后，`npm start` 可无 GUI 启动。环境变量：`RPE_COLLAB_PORT`、`RPE_COLLAB_HOST`、`RPE_COLLAB_KEY`。`GET /health` 只返回服务名称和协议版本，不公开房间列表。
 
-`npm test` 运行真实 WebSocket 多客户端测试。在编辑器根目录运行 `node tools/build-collaboration-server.mjs` 生成独立 Windows GUI 工具，输出位于忽略上传的 release 文件夹。
+`npm test` 运行真实 WebSocket 多客户端测试。在编辑器根目录运行 `node tools/build-collaboration-server.ts` 生成独立 Windows GUI 工具，输出位于忽略上传的 release 文件夹。
 
 第三方组件：ws（MIT）、Electron（MIT）、可选 cloudflared（Apache-2.0，需用户自行获取）。不在此项目中分发 cloudflared 二进制文件。

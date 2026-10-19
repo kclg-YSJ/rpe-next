@@ -57,6 +57,8 @@ npm start
 
 Windows 也可双击 `start.cmd`。无需安装 npm 依赖。默认打开 `http://127.0.0.1:4173`，关闭终端会停止本地服务。
 
+Bun 1.3 或更新版本也可直接运行：`bun install`、`bun run start`、`bun run test:bun`、`bun run smoke-build:bun`；桌面与发布脚本使用 `bun run build:desktop:bun`、`bun run build:release:bun`。CI 仍以 Node 22+/npm 为准。
+
 ## Windows 桌面测试版
 
 桌面包内置 Electron 运行环境，无需另装 Node.js 或浏览器。发布页提供 Windows、macOS、Linux 的 x64 / ARM64 桌面包；Windows 使用 ZIP，macOS 使用 DMG，Linux 使用 tar.xz。Windows 解压后运行 `RePhiEdit-Next.exe`，macOS 将应用拖入 Applications，Linux 解压后运行 `RePhiEdit-Next`。
@@ -105,7 +107,7 @@ npm run build:desktop
 
 ## 数据与隐私
 
-右上角“模组”可管理内置和导入模组；已装载数量显示在右下角。外部模组导入须主动确认风险，导入后默认禁用。模组在编辑器页面执行，拥有完整编辑器权限，可能读取、更改当前浏览器存储或桌面谱面库，或发送网络数据；请只启用可信代码。模组协议涵盖界面、语义、谱面结构、导入导出、函数补丁和生命周期，参见 [模组协议与开发指南](protocols/MOD-PROTOCOL.zh-CN.md)、[API 声明](schemas/mod-api-v1.d.ts) 和 [清单 Schema](schemas/mod-v1.schema.json)。制作时可用 `node tools/pack-mod.mjs <目录> [输出.rpenmod]`。
+右上角“模组”可管理内置和导入模组；已装载数量显示在右下角。外部模组导入须主动确认风险，导入后默认禁用。模组在编辑器页面执行，拥有完整编辑器权限，可能读取、更改当前浏览器存储或桌面谱面库，或发送网络数据；请只启用可信代码。模组协议涵盖界面、语义、谱面结构、导入导出、函数补丁和生命周期，参见 [模组协议与开发指南](protocols/MOD-PROTOCOL.zh-CN.md)、[API 声明](schemas/mod-api-v1.d.ts) 和 [清单 Schema](schemas/mod-v1.schema.json)。制作时可用 `node tools/pack-mod.ts <目录> [输出.rpenmod]`。
 
 “谱面工具 → 全局事件”打开独立时间轴和非常驻总览，按种类显示全曲密度；选中事件进入单独属性页。默认列宽与普通事件一致，不同种类留空隙；每种可有多列。内置占位仅用于测试、不写入谱面；模组可注册自定义类型、宽度、属性和绘制，保存时自动记录来源，停用模组保留只读数据。详见 [全局事件协议](protocols/GLOBAL-EVENTS-PROTOCOL.zh-CN.md)。
 
@@ -129,7 +131,11 @@ npm run build:desktop
 
 ## 开发与验证
 
-编辑器支持在“设置 → 编辑器皮肤”中导入、预览和切换独立皮肤包，涵盖界面样式、字体、图片、动画、命令分组和编辑画布色板。当前 API 3 保留响应式变量、容器规则、状态信号、分区画布、可调参数和同包明暗变体，并允许画布色板引用颜色参数，与界面配色一同调整。参见 [编辑器皮肤协议 v1](protocols/EDITOR-SKIN-PROTOCOL.zh-CN.md) 和 [机器可读组件目录](schemas/editor-skin-components.v1.json)。自定义皮肤可运行 `node tools/pack-editor-skin.mjs <皮肤目录> [输出文件]` 打包。
+开发服务器与构建使用 [Vite](https://vite.dev/)，源码以 TypeScript 编写、界面使用 [Vue 3](https://vuejs.org/) 单文件组件。开发服务器和构建步骤都会处理类型，日常运行不需要额外的编译命令。
+
+`npm test` 不用任何构建步骤：Node 直接以类型擦除方式运行 `test/` 与 `src/` 中的 `.ts` 文件。因此源码不能使用 `enum`、构造函数参数属性（`constructor(private x: T)`）和 `namespace` 这类需要真正生成代码的语法，`tsconfig.json` 里的 `erasableSyntaxOnly` 会让 `npm run typecheck` 一并拒绝它们，保证类型检查通过的写法在测试里也能直接跑。相对导入需要保留 `.ts` / `.vue` 后缀，这与 Node 的解析规则一致。
+
+编辑器支持在“设置 → 编辑器皮肤”中导入、预览和切换独立皮肤包，涵盖界面样式、字体、图片、动画、命令分组和编辑画布色板。当前 API 3 保留响应式变量、容器规则、状态信号、分区画布、可调参数和同包明暗变体，并允许画布色板引用颜色参数，与界面配色一同调整。参见 [编辑器皮肤协议 v1](protocols/EDITOR-SKIN-PROTOCOL.zh-CN.md) 和 [机器可读组件目录](schemas/editor-skin-components.v1.json)。自定义皮肤可运行 `node tools/pack-editor-skin.ts <皮肤目录> [输出文件]` 打包。
 
 新配置默认使用内置“墨线 Inkline(cmdysj)”，可在设置中切换皮肤、修改及恢复原始参数。原始皮肤仍保留；Inkline 的名称、作者、字体声明与素材均来自其皮肤包。网页端与桌面端共用 `src/core/default-settings.mjs` 中的初始配置；已有个人设置优先。
 

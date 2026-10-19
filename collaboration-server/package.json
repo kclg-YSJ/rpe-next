@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "main": "manager.cjs",
+  "main": "manager.ts",
   "license": "PolyForm-Noncommercial-1.0.0",
-  "scripts": { "start": "node server.mjs", "test": "node --test test/*.test.mjs" },
+  "scripts": { "start": "node server.ts", "test": "node --test test/*.test.ts" },
   "dependencies": { "ws": "8.22.0" }
 }

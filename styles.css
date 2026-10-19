@@ -1,5 +1,5 @@
-@font-face { font-family: RPE; src: url('./assets/rpe/fonts/cmdysj.ttf') format('truetype'); font-display: swap; }
-@font-face { font-family: RPEGame; src: url('./assets/rpe/fonts/cmdysj.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: RPE; src: url('/assets/rpe/fonts/cmdysj.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: RPEGame; src: url('/assets/rpe/fonts/cmdysj.ttf') format('truetype'); font-display: swap; }
 .editor.notes-only .canvases, .editor.notes-only .timeline-head { grid-template-columns: minmax(0, 1fr); }
 .editor.notes-only #events, .editor.notes-only .timeline-head > span:nth-child(2) { display: none; }
 .editor.multi-notes .canvases, .editor.multi-events .canvases { grid-template-columns: 24px minmax(0, 1fr) 24px; }
