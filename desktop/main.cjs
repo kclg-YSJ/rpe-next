@@ -12,6 +12,12 @@ const smokeMods = process.argv.includes('--smoke-mods');
 const smokeNative = process.argv.includes('--smoke-native');
 const smokeSaving = process.argv.includes('--smoke-saving');
 const smoke = process.argv.includes('--smoke-test') || smokeSettings || smokeMedia || smokeMods || smokeNative || smokeSaving;
+// A packaged build places the Vite output directly in resources/app. `npm run desktop` passes
+// --dist so the same shell can be run against a checkout's own build.
+const fromDist = process.argv.includes('--dist');
+// The Vite build emits the entry document at the app root and every bundled or copied resource
+// under assets/, so the protocol only has to expose those two places plus the licence files.
+const bundled = /^(?:index\.html|LICENSE|NOTICE|assets\/.+|protocols\/.+|schemas\/.+)$/;
 app.setName('RePhiEdit Next');
 app.setPath('userData', (smokeNative || smokeSaving) && process.env.RPE_NATIVE_TEST_HOME ? resolve(process.env.RPE_NATIVE_TEST_HOME) : smoke ? resolve(app.getPath('temp'), 'rpe-next-smoke-' + Date.now()) : resolve(app.getPath('appData'), 'rpe-next-desktop'));
 mkdirSync(app.getPath('userData'), { recursive: true });
@@ -34,7 +40,12 @@ else {
   });
   app.on('window-all-closed', () => app.quit());
   app.whenReady().then(async () => {
-    const root = await realpath(resolve(__dirname, '..'));
+    const root = await realpath(resolve(__dirname, fromDist ? '../dist' : '..'));
+    // The CSP's connect-src list comes from the collaboration policy module rather than being
+    // inlined here. It is read from the application root, not from the served site root: the Vite
+    // build output contains no source tree, so `../dist/src/...` would not exist. `build-desktop.mjs`
+    // copies this one dependency-free module into the package for the same reason.
+    const { collaborationConnectSources } = await import(pathToFileURL(resolve(__dirname, '..', 'src/core/collaboration-policy.mjs')).href);
     const { atomicJson } = await import(pathToFileURL(resolve(__dirname, 'native-store.mjs')).href);
     const configPath = resolve(app.getPath('userData'), 'native-storage.json');
     let config; try { config = JSON.parse(await readFile(configPath, 'utf8')); } catch (error) { if (error.code !== 'ENOENT') throw error; }
@@ -103,7 +114,6 @@ else {
         return { ok: true, result };
       } catch (error) { return { ok: false, error: { name: error.name, message: error.message, code: error.code, projectId: error.projectId, expectedRevision: error.expectedRevision, actualRevision: error.actualRevision } }; }
     });
-    const { collaborationConnectSources } = await import(pathToFileURL(resolve(root, 'src/core/collaboration-policy.mjs')).href);
     const connectSources = collaborationConnectSources(process.env.RPE_MEDIA_ORIGINS);
     protocol.handle('rpe', async request => {
       try {
@@ -111,14 +121,15 @@ else {
         if (url.host !== 'app' || !['GET', 'HEAD'].includes(request.method)) return new Response('Forbidden', { status: 403 });
         if (smokeNative && url.pathname === '/__native-test-seed') return new Response('<!doctype html><html><body>Native migration fixture</body></html>', { headers: { 'Content-Type': 'text/html' } });
         const relative = url.pathname === '/' ? 'index.html' : decodeURIComponent(url.pathname.slice(1));
-        if (!['index.html', 'styles.css', 'protocols/MOD-PROTOCOL.zh-CN.md', 'protocols/GLOBAL-EVENTS-PROTOCOL.zh-CN.md', 'protocols/EDITOR-SKIN-PROTOCOL.zh-CN.md', 'protocols/DESKTOP-STORAGE.zh-CN.md', 'schemas/editor-skin-v1.schema.json', 'schemas/editor-skin-components.v1.json', 'schemas/mod-v1.schema.json', 'schemas/mod-api-v1.d.ts'].includes(relative) && !relative.startsWith('src/') && !relative.startsWith('assets/')) return new Response('Not found', { status: 404 });
+        if (!bundled.test(relative)) return new Response('Not found', { status: 404 });
         const path = await realpath(resolve(root, relative));
         if (!path.startsWith(root + sep)) return new Response('Not found', { status: 404 });
         const response = await net.fetch(pathToFileURL(path).href);
         const headers = new Headers(response.headers);
         headers.set('Content-Security-Policy', `default-src 'self'; script-src 'self' blob:; script-src-elem 'self' blob: 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self' blob:; media-src 'self' blob: data:; connect-src ${connectSources}; object-src 'none'; base-uri 'none'; frame-ancestors 'none'`);
         headers.set('X-Content-Type-Options', 'nosniff');
-        if (path.endsWith('.mjs')) headers.set('Content-Type', 'text/javascript; charset=utf-8');
+        if (/\.m?js$/.test(path)) headers.set('Content-Type', 'text/javascript; charset=utf-8');
+        else if (path.endsWith('.css')) headers.set('Content-Type', 'text/css; charset=utf-8');
         return new Response(request.method === 'HEAD' ? null : response.body, { status: response.status, headers });
       } catch { return new Response('Not found', { status: 404 }); }
     });
@@ -168,7 +179,10 @@ else {
       const result = await mainWindow.webContents.executeJavaScript(`(async () => {
         await document.fonts.ready;
         await new Promise(resolve => setTimeout(resolve, 1000));
-        const resources = await Promise.all(['/src/ui/app.mjs', '/assets/rpe/Texture/Tap2.png', '/assets/rpe/fonts/cmdysj.ttf'].map(async path => { const response = await fetch(path); return { path, status: response.status, bytes: (await response.arrayBuffer()).byteLength }; }));
+        // The bundle name is content hashed, so read it back out of the served document.
+        const html = await (await fetch('/')).text();
+        const entry = html.match(/src="([^"]*\\.js)"/)?.[1] ?? '/assets/missing.js';
+        const resources = await Promise.all(['/index.html', entry, '/assets/rpe/Texture/Tap2.png', '/assets/rpe/fonts/cmdysj.ttf'].map(async path => { const response = await fetch(path); return { path, status: response.status, bytes: (await response.arrayBuffer()).byteLength }; }));
         const forbidden = await fetch('/desktop/main.cjs');
         const { CollaborationMedia } = await import('/src/platform/collaboration-media.mjs');
         const media = new CollaborationMedia(); const hashPhases = [];
@@ -177,7 +191,7 @@ else {
         if (mediaHash !== '039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81' || !hashPhases.includes('media-hash-worker-complete')) throw new Error('桌面后台校验或诊断烟测失败');
         const canvas = document.createElement('canvas');
         const database = await new Promise((resolve, reject) => { const request = indexedDB.open('desktop-smoke'); request.onsuccess = () => { request.result.close(); resolve(true); }; request.onerror = () => reject(request.error); });
-        return { title: document.title, secure: isSecureContext, libraryVisible: Boolean(document.querySelector('#home') && !document.querySelector('#home').hidden), directoryPicker: typeof showDirectoryPicker === 'function', webgl: Boolean(canvas.getContext('webgl2')), database, resources, forbidden: forbidden.status, hashPhases };
+        return { title: document.title, secure: isSecureContext, libraryVisible: Boolean(document.querySelector('#home') && !document.querySelector('#home').hidden), directoryPicker: typeof showDirectoryPicker === 'function', webgl: Boolean(canvas.getContext('webgl2')), database, resources, entry, forbidden: forbidden.status, hashPhases };
       })()`);
       if (smokeSettings) result.settings = await mainWindow.webContents.executeJavaScript(await require('node:fs/promises').readFile(resolve(root, 'tools/smoke-settings-renderer.js'), 'utf8'));
       if (smokeMedia) result.media = await (await import(pathToFileURL(resolve(root, 'tools/smoke-media.mjs')).href)).smokeMediaTransfer(mainWindow.webContents);
@@ -201,7 +215,7 @@ else {
         },
       });
       console.log(JSON.stringify({ ...result, errors }));
-      const passed = result.secure && result.libraryVisible && result.webgl && result.database && result.resources.every(resource => resource.status === 200 && resource.bytes > 0) && result.forbidden === 404 && !errors.length;
+      const passed = result.secure && result.libraryVisible && result.webgl && result.database && result.entry.endsWith('.js') && result.resources.every(resource => resource.status === 200 && resource.bytes > 0) && result.forbidden === 404 && !errors.length;
       await native.close(); closing = true; app.exit(passed ? 0 : 1);
     } else { mainWindow.maximize(); mainWindow.show(); }
   }).catch(error => { console.error(error); if (!smoke) dialog.showErrorBox('启动失败', error.message); app.exit(1); });

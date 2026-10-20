@@ -16,11 +16,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: npm
+      # Electron ships no install script: its runtime is fetched lazily the first time something
+      # requires it, which this web-only job never does. So a plain ci install stays small.
+      - run: npm ci
       - run: npm test
       - run: npm ci --prefix collaboration-server --ignore-scripts
       - run: npm run test:collaboration-server
       - run: npm run build:pages
-      - run: node tools/smoke-pages.mjs
+      - run: npm run smoke-pages
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

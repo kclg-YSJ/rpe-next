@@ -15,8 +15,11 @@ app.whenReady().then(async () => {
   session.fromPartition(partition).protocol.handle('rpe', async request => {
     try {
       const url = new URL(request.url); const relative = url.pathname === '/' ? 'index.html' : decodeURIComponent(url.pathname.slice(1));
+      // This branch keeps static resources under `public/`, which Vite is the one to copy into a
+      // build; upstream serves them from the repository root instead. So an `assets/...` request is
+      // read from `public/assets/...`, and the allowlist keeps naming the path the page asks for.
       if (url.host !== 'app' || !['index.html', 'styles.css'].includes(relative) && !relative.startsWith('src/') && !relative.startsWith('assets/')) return new Response('Not found', { status: 404 });
-      const path = await realpath(resolve(root, relative)); if (!path.startsWith(root + sep)) return new Response('Not found', { status: 404 });
+      const path = await realpath(resolve(root, relative.startsWith('assets/') ? 'public' : '.', relative)); if (!path.startsWith(root + sep)) return new Response('Not found', { status: 404 });
       const response = await net.fetch(pathToFileURL(path).href); const headers = new Headers(response.headers);
       headers.set('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob:; media-src 'self' blob:; connect-src 'self'; object-src 'none'; base-uri 'none'");
       if (path.endsWith('.mjs')) headers.set('Content-Type', 'text/javascript; charset=utf-8');
