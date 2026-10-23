@@ -1,11 +1,63 @@
 {
-  "protocol": "rpen-mod", "api": 1, "id": "sky-dodge", "name": "星航 · 谱面躲避", "version": "1.0.0", "author": "rpe-next",
-  "description": "驾驶小飞机穿行于谱面的音符与激活噪域之间，收集星星。五颗心、受击无敌、离开暂停及惩罚、随机补给与结算。游戏仅使用预览，不修改谱面。",
+  "protocol": "rpen-mod",
+  "api": 1,
+  "id": "sky-dodge",
+  "name": {
+    "zh-CN": "星航 · 谱面躲避",
+    "en-US": "Sky Voyage · Chart Dodge"
+  },
+  "version": "1.0.0",
+  "author": "rpe-next",
+  "description": {
+    "zh-CN": "驾驶小飞机穿行于谱面的音符与激活噪域之间，收集星星。五颗心、受击无敌、离开暂停及惩罚、随机补给与结算。游戏仅使用预览，不修改谱面。",
+    "en-US": "Fly a small plane through the chart’s notes and active noise areas to collect stars. Five hearts, invincibility after a hit, pause and penalty when leaving, random pickups and a results screen. The game only uses the preview and never edits the chart."
+  },
   "entry": "main.mjs",
   "settings": {
-    "toggle-key": { "type": "shortcut", "label": "开始 / 终止游戏", "default": "F8", "description": "打开谱面后按下此键。游戏中再次按下会结束并恢复编辑。" },
-    "invincibility": { "type": "number", "label": "受击无敌时间（秒）", "default": 2.5, "min": 0.5, "max": 10, "step": 0.1 },
-    "aircraft-size": { "type": "number", "label": "飞机半径（px）", "default": 10, "min": 6, "max": 20, "step": 1 },
-    "sound-volume": { "type": "number", "label": "游戏音效音量", "default": 0.35, "min": 0, "max": 1, "step": 0.05 }
+    "toggle-key": {
+      "type": "shortcut",
+      "label": {
+        "zh-CN": "开始 / 终止游戏",
+        "en-US": "Start / stop the game"
+      },
+      "default": "F8",
+      "description": {
+        "zh-CN": "打开谱面后按下此键。游戏中再次按下会结束并恢复编辑。",
+        "en-US": "Press after opening a chart. Pressing it again during play ends the game and returns to editing."
+      }
+    },
+    "invincibility": {
+      "type": "number",
+      "label": {
+        "zh-CN": "受击无敌时间（秒）",
+        "en-US": "Invincibility after a hit (s)"
+      },
+      "default": 2.5,
+      "min": 0.5,
+      "max": 10,
+      "step": 0.1
+    },
+    "aircraft-size": {
+      "type": "number",
+      "label": {
+        "zh-CN": "飞机半径（px）",
+        "en-US": "Plane radius (px)"
+      },
+      "default": 10,
+      "min": 6,
+      "max": 20,
+      "step": 1
+    },
+    "sound-volume": {
+      "type": "number",
+      "label": {
+        "zh-CN": "游戏音效音量",
+        "en-US": "Game sound volume"
+      },
+      "default": 0.35,
+      "min": 0,
+      "max": 1,
+      "step": 0.05
+    }
   }
 }

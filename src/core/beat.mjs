@@ -1,16 +1,17 @@
 import { evaluateNumericExpression } from './numeric-expression.mjs';
+import { t } from '../i18n.mjs';
 
 export function beatValue(beat, path = 'beat') {
   if (!Array.isArray(beat) || beat.length !== 3 || !beat.every(Number.isSafeInteger) || beat[2] <= 0) {
-    throw new Error(`${path}: 拍数必须为 [整数, 分子, 正分母]`);
+    throw new Error(t('beat.s67be2d4', { p0: path }));
   }
   return beat[0] + beat[1] / beat[2];
 }
 
 export function fromNumber(value, denominator = 19200) {
-  if (!Number.isFinite(value) || !Number.isSafeInteger(denominator) || denominator <= 0) throw new Error('非法拍数');
+  if (!Number.isFinite(value) || !Number.isSafeInteger(denominator) || denominator <= 0) throw new Error(t('beat.s9241a25'));
   const total = Math.round(value * denominator);
-  if (!Number.isSafeInteger(total)) throw new Error('拍数超出安全精度范围');
+  if (!Number.isSafeInteger(total)) throw new Error(t('beat.s990d689'));
   const whole = Math.floor(total / denominator);
   const numerator = total - whole * denominator;
   let divisor = denominator;
@@ -27,7 +28,7 @@ export function parseBeat(text) {
     beatValue(beat);
     return beat;
   }
-  if (String(text).trim() === '') throw new Error('拍数不能为空');
+  if (String(text).trim() === '') throw new Error(t('beat.scbdcea6'));
   return fromNumber(evaluateNumericExpression(text));
 }
 

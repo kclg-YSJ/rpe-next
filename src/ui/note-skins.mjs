@@ -6,17 +6,18 @@ import { RpeSkin } from './skin.mjs';
 import { assetUrl } from '../core/asset-url.mjs';
 import { download } from '../platform/files.mjs';
 import { hitFrame } from '../core/visual-constants.mjs';
+import { t } from '../i18n.mjs';
 
 const ACTIVE_KEY='rpe-next-note-skin-v1';
 const action=(text,run,className='')=>{const node=document.createElement('button');node.type='button';node.textContent=text;node.className=className;node.onclick=run;return node;};
 const text=(tag,value,className='')=>{const node=document.createElement(tag);node.textContent=value;node.className=className;return node;};
-const title=record=>record?record.info.name+(record.info.author?` (${record.info.author})`:''):'默认音符皮肤';
+const title=record=>record?record.info.name+(record.info.author?` (${record.info.author})`:''):t('note-skins.s32e82dc');
 
 export class NoteSkins {
   constructor(host,{skin,hitSounds,audio,notify,invalidate,pause,settings}) {
     Object.assign(this,{skin,hitSounds,audio,notify,invalidate,pause,settings});this.records=new Map();this.modifications=new WeakMap();this.current='default';this.selected='default';this.cardUrls=[];this.generation=0;this.applying=false;this.demoPlaying=true;
-    host.append(text('h3','音符皮肤与音效'),text('p','统一管理音符、打击音效与打击特效。皮肤保存在本机，不随谱面分享。','hint'));
-    this.summary=text('span','默认音符皮肤');const entry=action('管理音符皮肤',()=>this.open());entry.id='note-skins-open';host.append(entry,this.summary);
+    host.append(text('h3',t('note-skins.s0c86c6b')),text('p',t('note-skins.s930653c'),'hint'));
+    this.summary=text('span',t('note-skins.s32e82dc'));const entry=action(t('note-skins.s9f804bf'),()=>this.open());entry.id='note-skins-open';host.append(entry,this.summary);
     this.renderDialog();this.ready=this.load();
   }
   async load() {
@@ -24,38 +25,38 @@ export class NoteSkins {
       for(const record of await builtinNoteSkins())this.records.set(record.id,record);
       for(const stored of await readNoteSkins()) {
         try {
-          if(!/^(?:pack-[a-f0-9]{24}|builtin-[a-z0-9-]+)$/.test(stored.id))throw new Error('标识无效');
+          if(!/^(?:pack-[a-f0-9]{24}|builtin-[a-z0-9-]+)$/.test(stored.id))throw new Error(t('note-skins.sad6c3a5'));
           const builtin=this.records.get(stored.id);if(stored.id.startsWith('builtin-')&&!builtin)continue;
           const record=parseNoteSkin(new Map(stored.files),stored.id);
           record.builtin=Boolean(builtin);record.originalFiles=builtin?.files??new Map(stored.originalFiles??stored.files);this.records.set(record.id,record);
-        } catch(error) {this.notify('已跳过损坏的音符皮肤：'+error.message,'warning');}
+        } catch(error) {this.notify(t('note-skins.sae607ad')+error.message,'warning');}
       }
       const id=localPreferences.getItem(ACTIVE_KEY)??'default';
-      if(id!=='default'&&!this.records.has(id)) {localPreferences.removeItem(ACTIVE_KEY);this.notify('找不到已保存的音符皮肤，已使用默认皮肤。','warning');}
+      if(id!=='default'&&!this.records.has(id)) {localPreferences.removeItem(ACTIVE_KEY);this.notify(t('note-skins.sc1e1b9b'),'warning');}
       else if(id!=='default')await this.activate(id,false);
-    } catch(error) {this.notify('音符皮肤读取失败，继续使用默认皮肤：'+error.message,'warning');}
+    } catch(error) {this.notify(t('note-skins.sc10ed5f')+error.message,'warning');}
     this.summary.textContent=title(this.records.get(this.current));
   }
   renderDialog() {
     this.dialog=document.createElement('dialog');this.dialog.id='note-skin-modal';this.dialog.className='note-skin-manager';
-    const heading=document.createElement('div');heading.className='note-skin-heading';heading.append(text('h2','音符皮肤与音效'),action('返回设置',()=>this.close()));
+    const heading=document.createElement('div');heading.className='note-skin-heading';heading.append(text('h2',t('note-skins.s0c86c6b')),action(t('note-skins.sf3b1542'),()=>this.close()));
     const toolbar=document.createElement('div');toolbar.className='note-skin-toolbar';
-    this.zip=document.createElement('input');this.zip.type='file';this.zip.accept='.zip';this.zip.hidden=true;this.zip.setAttribute('aria-label','导入音符皮肤包');this.zip.onchange=()=>this.importFiles(this.zip.files);
-    this.directory=document.createElement('input');this.directory.type='file';this.directory.webkitdirectory=true;this.directory.multiple=true;this.directory.hidden=true;this.directory.setAttribute('aria-label','导入音符皮肤文件夹');this.directory.onchange=()=>this.importFiles(this.directory.files,true);
-    toolbar.append(action('导入 ZIP 皮肤包',()=>this.zip.click()),action('导入文件夹',()=>this.directory.click()),text('span','Phira / prpr 资源包 · info.yml','hint'));
-    const body=document.createElement('div');body.className='note-skin-body';this.gallery=document.createElement('div');this.gallery.className='note-skin-gallery';this.gallery.setAttribute('aria-label','音符皮肤列表');
+    this.zip=document.createElement('input');this.zip.type='file';this.zip.accept='.zip';this.zip.hidden=true;this.zip.setAttribute('aria-label',t('note-skins.s81067f7'));this.zip.onchange=()=>this.importFiles(this.zip.files);
+    this.directory=document.createElement('input');this.directory.type='file';this.directory.webkitdirectory=true;this.directory.multiple=true;this.directory.hidden=true;this.directory.setAttribute('aria-label',t('note-skins.s7e3bc2f'));this.directory.onchange=()=>this.importFiles(this.directory.files,true);
+    toolbar.append(action(t('note-skins.s8458b3b'),()=>this.zip.click()),action(t('note-skins.s4d2d93e'),()=>this.directory.click()),text('span',t('note-skins.s9076326'),'hint'));
+    const body=document.createElement('div');body.className='note-skin-body';this.gallery=document.createElement('div');this.gallery.className='note-skin-gallery';this.gallery.setAttribute('aria-label',t('note-skins.s32e0496'));
     this.detail=document.createElement('div');this.detail.className='note-skin-detail';
     const previewHeader=document.createElement('div');previewHeader.className='note-skin-preview-heading';this.selectedTitle=text('h3','');
-    this.animationButton=action('暂停动画',()=>{this.demoPlaying=!this.demoPlaying;this.animationButton.textContent=this.demoPlaying?'暂停动画':'播放动画';});
-    this.goodButton=action('Perfect 色',()=>{this.demoGood=!this.demoGood;this.goodButton.textContent=this.demoGood?'Good 色':'Perfect 色';});previewHeader.append(this.selectedTitle,this.animationButton,this.goodButton);
-    this.backgroundButton=action('深色背景',()=>{this.demoLight=!this.demoLight;this.backgroundButton.textContent=this.demoLight?'浅色背景':'深色背景';this.dialog.classList.toggle('preview-light',this.demoLight);});previewHeader.append(this.backgroundButton);
-    this.canvas=document.createElement('canvas');this.canvas.className='note-skin-preview';this.canvas.setAttribute('aria-label','普通音符、等时高亮、Hold 与打击特效预览');
+    this.animationButton=action(t('note-skins.sf3cae90'),()=>{this.demoPlaying=!this.demoPlaying;this.animationButton.textContent=this.demoPlaying?t('note-skins.sf3cae90'):t('note-skins.sea5f119');});
+    this.goodButton=action(t('note-skins.s4bc2bc9'),()=>{this.demoGood=!this.demoGood;this.goodButton.textContent=this.demoGood?t('note-skins.sf7dced8'):t('note-skins.s4bc2bc9');});previewHeader.append(this.selectedTitle,this.animationButton,this.goodButton);
+    this.backgroundButton=action(t('note-skins.sa3018de'),()=>{this.demoLight=!this.demoLight;this.backgroundButton.textContent=this.demoLight?t('note-skins.s73ecf67'):t('note-skins.sa3018de');this.dialog.classList.toggle('preview-light',this.demoLight);});previewHeader.append(this.backgroundButton);
+    this.canvas=document.createElement('canvas');this.canvas.className='note-skin-preview';this.canvas.setAttribute('aria-label',t('note-skins.s3ca2033'));
     this.form=document.createElement('div');this.form.className='note-skin-form';this.form.addEventListener('input',()=>this.updateDraft());
-    this.materials=document.createElement('details');this.materials.className='note-skin-materials';this.materials.append(text('summary','贴图与音效文件'));
+    this.materials=document.createElement('details');this.materials.className='note-skin-materials';this.materials.append(text('summary',t('note-skins.sab7a299')));
     this.detail.append(previewHeader,this.canvas,this.form,this.materials);body.append(this.gallery,this.detail);
-    const footer=document.createElement('div');footer.className='note-skin-footer';this.message=text('p','选择皮肤即可查看，点击“应用此皮肤”后切换。','hint');this.message.setAttribute('role','status');
-    this.applyButton=action('应用此皮肤',()=>this.apply(),'primary');this.applyButton.id='note-skin-apply';this.exportButton=action('导出 ZIP',()=>{if(this.draft)download(exportNoteSkin(this.draft),this.safeFilename()+'.zip');});
-    this.resetButton=action('恢复原始参数与素材',()=>this.reset());this.deleteButton=action('删除',()=>this.remove());
+    const footer=document.createElement('div');footer.className='note-skin-footer';this.message=text('p',t('note-skins.sfc74501'),'hint');this.message.setAttribute('role','status');
+    this.applyButton=action(t('note-skins.s32df5f8'),()=>this.apply(),'primary');this.applyButton.id='note-skin-apply';this.exportButton=action(t('note-skins.sd6b10af'),()=>{if(this.draft)download(exportNoteSkin(this.draft),this.safeFilename()+'.zip');});
+    this.resetButton=action(t('note-skins.s33bbd88'),()=>this.reset());this.deleteButton=action(t('note-skins.s3755f56'),()=>this.remove());
     const actions=document.createElement('div');actions.className='note-skin-toolbar';actions.append(this.resetButton,this.exportButton,this.deleteButton,this.applyButton);footer.append(this.message,actions);
     this.dialog.append(heading,toolbar,body,footer,this.zip,this.directory);document.body.append(this.dialog);
     this.dialog.addEventListener('cancel',event=>{if(event.target!==this.dialog)return;event.preventDefault();this.close();});
@@ -82,24 +83,24 @@ export class NoteSkins {
           const original=record.originalFiles.get(name);return !original||bytes.length!==original.length||bytes.some((value,index)=>value!==original[index]);
         })));this.modifications.set(record,modified);
       }
-      const state=[id===this.current?'已应用':record?.builtin||id==='default'?'内置':'已导入',...(modified?['已修改']:[])].join(' · ');
-      card.append(images,text('strong',record?.info.name??'默认音符皮肤'),text('span',record?.info.author??'编辑器内置'),text('small',state));this.gallery.append(card);
+      const state=[id===this.current?t('note-skins.sc99c695'):record?.builtin||id==='default'?t('note-skins.s09ceea7'):t('note-skins.s5c5b7cf'),...(modified?[t('note-skins.sc920e42')]:[])].join(' · ');
+      card.append(images,text('strong',record?.info.name??t('note-skins.s32e82dc')),text('span',record?.info.author??t('note-skins.s5c6073a')),text('small',state));this.gallery.append(card);
     }
   }
   async open(){await this.ready;this.pause();this.settings.close();this.dialog.showModal();this.renderCards();await this.select(this.current,true);this.animate();}
-  close(force=false){if(this.applying)return;if(!force&&this.modified&&!confirm('尚未应用的皮肤修改将被放弃，返回设置？'))return;this.generation++;this.modified=false;this.dialog.close();}
+  close(force=false){if(this.applying)return;if(!force&&this.modified&&!confirm(t('note-skins.s6a61366')))return;this.generation++;this.modified=false;this.dialog.close();}
   async select(id,force=false){
-    if(this.applying)return false;if(!force&&this.modified&&!confirm('放弃尚未应用的皮肤修改并选择另一套皮肤？'))return false;
+    if(this.applying)return false;if(!force&&this.modified&&!confirm(t('note-skins.sdb2ac61')))return false;
     const generation=++this.generation;this.selected=id;this.modified=false;this.draft=this.records.get(id)??null;this.valid=true;this.message.classList.remove('error');
     this.previewSkin?.resourcePack?.dispose();this.previewSkin=null;this.stopSound();this.renderCards();this.selectedTitle.textContent=title(this.draft);this.renderForm();this.renderMaterials();this.updateButtons();
-    this.message.textContent=id===this.current?'正在使用这套皮肤。':'正在准备预览…';
+    this.message.textContent=id===this.current?t('note-skins.s52933df'):t('note-skins.sbfbbf69');
     try {
       if(this.draft) {
         const previewSkin=new RpeSkin(()=>{});const runtime=await ResourceNoteSkin.prepare(this.draft,previewSkin.tintedSource.bind(previewSkin));
         if(generation!==this.generation){runtime.dispose();return false;}previewSkin.setResourcePack(runtime);this.previewSkin=previewSkin;
       } else this.previewSkin=this.skin.resourcePack?Object.assign(new RpeSkin(()=>{}),{images:this.skin.images}):this.skin;
       if(generation!==this.generation)return false;
-      this.message.textContent=(id===this.current?'正在使用这套皮肤。':'仅预览，点击“应用此皮肤”后切换。')+(this.draft?.warnings.join('；')??'');
+      this.message.textContent=(id===this.current?t('note-skins.s52933df'):t('note-skins.scc459ad'))+(this.draft?.warnings.join('；')??'');
       this.updateButtons();return true;
     } catch(error){if(generation===this.generation){this.valid=false;this.error(error);this.updateButtons();}return false;}
   }
@@ -111,60 +112,60 @@ export class NoteSkins {
   }
   renderForm(){
     this.form.replaceChildren();this.controls=new Map();
-    if(!this.draft){this.form.append(text('p','沿用编辑器当前的默认音符、音效和特效。普通音符与等时高亮均可在上方预览。','hint'));return;}
+    if(!this.draft){this.form.append(text('p',t('note-skins.sf8504a9'),'hint'));return;}
     const add=(host,label,key,type,min,max,step)=>this.controls.set(key,this.field(host,label,key,type,this.draft.info[key],min,max,step));
-    add(this.form,'名称','name','text');add(this.form,'作者','author','text');add(this.form,'说明','description','textarea');
+    add(this.form,t('note-skins.s1be7ae4'),'name','text');add(this.form,t('note-skins.s698bea5'),'author','text');add(this.form,t('note-skins.s26670dd'),'description','textarea');
     const group=label=>{const details=document.createElement('details');details.open=true;details.append(text('summary',label));this.form.append(details);return details;};
-    const hold=group('Hold 图集与显示');
-    for(const [key,label] of [['holdAtlas','普通 Hold'],['holdAtlasMH','等时高亮 Hold']]) for(const [index,part] of ['尾部高度（px）','头部高度（px）'].entries()) this.controls.set(key+'.'+index,this.field(hold,label+' '+part,key+'.'+index,'number',this.draft.info[key][index],0,65535,1));
-    for(const [key,label] of [['holdKeepHead','触线后保留 Hold 头部'],['holdRepeat','重复平铺 Hold 身体'],['holdCompact','Hold 头尾中心与端点对齐']])add(hold,label,key,'checkbox');
-    const fx=group('打击动画');
-    for(const [index,label] of ['横向帧数','纵向帧数'].entries())this.controls.set('hitFx.'+index,this.field(fx,label,'hitFx.'+index,'number',this.draft.info.hitFx[index],1,10240,1));
-    add(fx,'持续时间（秒）','hitFxDuration','number',0.01,120,0.01);add(fx,'缩放比例','hitFxScale','number',0.01,64,0.01);
-    for(const [key,label] of [['hitFxRotate','跟随音符旋转'],['hitFxTinted','依照判定颜色着色'],['hideParticles','隐藏方形粒子']])add(fx,label,key,'checkbox');
-    const colors=group('判定颜色');
+    const hold=group(t('note-skins.sa1a380a'));
+    for(const [key,label] of [['holdAtlas',t('note-skins.s49e9c33')],['holdAtlasMH',t('note-skins.s35347a3')]]) for(const [index,part] of [t('note-skins.sa557e19'),t('note-skins.scb2f01b')].entries()) this.controls.set(key+'.'+index,this.field(hold,label+' '+part,key+'.'+index,'number',this.draft.info[key][index],0,65535,1));
+    for(const [key,label] of [['holdKeepHead',t('note-skins.s47fe940')],['holdRepeat',t('note-skins.s371a6a0')],['holdCompact',t('note-skins.s8efd058')]])add(hold,label,key,'checkbox');
+    const fx=group(t('note-skins.s17a5ccc'));
+    for(const [index,label] of [t('note-skins.s2d413f8'),t('note-skins.s28d0560')].entries())this.controls.set('hitFx.'+index,this.field(fx,label,'hitFx.'+index,'number',this.draft.info.hitFx[index],1,10240,1));
+    add(fx,t('note-skins.s04fea79'),'hitFxDuration','number',0.01,120,0.01);add(fx,t('note-skins.sd49e653'),'hitFxScale','number',0.01,64,0.01);
+    for(const [key,label] of [['hitFxRotate',t('note-skins.sbe01f50')],['hitFxTinted',t('note-skins.s809e349')],['hideParticles',t('note-skins.sbc45d6a')]])add(fx,label,key,'checkbox');
+    const colors=group(t('note-skins.s63b1c14'));
     for(const [key,label] of [['colorPerfect','Perfect'],['colorGood','Good']])this.controls.set(key,this.field(colors,label+'（RGB / ARGB）',key,'text','0x'+this.draft.info[key].toString(16).padStart(8,'0')));
-    colors.append(text('p','支持 0xRRGGBB 或 0xAARRGGBB。编辑器采用 Perfect 预览，谱面自己的颜色事件仍然优先。','hint'));
+    colors.append(text('p',t('note-skins.s783f3db'),'hint'));
   }
   updateDraft(){
     if(!this.draft)return;const source=structuredClone(this.draft.info);let invalid=false;
     for(const [key,control] of this.controls){control.setCustomValidity('');const type=control.dataset.noteSkinType??control.type;const value=type==='checkbox'?control.checked:type==='number'?Number(control.value):control.value;
       if(type==='number'){
         const validation=control.type==='number'?control:control.cloneNode();if(validation!==control){validation.type='number';validation.value=control.value;}
-        if(!control.value.trim()||!Number.isFinite(value)||!validation.checkValidity()){control.setCustomValidity('请填写有效数值');invalid=true;}
+        if(!control.value.trim()||!Number.isFinite(value)||!validation.checkValidity()){control.setCustomValidity(t('note-skins.s87c1194'));invalid=true;}
       }
       if(key.includes('.')){const [field,index]=key.split('.');source[field][index]=value;}else source[key]=value;
     }
-    try {if(invalid)throw new Error('请先修正无效的数值。');this.draft=updateNoteSkin(this.draft,noteSkinInfo(source));if(this.previewSkin?.resourcePack)this.previewSkin.resourcePack.setInfo(this.draft.info);
-      this.valid=true;this.modified=true;this.selectedTitle.textContent=title(this.draft)+' · 未应用';this.message.classList.remove('error');this.message.textContent='预览已更新，应用后保存修改。';}
+    try {if(invalid)throw new Error(t('note-skins.sd0a30b2'));this.draft=updateNoteSkin(this.draft,noteSkinInfo(source));if(this.previewSkin?.resourcePack)this.previewSkin.resourcePack.setInfo(this.draft.info);
+      this.valid=true;this.modified=true;this.selectedTitle.textContent=title(this.draft)+t('note-skins.s5db8ce7');this.message.classList.remove('error');this.message.textContent=t('note-skins.s1f09d2b');}
     catch(error){this.valid=false;this.message.textContent=error.message;this.message.classList.add('error');}
     this.updateButtons();
   }
   updateButtons(){this.applyButton.disabled=this.applying||!this.valid||!this.previewSkin;this.exportButton.disabled=this.applying||!this.valid||!this.draft;this.deleteButton.disabled=this.applying||!this.draft||this.draft.builtin;this.resetButton.disabled=this.applying||!this.draft;this.gallery.inert=this.applying;this.detail.inert=this.applying;}
   renderMaterials(){
-    const open=this.materials.open;this.materials.replaceChildren(text('summary','贴图与音效文件'));this.materials.open=open;
-    if(!this.draft){this.materials.append(text('p','默认素材由编辑器提供。','hint'));}
+    const open=this.materials.open;this.materials.replaceChildren(text('summary',t('note-skins.sab7a299')));this.materials.open=open;
+    if(!this.draft){this.materials.append(text('p',t('note-skins.sffa3e49'),'hint'));}
     else for(const name of [...NOTE_SKIN_IMAGES,...Object.values(NOTE_SKIN_SOUNDS)]) {
-      const row=document.createElement('div');row.className='note-skin-material-row';row.append(text('span',name),text('small',this.draft.files.has(name)?`${(this.draft.files.get(name).length/1024).toFixed(1)} KiB`:'使用默认音效'));
-      const input=document.createElement('input');input.type='file';input.accept=name.endsWith('.png')?'image/png':'.ogg';input.hidden=true;input.setAttribute('aria-label','替换 '+name);input.onchange=()=>this.replaceFile(name,input.files?.[0]);
-      row.append(action('替换',()=>input.click()),input);
-      if(name.endsWith('.ogg'))row.append(action('试听',()=>this.audition(Object.keys(NOTE_SKIN_SOUNDS).find(key=>NOTE_SKIN_SOUNDS[key]===name))));
-      if(name.endsWith('.ogg')&&this.draft.files.has(name))row.append(action('用默认',()=>this.replaceFile(name,null)));
+      const row=document.createElement('div');row.className='note-skin-material-row';row.append(text('span',name),text('small',this.draft.files.has(name)?`${(this.draft.files.get(name).length/1024).toFixed(1)} KiB`:t('note-skins.sffcfdc0')));
+      const input=document.createElement('input');input.type='file';input.accept=name.endsWith('.png')?'image/png':'.ogg';input.hidden=true;input.setAttribute('aria-label',t('note-skins.sad95096')+name);input.onchange=()=>this.replaceFile(name,input.files?.[0]);
+      row.append(action(t('note-skins.s855241c'),()=>input.click()),input);
+      if(name.endsWith('.ogg'))row.append(action(t('note-skins.s854b122'),()=>this.audition(Object.keys(NOTE_SKIN_SOUNDS).find(key=>NOTE_SKIN_SOUNDS[key]===name))));
+      if(name.endsWith('.ogg')&&this.draft.files.has(name))row.append(action(t('note-skins.se401a05'),()=>this.replaceFile(name,null)));
       this.materials.append(row);
     }
-    const sounds=document.createElement('div');sounds.className='note-skin-toolbar';for(const [key,label] of [['tap','Tap / Hold'],['drag','Drag'],['flick','Flick']])sounds.append(action('试听 '+label,()=>this.audition(key)));
+    const sounds=document.createElement('div');sounds.className='note-skin-toolbar';for(const [key,label] of [['tap','Tap / Hold'],['drag','Drag'],['flick','Flick']])sounds.append(action(t('note-skins.s6028bff')+label,()=>this.audition(key)));
     this.materials.append(sounds);
   }
   async replaceFile(name,file){
     if(!this.draft||this.applying||file===undefined)return;
     const generation=this.generation;let runtime;
     try {
-      if(file&&file.size>NOTE_SKIN_LIMITS.fileBytes)throw new Error('素材文件过大');
+      if(file&&file.size>NOTE_SKIN_LIMITS.fileBytes)throw new Error(t('note-skins.sea27847'));
       const next=updateNoteSkin(this.draft,this.draft.info,new Map([[name,file?new Uint8Array(await file.arrayBuffer()):null]]));
       const preview=new RpeSkin(()=>{});runtime=await ResourceNoteSkin.prepare(next,preview.tintedSource.bind(preview));
       if(file&&name.endsWith('.ogg'))await decodeNoteSkinSounds(next,this.audio.ensureContext());
       if(generation!==this.generation||!this.dialog.open){runtime.dispose();return;}
-      this.previewSkin?.resourcePack?.dispose();preview.setResourcePack(runtime);this.previewSkin=preview;this.draft=next;this.modified=true;this.valid=true;this.renderMaterials();this.message.textContent='素材已替换，仅影响预览；应用后保存。';this.updateButtons();
+      this.previewSkin?.resourcePack?.dispose();preview.setResourcePack(runtime);this.previewSkin=preview;this.draft=next;this.modified=true;this.valid=true;this.renderMaterials();this.message.textContent=t('note-skins.s885fcbb');this.updateButtons();
     } catch(error){runtime?.dispose();if(generation===this.generation)this.error(error);}
   }
   async importFiles(files,directory=false){
@@ -172,15 +173,15 @@ export class NoteSkins {
     try {
       const record=await importNoteSkin(files,directory);const preview=new RpeSkin(()=>{});const runtime=await ResourceNoteSkin.prepare(record,preview.tintedSource.bind(preview));
       try{await decodeNoteSkinSounds(record,this.audio.ensureContext());}finally{runtime.dispose();}
-      const existing=this.records.get(record.id);if(existing&&!confirm('这套皮肤已导入，重新导入将恢复包内参数。继续？'))return;
-      if(this.modified&&!confirm('导入将放弃当前未应用的皮肤修改，继续？'))return;
-      await storeNoteSkin(record);this.records.set(record.id,record);await this.select(record.id,true);this.message.textContent='皮肤已导入，点击“应用此皮肤”后切换。';
+      const existing=this.records.get(record.id);if(existing&&!confirm(t('note-skins.s824c0b1')))return;
+      if(this.modified&&!confirm(t('note-skins.sd47b5f6')))return;
+      await storeNoteSkin(record);this.records.set(record.id,record);await this.select(record.id,true);this.message.textContent=t('note-skins.s4e8e005');
     }catch(error){this.error(error);}finally{this.zip.value='';this.directory.value='';}
   }
   async activate(id,persist=true,record=this.records.get(id),beforeActivate=async()=>{}){
     if(id==='default'){this.skin.setResourcePack(null);this.hitSounds.setSoundPack();}
     else {
-      if(!record)throw new Error('音符皮肤不存在');
+      if(!record)throw new Error(t('note-skins.s942b042'));
       const runtime=await ResourceNoteSkin.prepare(record,this.skin.tintedSource.bind(this.skin));
       try {const sounds=await decodeNoteSkinSounds(record,this.audio.ensureContext());await beforeActivate();this.skin.setResourcePack(runtime);this.hitSounds.setSoundPack(sounds);}
       catch(error){runtime.dispose();throw error;}
@@ -202,18 +203,18 @@ export class NoteSkins {
   }
   async apply(){
     if(this.applying||!this.valid||!this.previewSkin)return;this.applying=true;this.updateButtons();
-    try{const record=this.draft;await this.activate(this.selected,true,record,async()=>{if(record)await storeNoteSkin(record);});if(record)this.records.set(record.id,record);this.modified=false;this.renderCards();this.message.classList.remove('error');this.message.textContent='已应用并保存，下次启动自动恢复。';this.notify('已切换音符皮肤：'+title(record),'success');}
+    try{const record=this.draft;await this.activate(this.selected,true,record,async()=>{if(record)await storeNoteSkin(record);});if(record)this.records.set(record.id,record);this.modified=false;this.renderCards();this.message.classList.remove('error');this.message.textContent=t('note-skins.s8ba9521');this.notify(t('note-skins.sb3609b7')+title(record),'success');}
     catch(error){this.error(error);}finally{this.applying=false;this.updateButtons();}
   }
   async reset(){
-    if(!this.draft||!confirm('恢复这套皮肤的原始参数和素材？应用后保存。'))return;
+    if(!this.draft||!confirm(t('note-skins.sde00735')))return;
     try{const original=this.draft.originalFiles??this.draft.files;const restored={...parseNoteSkin(original,this.selected),originalFiles:original,builtin:this.draft.builtin};
       await this.select(this.selected,true);this.draft=restored;this.modified=true;this.renderForm();this.renderMaterials();
-      const preview=new RpeSkin(()=>{});preview.setResourcePack(await ResourceNoteSkin.prepare(restored,preview.tintedSource.bind(preview)));this.previewSkin?.resourcePack?.dispose();this.previewSkin=preview;this.message.textContent='已恢复原始参数与素材，应用后保存。';this.valid=true;this.updateButtons();
+      const preview=new RpeSkin(()=>{});preview.setResourcePack(await ResourceNoteSkin.prepare(restored,preview.tintedSource.bind(preview)));this.previewSkin?.resourcePack?.dispose();this.previewSkin=preview;this.message.textContent=t('note-skins.s13f8637');this.valid=true;this.updateButtons();
     }catch(error){this.error(error);}
   }
   async remove(){
-    const record=this.records.get(this.selected);if(!record||record.builtin||!confirm(`删除音符皮肤“${record.info.name}”？`))return;
+    const record=this.records.get(this.selected);if(!record||record.builtin||!confirm(t('note-skins.sb112dd0', { p0: record.info.name })))return;
     try{if(this.current===record.id)await this.activate('default');await deleteNoteSkin(record.id);this.records.delete(record.id);await this.select(this.current,true);}catch(error){this.error(error);}
   }
   stopSound(){if(this.soundSource){try{this.soundSource.stop();}catch{}this.soundSource.disconnect();this.soundSource=null;}}
@@ -221,7 +222,7 @@ export class NoteSkins {
     try{this.stopSound();const context=this.audio.ensureContext();await context.resume();let buffer;
       if(this.draft){const sounds=await decodeNoteSkinSounds(this.draft,context);buffer=sounds.get(type);}
       if(!buffer){await this.hitSounds.prepare();buffer=this.hitSounds.buffers.get(type);}
-      if(!buffer)throw new Error('无法读取默认打击音效');
+      if(!buffer)throw new Error(t('note-skins.s80488c6'));
       if(!this.dialog.open)return;const source=context.createBufferSource();source.buffer=buffer;const gain=context.createGain();gain.gain.value=this.hitSounds.volume;gain.connect(context.destination);source.connect(gain);source.onended=()=>{source.disconnect();gain.disconnect();if(this.soundSource===source)this.soundSource=null;};this.soundSource=source;source.start();
     }catch(error){this.error(error);}
   }
@@ -232,7 +233,7 @@ export class NoteSkins {
     const skin=this.previewSkin;if(!skin)return;const ratio=globalThis.devicePixelRatio||1;const width=Math.max(1,this.canvas.clientWidth);const height=Math.max(1,this.canvas.clientHeight);
     if(this.canvas.width!==Math.round(width*ratio)||this.canvas.height!==Math.round(height*ratio)){this.canvas.width=Math.round(width*ratio);this.canvas.height=Math.round(height*ratio);}
     const ctx=this.canvas.getContext('2d');ctx.setTransform(this.canvas.width/width,0,0,this.canvas.height/height,0,0);ctx.clearRect(0,0,width,height);ctx.fillStyle=this.demoLight?'#d8dde6':'#20242b';ctx.fillRect(0,0,width,height);
-    const scale=Math.min(width/680,height/250);ctx.save();ctx.translate((width-680*scale)/2,(height-250*scale)/2);ctx.scale(scale,scale);ctx.fillStyle=this.demoLight?'#252a35':'#edf0f5';ctx.font='12px sans-serif';ctx.fillText('普通',12,57);ctx.fillText('等时高亮',12,127);ctx.fillText('Hold',400,25);ctx.fillText('打击特效',540,25);
+    const scale=Math.min(width/680,height/250);ctx.save();ctx.translate((width-680*scale)/2,(height-250*scale)/2);ctx.scale(scale,scale);ctx.fillStyle=this.demoLight?'#252a35':'#edf0f5';ctx.font='12px sans-serif';ctx.fillText(t('note-skins.s7cda072'),12,57);ctx.fillText(t('note-skins.s3de9708'),12,127);ctx.fillText('Hold',400,25);ctx.fillText(t('note-skins.sc8bab1f'),540,25);
     for(const [x,type,label] of [[125,1,'Tap'],[225,4,'Drag'],[325,3,'Flick']]){skin.head(ctx,type,x,55,80,false,undefined,0);skin.head(ctx,type,x,125,80,true,undefined,0);ctx.fillStyle=this.demoLight?'#4d5563':'#afb7c4';ctx.fillText(label,x-20,182);}
     skin.hold(ctx,430,195,45,52,false,true);skin.hold(ctx,480,195,45,52,true,true);
     const duration=skin.hitLifetime??0.5;const age=time%(duration+0.35);if(!skin.drawHit(ctx,{age,x:590,y:112,size:135,rotation:Math.PI/4,seed:9,good:this.demoGood})){

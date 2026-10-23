@@ -2,15 +2,16 @@ import { beatValue, fromNumber } from './beat.mjs';
 import { SceneRuntime } from './scene.mjs';
 import { createNoiseArea, createNoiseEvent, withNoiseAreas } from './noise-areas.mjs';
 import { noiseLayers } from './noise-skin.mjs';
+import { t } from '../i18n.mjs';
 
 const MAX_SAMPLES = 60000;
 const timeBeat = seconds => fromNumber(seconds, 1000000000);
 
 export function noiseTrackingTarget(chart, tempo, target) {
   const line = chart.judgeLineList?.[target?.lineIndex];
-  if (!line || !['line', 'note'].includes(target.mode)) throw new Error('请选择追踪对象');
+  if (!line || !['line', 'note'].includes(target.mode)) throw new Error(t('noise-tracking.s7490061'));
   const note = target.mode === 'note' ? line.notes?.[target.noteIndex] : null;
-  if (target.mode === 'note' && !note) throw new Error('音符已不存在，请重新取样');
+  if (target.mode === 'note' && !note) throw new Error(t('noise-tracking.s808dd45'));
   const scene = new SceneRuntime(); scene.compile(chart, tempo);
   const runtime = scene.lines[target.lineIndex]; const entry = note ? runtime.notes[target.noteIndex] : null;
   return {
@@ -67,12 +68,12 @@ function simplify(samples, positionTolerance, angleTolerance) {
 export function trackedNoiseArea(chart, tempo, options) {
   const { start, end, width, height, target, layerId = noiseLayers(chart)[0].id, invert = false, active = true, sampleRate = 120, name = '' } = options;
   const startBeat = Array.isArray(start) ? beatValue(start) : start; const endBeat = Array.isArray(end) ? beatValue(end) : end;
-  if (![startBeat, endBeat, width, height].every(Number.isFinite) || endBeat <= startBeat || width <= 0 || height <= 0 || width > 100000 || height > 100000) throw new Error('结束拍须晚于开始拍，宽高须在 0–100000 之间');
-  if (![60, 120, 240].includes(sampleRate)) throw new Error('采样精度须为 60、120 或 240 Hz');
-  if (!noiseLayers(chart).some(layer => layer.id === layerId)) throw new Error('目标噪域层已不存在');
+  if (![startBeat, endBeat, width, height].every(Number.isFinite) || endBeat <= startBeat || width <= 0 || height <= 0 || width > 100000 || height > 100000) throw new Error(t('noise-tracking.s607705f'));
+  if (![60, 120, 240].includes(sampleRate)) throw new Error(t('noise-tracking.s41fa670'));
+  if (!noiseLayers(chart).some(layer => layer.id === layerId)) throw new Error(t('noise-tracking.se9c1515'));
   const source = noiseTrackingTarget(chart, tempo, target); const begin = tempo.seconds(startBeat); const finish = tempo.seconds(endBeat);
   const cuts = trackingCuts(chart, tempo, source, begin, finish);
-  if ((finish - begin) * sampleRate + cuts.length * 2 > MAX_SAMPLES) throw new Error('追踪区间过长，请缩短区间或降低采样精度（最多 60000 个采样点）');
+  if ((finish - begin) * sampleRate + cuts.length * 2 > MAX_SAMPLES) throw new Error(t('noise-tracking.s60d6330'));
   const area = { ...createNoiseArea(startBeat, endBeat), Name: name, layerId, isInvert: Boolean(invert),
     bottomLeft: { x: -width / 2, y: -height / 2 }, topRight: { x: width / 2, y: height / 2 },
     activeIntervals: active ? [{ startTime: fromNumber(startBeat), endTime: fromNumber(endBeat), readyFlash: 0.5 }] : [] };
@@ -80,7 +81,7 @@ export function trackedNoiseArea(chart, tempo, options) {
   if (active) { area.activeIntervals[0].startTime = [...area.appearTime]; area.activeIntervals[0].endTime = [...area.disappearTime]; }
   const read = seconds => {
     const value = source.sample(seconds);
-    if (!Object.values(value).every(Number.isFinite)) throw new Error('追踪对象在区间内包含无效坐标或旋转');
+    if (!Object.values(value).every(Number.isFinite)) throw new Error(t('noise-tracking.sbd2453f'));
     return { ...value, seconds };
   };
   const eventBeat = seconds => seconds === begin ? [...area.appearTime] : seconds === finish ? [...area.disappearTime] : timeBeat(tempo.beat(seconds));

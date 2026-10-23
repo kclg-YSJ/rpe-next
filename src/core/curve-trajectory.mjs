@@ -1,40 +1,41 @@
 import { compileExpression } from './batch-script.mjs';
 import { easing } from './easing.mjs';
+import { t } from '../i18n.mjs';
 
 export const TRAJECTORY_VERSION = 210;
 export const TRAJECTORY_DEFAULTS = Object.freeze({ mode: 'parametric', xExpression: '200*cos(2*pi*t)', yExpression: '200*sin(2*pi*t)', radiusExpression: '200', rotationExpression: '', tangentRotation: false, parameterStart: '0', parameterEnd: '1', angleStart: '0', angleEnd: '2*pi', trimStart: 0, trimEnd: 1, rotation: 0, scaleX: 1, scaleY: 1, alignStart: false, startX: 0, startY: 0, easingX: 1, easingY: 1, seed: 1, randomness: 0, parameters: {} });
 export const trajectoryHasRotation = options => Boolean(options.tangentRotation || options.rotationExpression?.trim());
-const radiusParameter = { key: 'radius', label: '半径', value: 200, min: 1, max: 2000, step: 1 };
+const radiusParameter = { key: 'radius', label: t('curve-trajectory.sb29ee13'), value: 200, min: 1, max: 2000, step: 1 };
 const parameter = (key, label, value, min = 1, max = 1000, step = 1) => ({ key, label, value, min, max, step });
 const polygon = sides => ({ mode: 'polar', radiusExpression: `radius*cos(pi/${sides})/cos(theta-round(theta/(2*pi/${sides}))*(2*pi/${sides}))` });
 export const CURVE_PRESETS = [
-  { id: 'line', category: '基本图形', name: '直线', xExpression: 'length*t', yExpression: '0', parameters: [parameter('length', '长度', 400)] },
-  { id: 'circle', category: '基本图形', name: '圆形', mode: 'polar', radiusExpression: 'radius', parameters: [radiusParameter] },
-  ...[[3, '三角形'], [4, '四边形'], [5, '五边形'], [6, '六边形'], [8, '八边形'], [12, '十二边形']].map(([sides, name]) => ({ id: `polygon-${sides}`, category: '基本图形', name, ...polygon(sides), parameters: [radiusParameter] })),
-  { id: 'arc', category: '基本图形', name: '圆弧', mode: 'polar', radiusExpression: 'radius', angleEnd: 'sweep*pi/180', parameters: [radiusParameter, parameter('sweep', '圆心角（度）', 180, -720, 720)] },
-  { id: 'rectangle', category: '基本图形', name: '矩形', mode: 'polar', radiusExpression: 'min(width/max(abs(cos(theta)),0.000001),height/max(abs(sin(theta)),0.000001))', parameters: [parameter('width', '半宽', 250), parameter('height', '半高', 150)] },
-  { id: 'diamond', category: '基本图形', name: '菱形', mode: 'polar', radiusExpression: '1/(abs(cos(theta))/width+abs(sin(theta))/height)', parameters: [parameter('width', '横半轴', 260), parameter('height', '纵半轴', 160)] },
-  { id: 'star', category: '基本图形', name: '星形', shape: 'star', parameters: [radiusParameter, parameter('points', '角数', 5, 3, 20), parameter('inner', '内半径比例', 0.4, 0.05, 1, 0.01)] },
-  { id: 'ellipse', category: '进阶图形', name: '椭圆', xExpression: 'width*cos(2*pi*t)', yExpression: 'height*sin(2*pi*t)', parameters: [parameter('width', '横半轴', 280), parameter('height', '纵半轴', 140)] },
-  { id: 'heart', category: '进阶图形', name: '心形', xExpression: 'radius*sin(2*pi*t)^3', yExpression: 'radius*(13*cos(2*pi*t)-5*cos(4*pi*t)-2*cos(6*pi*t)-cos(8*pi*t))/16', parameters: [radiusParameter] },
-  { id: 'spiral', category: '进阶图形', name: '螺线', mode: 'polar', radiusExpression: 'radius*t', angleEnd: '2*pi*turns', parameters: [radiusParameter, parameter('turns', '圈数', 3, 0.1, 20, 0.1)] },
-  { id: 'rose', category: '进阶图形', name: '玫瑰线', mode: 'polar', radiusExpression: 'radius*cos(petals*theta)', parameters: [radiusParameter, parameter('petals', '花瓣参数', 5, 1, 20)] },
-  { id: 'infinity', category: '进阶图形', name: '八字形', xExpression: 'radius*cos(2*pi*t)', yExpression: 'radius*sin(4*pi*t)/2', parameters: [radiusParameter] },
-  { id: 'lissajous', category: '进阶图形', name: '李萨如曲线', xExpression: 'radius*sin(a*2*pi*t)', yExpression: 'radius*sin(b*2*pi*t+phase)', parameters: [radiusParameter, parameter('a', '横频率', 3, 1, 20), parameter('b', '纵频率', 2, 1, 20), parameter('phase', '相位（弧度）', 0, -6.3, 6.3, 0.1)] },
-  { id: 'parabola', category: '进阶图形', name: '抛物线', xExpression: 'width*(2*t-1)', yExpression: 'height*(2*t-1)^2', parameters: [parameter('width', '半宽', 250), parameter('height', '高度', 200)] },
-  { id: 'sine', category: '进阶图形', name: '正弦波', xExpression: 'length*(t-0.5)', yExpression: 'amplitude*sin(2*pi*waves*t+phase)', parameters: [parameter('length', '长度', 600), parameter('amplitude', '振幅', 100), parameter('waves', '波数', 2, 0.1, 20, 0.1), parameter('phase', '相位', 0, -6.3, 6.3, 0.1)] },
-  { id: 'damped-wave', category: '进阶图形', name: '衰减波', xExpression: 'length*(t-0.5)', yExpression: 'amplitude*(1-t)^decay*sin(2*pi*waves*t)', parameters: [parameter('length', '长度', 600), parameter('amplitude', '振幅', 180), parameter('waves', '波数', 4, 1, 20), parameter('decay', '衰减指数', 2, 0.1, 8, 0.1)] },
-  { id: 'cycloid', category: '进阶图形', name: '摆线', xExpression: 'radius*(2*pi*t-sin(2*pi*t)-pi)', yExpression: 'radius*(1-cos(2*pi*t))', parameters: [parameter('radius', '滚动半径', 90)] },
-  { id: 'astroid', category: '进阶图形', name: '星状线', xExpression: 'radius*cos(2*pi*t)^3', yExpression: 'radius*sin(2*pi*t)^3', parameters: [radiusParameter] },
-  { id: 'cardioid', category: '进阶图形', name: '心脏线', mode: 'polar', radiusExpression: 'radius*(1-cos(theta))', parameters: [parameter('radius', '基准半径', 130)] },
-  { id: 'limacon', category: '进阶图形', name: '蚶线', mode: 'polar', radiusExpression: 'radius*(ratio+cos(theta))', parameters: [parameter('radius', '基准半径', 150), parameter('ratio', '内外环比例', 0.5, 0.1, 3, 0.1)] },
-  { id: 'log-spiral', category: '进阶图形', name: '对数螺线', mode: 'polar', radiusExpression: 'radius*growth^t', angleEnd: '2*pi*turns', parameters: [parameter('radius', '起始半径', 30), parameter('growth', '半径增长倍数', 8, 0.1, 30, 0.1), parameter('turns', '圈数', 2, 0.1, 20, 0.1)] },
-  { id: 'hypotrochoid', category: '进阶图形', name: '内旋轮线', xExpression: '(outer-inner)*cos(2*pi*turns*t)+pen*cos((outer-inner)/inner*2*pi*turns*t)', yExpression: '(outer-inner)*sin(2*pi*turns*t)-pen*sin((outer-inner)/inner*2*pi*turns*t)', parameters: [parameter('outer', '外圆半径', 240), parameter('inner', '滚动圆半径', 90), parameter('pen', '笔尖距离', 120), parameter('turns', '圈数', 3, 1, 20)] },
-  { id: 'epitrochoid', category: '进阶图形', name: '外旋轮线', xExpression: '(outer+inner)*cos(2*pi*turns*t)-pen*cos((outer+inner)/inner*2*pi*turns*t)', yExpression: '(outer+inner)*sin(2*pi*turns*t)-pen*sin((outer+inner)/inner*2*pi*turns*t)', parameters: [parameter('outer', '固定圆半径', 120), parameter('inner', '滚动圆半径', 40), parameter('pen', '笔尖距离', 70), parameter('turns', '圈数', 1, 1, 20)] },
-  { id: 'superellipse', category: '进阶图形', name: '超椭圆', mode: 'polar', radiusExpression: '1/((abs(cos(theta))/width)^power+(abs(sin(theta))/height)^power)^(1/power)', parameters: [parameter('width', '半宽', 240), parameter('height', '半高', 150), parameter('power', '圆角指数', 4, 0.5, 12, 0.1)] },
-  { id: 'random-wave', category: '其他', name: '随机波形', xExpression: 'length*(t-0.5)', yExpression: 'amplitude*(sin(2*pi*waves*t)+randomness*(0.5*sin(13*pi*t+seed)+0.3*cos(23*pi*t+2*seed)))', randomness: 0.5, parameters: [parameter('length', '长度', 600), parameter('amplitude', '振幅', 100), parameter('waves', '主波数', 2, 1, 20)] },
-  { id: 'random-polygon', category: '其他', name: '随机多边形', shape: 'random-polygon', randomness: 0.5, parameters: [radiusParameter, parameter('points', '顶点数', 7, 3, 40)] },
-  { id: 'random-loop', category: '其他', name: '随机闭合曲线', mode: 'polar', radiusExpression: 'radius*(1+randomness*(0.5*sin(3*theta+seed)+0.3*cos(5*theta+seed*2)+0.2*sin(7*theta+seed*3)))', randomness: 0.5, parameters: [radiusParameter] },
+  { id: 'line', category: t('curve-trajectory.s3bfba45'), name: t('curve-trajectory.s1082f4e'), xExpression: 'length*t', yExpression: '0', parameters: [parameter('length', t('curve-trajectory.sa539498'), 400)] },
+  { id: 'circle', category: t('curve-trajectory.s3bfba45'), name: t('curve-trajectory.se006237'), mode: 'polar', radiusExpression: 'radius', parameters: [radiusParameter] },
+  ...[[3, t('curve-trajectory.s0a876c1')], [4, t('curve-trajectory.sdfed728')], [5, t('curve-trajectory.s564fc19')], [6, t('curve-trajectory.sac60b7f')], [8, t('curve-trajectory.s1266627')], [12, t('curve-trajectory.s8c35c41')]].map(([sides, name]) => ({ id: `polygon-${sides}`, category: t('curve-trajectory.s3bfba45'), name, ...polygon(sides), parameters: [radiusParameter] })),
+  { id: 'arc', category: t('curve-trajectory.s3bfba45'), name: t('curve-trajectory.sdd7169e'), mode: 'polar', radiusExpression: 'radius', angleEnd: 'sweep*pi/180', parameters: [radiusParameter, parameter('sweep', t('curve-trajectory.sf488250'), 180, -720, 720)] },
+  { id: 'rectangle', category: t('curve-trajectory.s3bfba45'), name: t('curve-trajectory.sb5d5ad3'), mode: 'polar', radiusExpression: 'min(width/max(abs(cos(theta)),0.000001),height/max(abs(sin(theta)),0.000001))', parameters: [parameter('width', t('curve-trajectory.s07bbeda'), 250), parameter('height', t('curve-trajectory.s1d2c05e'), 150)] },
+  { id: 'diamond', category: t('curve-trajectory.s3bfba45'), name: t('curve-trajectory.sce8122f'), mode: 'polar', radiusExpression: '1/(abs(cos(theta))/width+abs(sin(theta))/height)', parameters: [parameter('width', t('curve-trajectory.s561a432'), 260), parameter('height', t('curve-trajectory.s4616e80'), 160)] },
+  { id: 'star', category: t('curve-trajectory.s3bfba45'), name: t('curve-trajectory.s4ea7857'), shape: 'star', parameters: [radiusParameter, parameter('points', t('curve-trajectory.s5dd141d'), 5, 3, 20), parameter('inner', t('curve-trajectory.s035b2eb'), 0.4, 0.05, 1, 0.01)] },
+  { id: 'ellipse', category: t('curve-trajectory.sf505d38'), name: t('curve-trajectory.s229298d'), xExpression: 'width*cos(2*pi*t)', yExpression: 'height*sin(2*pi*t)', parameters: [parameter('width', t('curve-trajectory.s561a432'), 280), parameter('height', t('curve-trajectory.s4616e80'), 140)] },
+  { id: 'heart', category: t('curve-trajectory.sf505d38'), name: t('curve-trajectory.sd32afa0'), xExpression: 'radius*sin(2*pi*t)^3', yExpression: 'radius*(13*cos(2*pi*t)-5*cos(4*pi*t)-2*cos(6*pi*t)-cos(8*pi*t))/16', parameters: [radiusParameter] },
+  { id: 'spiral', category: t('curve-trajectory.sf505d38'), name: t('curve-trajectory.sdf64101'), mode: 'polar', radiusExpression: 'radius*t', angleEnd: '2*pi*turns', parameters: [radiusParameter, parameter('turns', t('curve-trajectory.sdc87b8c'), 3, 0.1, 20, 0.1)] },
+  { id: 'rose', category: t('curve-trajectory.sf505d38'), name: t('curve-trajectory.s9aa4c15'), mode: 'polar', radiusExpression: 'radius*cos(petals*theta)', parameters: [radiusParameter, parameter('petals', t('curve-trajectory.sa804976'), 5, 1, 20)] },
+  { id: 'infinity', category: t('curve-trajectory.sf505d38'), name: t('curve-trajectory.sa7e7085'), xExpression: 'radius*cos(2*pi*t)', yExpression: 'radius*sin(4*pi*t)/2', parameters: [radiusParameter] },
+  { id: 'lissajous', category: t('curve-trajectory.sf505d38'), name: t('curve-trajectory.sb848592'), xExpression: 'radius*sin(a*2*pi*t)', yExpression: 'radius*sin(b*2*pi*t+phase)', parameters: [radiusParameter, parameter('a', t('curve-trajectory.sb85e519'), 3, 1, 20), parameter('b', t('curve-trajectory.sc3e2201'), 2, 1, 20), parameter('phase', t('curve-trajectory.s781e2de'), 0, -6.3, 6.3, 0.1)] },
+  { id: 'parabola', category: t('curve-trajectory.sf505d38'), name: t('curve-trajectory.sf3c36ad'), xExpression: 'width*(2*t-1)', yExpression: 'height*(2*t-1)^2', parameters: [parameter('width', t('curve-trajectory.s07bbeda'), 250), parameter('height', t('curve-trajectory.seea51aa'), 200)] },
+  { id: 'sine', category: t('curve-trajectory.sf505d38'), name: t('curve-trajectory.s01260a6'), xExpression: 'length*(t-0.5)', yExpression: 'amplitude*sin(2*pi*waves*t+phase)', parameters: [parameter('length', t('curve-trajectory.sa539498'), 600), parameter('amplitude', t('curve-trajectory.sd76e84e'), 100), parameter('waves', t('curve-trajectory.sed07397'), 2, 0.1, 20, 0.1), parameter('phase', t('curve-trajectory.s90dda8c'), 0, -6.3, 6.3, 0.1)] },
+  { id: 'damped-wave', category: t('curve-trajectory.sf505d38'), name: t('curve-trajectory.s7af5002'), xExpression: 'length*(t-0.5)', yExpression: 'amplitude*(1-t)^decay*sin(2*pi*waves*t)', parameters: [parameter('length', t('curve-trajectory.sa539498'), 600), parameter('amplitude', t('curve-trajectory.sd76e84e'), 180), parameter('waves', t('curve-trajectory.sed07397'), 4, 1, 20), parameter('decay', t('curve-trajectory.s2e6fb07'), 2, 0.1, 8, 0.1)] },
+  { id: 'cycloid', category: t('curve-trajectory.sf505d38'), name: t('curve-trajectory.s6c0456a'), xExpression: 'radius*(2*pi*t-sin(2*pi*t)-pi)', yExpression: 'radius*(1-cos(2*pi*t))', parameters: [parameter('radius', t('curve-trajectory.se234fcc'), 90)] },
+  { id: 'astroid', category: t('curve-trajectory.sf505d38'), name: t('curve-trajectory.sfa3a0ca'), xExpression: 'radius*cos(2*pi*t)^3', yExpression: 'radius*sin(2*pi*t)^3', parameters: [radiusParameter] },
+  { id: 'cardioid', category: t('curve-trajectory.sf505d38'), name: t('curve-trajectory.se11731d'), mode: 'polar', radiusExpression: 'radius*(1-cos(theta))', parameters: [parameter('radius', t('curve-trajectory.s7ffb03e'), 130)] },
+  { id: 'limacon', category: t('curve-trajectory.sf505d38'), name: t('curve-trajectory.sd0bce98'), mode: 'polar', radiusExpression: 'radius*(ratio+cos(theta))', parameters: [parameter('radius', t('curve-trajectory.s7ffb03e'), 150), parameter('ratio', t('curve-trajectory.sd7ff195'), 0.5, 0.1, 3, 0.1)] },
+  { id: 'log-spiral', category: t('curve-trajectory.sf505d38'), name: t('curve-trajectory.s9db4592'), mode: 'polar', radiusExpression: 'radius*growth^t', angleEnd: '2*pi*turns', parameters: [parameter('radius', t('curve-trajectory.sd2392f6'), 30), parameter('growth', t('curve-trajectory.sec18f7c'), 8, 0.1, 30, 0.1), parameter('turns', t('curve-trajectory.sdc87b8c'), 2, 0.1, 20, 0.1)] },
+  { id: 'hypotrochoid', category: t('curve-trajectory.sf505d38'), name: t('curve-trajectory.s10c1e15'), xExpression: '(outer-inner)*cos(2*pi*turns*t)+pen*cos((outer-inner)/inner*2*pi*turns*t)', yExpression: '(outer-inner)*sin(2*pi*turns*t)-pen*sin((outer-inner)/inner*2*pi*turns*t)', parameters: [parameter('outer', t('curve-trajectory.sa8d2126'), 240), parameter('inner', t('curve-trajectory.sd7e0b98'), 90), parameter('pen', t('curve-trajectory.s80695e5'), 120), parameter('turns', t('curve-trajectory.sdc87b8c'), 3, 1, 20)] },
+  { id: 'epitrochoid', category: t('curve-trajectory.sf505d38'), name: t('curve-trajectory.sb9dd744'), xExpression: '(outer+inner)*cos(2*pi*turns*t)-pen*cos((outer+inner)/inner*2*pi*turns*t)', yExpression: '(outer+inner)*sin(2*pi*turns*t)-pen*sin((outer+inner)/inner*2*pi*turns*t)', parameters: [parameter('outer', t('curve-trajectory.s88267eb'), 120), parameter('inner', t('curve-trajectory.sd7e0b98'), 40), parameter('pen', t('curve-trajectory.s80695e5'), 70), parameter('turns', t('curve-trajectory.sdc87b8c'), 1, 1, 20)] },
+  { id: 'superellipse', category: t('curve-trajectory.sf505d38'), name: t('curve-trajectory.s6a069b6'), mode: 'polar', radiusExpression: '1/((abs(cos(theta))/width)^power+(abs(sin(theta))/height)^power)^(1/power)', parameters: [parameter('width', t('curve-trajectory.s07bbeda'), 240), parameter('height', t('curve-trajectory.s1d2c05e'), 150), parameter('power', t('curve-trajectory.s6cd7e54'), 4, 0.5, 12, 0.1)] },
+  { id: 'random-wave', category: t('curve-trajectory.s1a26edf'), name: t('curve-trajectory.s419b223'), xExpression: 'length*(t-0.5)', yExpression: 'amplitude*(sin(2*pi*waves*t)+randomness*(0.5*sin(13*pi*t+seed)+0.3*cos(23*pi*t+2*seed)))', randomness: 0.5, parameters: [parameter('length', t('curve-trajectory.sa539498'), 600), parameter('amplitude', t('curve-trajectory.sd76e84e'), 100), parameter('waves', t('curve-trajectory.s270aeb1'), 2, 1, 20)] },
+  { id: 'random-polygon', category: t('curve-trajectory.s1a26edf'), name: t('curve-trajectory.s30ec055'), shape: 'random-polygon', randomness: 0.5, parameters: [radiusParameter, parameter('points', t('curve-trajectory.sb244821'), 7, 3, 40)] },
+  { id: 'random-loop', category: t('curve-trajectory.s1a26edf'), name: t('curve-trajectory.s92935a1'), mode: 'polar', radiusExpression: 'radius*(1+randomness*(0.5*sin(3*theta+seed)+0.3*cos(5*theta+seed*2)+0.2*sin(7*theta+seed*3)))', randomness: 0.5, parameters: [radiusParameter] },
 ];
 
 export function normalizeCurveExpression(source) {
@@ -48,7 +49,7 @@ export function presetOptions(preset) {
 export function editableTrajectoryOptions(input) {
   const options = { ...TRAJECTORY_DEFAULTS, ...structuredClone(input) };
   if (!options.shape) return options;
-  if (!['star', 'random-polygon'].includes(options.shape)) throw new Error('未知 shape 类型');
+  if (!['star', 'random-polygon'].includes(options.shape)) throw new Error(t('curve-trajectory.s836db4d'));
   const star = options.shape === 'star';
   const sides = `(clamp(round(points),3,40)${star ? '*2' : ''})`;
   const amount = `(((t%1+1)%1)*${sides})`;
@@ -76,11 +77,11 @@ export function editableTrajectoryOptions(input) {
 export function compileTrajectory(input = {}) {
   const options = { ...TRAJECTORY_DEFAULTS, ...input };
   const parameters = options.parameters ?? {};
-  if (Array.isArray(parameters) || typeof parameters !== 'object' || Object.keys(parameters).length > 32) throw new Error('参数必须是至多 32 项的数值字典');
-  for (const [key, value] of Object.entries(parameters)) if (!/^[A-Za-z_][A-Za-z_0-9]*$/.test(key) || !Number.isFinite(value)) throw new Error('自定义参数名或值无效');
-  for (const key of ['trimStart', 'trimEnd', 'rotation', 'scaleX', 'scaleY', 'startX', 'startY', 'seed', 'randomness']) if (!Number.isFinite(Number(options[key]))) throw new Error(`${key} 必须为有限数字`);
-  if (options.trimStart < 0 || options.trimEnd > 1 || options.trimEnd <= options.trimStart) throw new Error('截取范围须满足 0 ≤ 起点 < 终点 ≤ 1');
-  for (const key of ['easingX', 'easingY']) if (!Number.isInteger(Number(options[key])) || options[key] < 1 || options[key] > 29) throw new Error('缓动编号须为 1–29');
+  if (Array.isArray(parameters) || typeof parameters !== 'object' || Object.keys(parameters).length > 32) throw new Error(t('curve-trajectory.s36409e4'));
+  for (const [key, value] of Object.entries(parameters)) if (!/^[A-Za-z_][A-Za-z_0-9]*$/.test(key) || !Number.isFinite(value)) throw new Error(t('curve-trajectory.se2207d9'));
+  for (const key of ['trimStart', 'trimEnd', 'rotation', 'scaleX', 'scaleY', 'startX', 'startY', 'seed', 'randomness']) if (!Number.isFinite(Number(options[key]))) throw new Error(t('curve-trajectory.s67aaa7f', { p0: key }));
+  if (options.trimStart < 0 || options.trimEnd > 1 || options.trimEnd <= options.trimStart) throw new Error(t('curve-trajectory.s0f30bbd'));
+  for (const key of ['easingX', 'easingY']) if (!Number.isInteger(Number(options[key])) || options[key] < 1 || options[key] > 29) throw new Error(t('curve-trajectory.s149b25e'));
   const scope = { ...parameters, seed: Number(options.seed), randomness: Number(options.randomness) };
   const expression = source => compileExpression(normalizeCurveExpression(source));
   const begin = expression(options.mode === 'polar' ? options.angleStart : options.parameterStart)(scope);
@@ -132,40 +133,40 @@ export function compileTrajectory(input = {}) {
       point.rotation = angle + 360 * Math.round((reference - angle) / 360);
     }
     const result = { x: point.x + (options.alignStart ? Number(options.startX) - first.x : 0), y: point.y + (options.alignStart ? Number(options.startY) - first.y : 0), rotation: point.rotation };
-    if (!Object.values(result).every(Number.isFinite)) throw new Error('曲线计算结果不是有限数字');
+    if (!Object.values(result).every(Number.isFinite)) throw new Error(t('curve-trajectory.s05bd0c5'));
     return result;
   };
 }
 
 export function sampleCurveTrajectory(options = {}, count = 257) {
-  if (!Number.isFinite(count) || count < 2 || count > 8193) throw new Error('轨迹采样数须为 2–8193');
+  if (!Number.isFinite(count) || count < 2 || count > 8193) throw new Error(t('curve-trajectory.s8304cf4'));
   const evaluate = compileTrajectory(options); const length = Math.trunc(count);
   return Array.from({ length }, (unused, index) => ({ t: index / (length - 1), ...evaluate(index / (length - 1)) }));
 }
 
 export function validateCurvePreset(preset) {
-  if (!preset || typeof preset !== 'object' || typeof preset.name !== 'string' || !preset.name.trim() || preset.name.length > 80) throw new Error('预设需要 1–80 字的名称');
+  if (!preset || typeof preset !== 'object' || typeof preset.name !== 'string' || !preset.name.trim() || preset.name.length > 80) throw new Error(t('curve-trajectory.s3497162'));
   const allowed = new Set([...Object.keys(TRAJECTORY_DEFAULTS), 'name', 'category', 'id', 'shape']);
-  for (const key of Object.keys(preset)) if (!allowed.has(key)) throw new Error(`未知预设字段：${key}`);
-  if (preset.mode !== undefined && !['parametric', 'polar'].includes(preset.mode)) throw new Error('mode 必须为 parametric 或 polar');
-  if (preset.shape !== undefined && !['star', 'random-polygon'].includes(preset.shape)) throw new Error('未知 shape 类型');
+  for (const key of Object.keys(preset)) if (!allowed.has(key)) throw new Error(t('curve-trajectory.s7750756', { p0: key }));
+  if (preset.mode !== undefined && !['parametric', 'polar'].includes(preset.mode)) throw new Error(t('curve-trajectory.s769ce17'));
+  if (preset.shape !== undefined && !['star', 'random-polygon'].includes(preset.shape)) throw new Error(t('curve-trajectory.s836db4d'));
   for (const [key, fallback] of Object.entries(TRAJECTORY_DEFAULTS)) {
     if (key === 'parameters' || !Object.hasOwn(preset, key)) continue;
-    if (typeof preset[key] !== typeof fallback) throw new Error(`${key} 必须为${typeof fallback === 'string' ? '字符串' : typeof fallback === 'boolean' ? '布尔值' : '数字'}`);
+    if (typeof preset[key] !== typeof fallback) throw new Error(t('curve-trajectory.s6e3b660', { p0: key, p1: typeof fallback === 'string' ? t('curve-trajectory.s4dc9621') : typeof fallback === 'boolean' ? t('curve-trajectory.s642a2c8') : t('curve-trajectory.s7a4dc82') }));
   }
   const required = preset.shape ? [] : preset.mode === 'polar' ? ['radiusExpression'] : ['xExpression', 'yExpression'];
-  for (const key of required) if (typeof preset[key] !== 'string' || !preset[key].trim()) throw new Error(`缺少曲线表达式：${key}`);
-  if (!Array.isArray(preset.parameters) || preset.parameters.length > 32) throw new Error('预设参数声明必须是数组，至多 32 项');
+  for (const key of required) if (typeof preset[key] !== 'string' || !preset[key].trim()) throw new Error(t('curve-trajectory.s6a63bc2', { p0: key }));
+  if (!Array.isArray(preset.parameters) || preset.parameters.length > 32) throw new Error(t('curve-trajectory.s4117df4'));
   const keys = new Set();
   for (const entry of preset.parameters) {
-    if (!entry || keys.has(entry.key) || !/^[A-Za-z_][A-Za-z_0-9]*$/.test(entry.key) || ['t', 'u', 'theta', 'pi', 'seed', 'randomness'].includes(entry.key) || !Number.isFinite(entry.value)) throw new Error('预设参数名重复、保留或默认值无效');
-    for (const key of Object.keys(entry)) if (!['key', 'label', 'value', 'min', 'max', 'step'].includes(key)) throw new Error(`参数 ${entry.key} 的未知字段：${key}`);
-    if (entry.label !== undefined && typeof entry.label !== 'string') throw new Error(`参数 ${entry.key} 的 label 必须为字符串`);
-    for (const key of ['min', 'max', 'step']) if (entry[key] !== undefined && !Number.isFinite(entry[key])) throw new Error(`参数 ${entry.key} 的 ${key} 必须为有限数字`);
-    if (entry.step <= 0 || entry.min > entry.max || entry.value < entry.min || entry.value > entry.max) throw new Error(`参数 ${entry.key} 的范围、步长或默认值无效`);
+    if (!entry || keys.has(entry.key) || !/^[A-Za-z_][A-Za-z_0-9]*$/.test(entry.key) || ['t', 'u', 'theta', 'pi', 'seed', 'randomness'].includes(entry.key) || !Number.isFinite(entry.value)) throw new Error(t('curve-trajectory.s06d9b77'));
+    for (const key of Object.keys(entry)) if (!['key', 'label', 'value', 'min', 'max', 'step'].includes(key)) throw new Error(t('curve-trajectory.s83e52c2', { p0: entry.key, p1: key }));
+    if (entry.label !== undefined && typeof entry.label !== 'string') throw new Error(t('curve-trajectory.s3e14221', { p0: entry.key }));
+    for (const key of ['min', 'max', 'step']) if (entry[key] !== undefined && !Number.isFinite(entry[key])) throw new Error(t('curve-trajectory.s5b51b92', { p0: entry.key, p1: key }));
+    if (entry.step <= 0 || entry.min > entry.max || entry.value < entry.min || entry.value > entry.max) throw new Error(t('curve-trajectory.s9f6a2f1', { p0: entry.key }));
     keys.add(entry.key);
   }
-  const clean = { name: preset.name.trim(), parameters: structuredClone(preset.parameters), category: '自定义' };
+  const clean = { name: preset.name.trim(), parameters: structuredClone(preset.parameters), category: t('curve-trajectory.sc493338') };
   for (const key of Object.keys(TRAJECTORY_DEFAULTS)) if (key !== 'parameters' && Object.hasOwn(preset, key)) clean[key] = structuredClone(preset[key]);
   if (['star', 'random-polygon'].includes(preset.shape)) clean.shape = preset.shape;
   sampleCurveTrajectory(presetOptions(clean), 257);

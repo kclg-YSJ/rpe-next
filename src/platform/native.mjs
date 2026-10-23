@@ -1,4 +1,5 @@
 import { snapshotParts } from './recovery-transfer.mjs';
+import { t } from '../i18n.mjs';
 
 const bridge = globalThis.rpenDesktopStorage?.version === 1 ? globalThis.rpenDesktopStorage : null;
 // Recreate typed errors in the renderer; contextBridge only preserves Error messages.
@@ -61,11 +62,11 @@ export async function decodeNative(envelope) {
     const bytes = new Uint8Array(entry.length);
     for (let offset = 0; offset < bytes.length;) {
       const chunk = await nativeStorage.call('blob', entry.hash, offset, Math.min(1024 ** 2, bytes.length - offset));
-      if (!chunk?.length) throw Error('素材文件不完整'); bytes.set(chunk, offset); offset += chunk.length;
+      if (!chunk?.length) throw Error(t('native.sde220c9')); bytes.set(chunk, offset); offset += chunk.length;
     }
     const value = entry.kind === 'blob' ? new Blob([bytes], { type: entry.type }) : bytes;
     let parent = data;
-    for (const key of entry.path.slice(0, -1)) { if (!Object.hasOwn(parent, key)) throw Error('存储素材引用无效'); parent = parent[key]; }
+    for (const key of entry.path.slice(0, -1)) { if (!Object.hasOwn(parent, key)) throw Error(t('native.s5099694')); parent = parent[key]; }
     Object.defineProperty(parent, entry.path.at(-1), { value, enumerable: true, writable: true, configurable: true });
     binaryCache.set(value, entry.hash);
   }
@@ -109,9 +110,9 @@ async function migrateLegacy() {
           if (await nativeStorage.call('migrationDone', source, kind, id)) continue;
           if (!overlay) {
             overlay = document.createElement('div'); overlay.className = 'native-storage-migration'; overlay.setAttribute('role', 'status');
-            const title = document.createElement('strong'); title.textContent = '正在迁移桌面存储';
+            const title = document.createElement('strong'); title.textContent = t('native.s4f9a22d');
             const progress = document.createElement('p'); progress.dataset.nativeProgress = 'true';
-            const hint = document.createElement('p'); hint.textContent = '正在复制到原生文件谱面库并校验。旧数据库保留；关闭程序后，下次可继续迁移。'; overlay.append(title, progress, hint); document.body.append(overlay);
+            const hint = document.createElement('p'); hint.textContent = t('native.sc316757'); overlay.append(title, progress, hint); document.body.append(overlay);
           }
           overlay.querySelector('[data-native-progress]').textContent = `${kind} · ${index + 1}/${keys.length}`;
           const value = await legacyRead(database, store, key);

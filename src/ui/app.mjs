@@ -1,6 +1,10 @@
+// Must stay first: it applies the saved language before the modules below build
+// their label tables with `t()`.
+import '../platform/locale-bootstrap.mjs';
 import { EditorSession } from '../application/session.mjs';
 import { FrameLimiter, validFpsLimit } from '../core/frame-timing.mjs';
 import { assertChart, createChart, diagnose, EVENT_TYPES, previewLimitations } from '../core/chart.mjs';
+import { chartDisplayName } from '../core/labels.mjs';
 import { beatValue, parseBeat, formatBeat, fromNumber, upperBound } from '../core/beat.mjs';
 import { TempoMap } from '../core/tempo.mjs';
 import { AudioTransport } from '../platform/audio.mjs';
@@ -86,12 +90,22 @@ import { DEFAULT_EDITOR_PREFERENCES, DEFAULT_SETTINGS } from '../core/default-se
 import { appendLineShortcutDigit } from '../core/line-switch.mjs';
 import { installNumericExpressionInputs } from './numeric-expression-input.mjs';
 import { TimeReadouts } from './time-readouts.mjs';
+import { currentLocale, setLocale, t } from '../i18n.mjs';
+import { localeCandidates, preferredLocales, readLocalePreference, writeLocalePreference } from '../platform/locale.mjs';
+import { installDomTranslation } from './dom-i18n.mjs';
+
+// Resolve the interface language before any UI text is created. An explicit
+// choice wins; otherwise the browser and migrated RPE settings decide.
+for (const candidate of preferredLocales({ stored: readLocalePreference() })) {
+  if (setLocale(candidate).locale) break;
+}
+document.documentElement.lang = currentLocale().locale;
 
 try { await initializeLocalPreferences(); }
 catch (error) {
   const host = document.createElement('div'); host.className = 'native-storage-migration';
-  const message = document.createElement('p'); message.textContent = '桌面存储未能完成初始化：' + error.message + '。旧数据仍保留。请检查磁盘空间和文件夹权限后重试。';
-  const retry = document.createElement('button'); retry.textContent = '重试'; retry.onclick = () => location.reload();
+  const message = document.createElement('p'); message.textContent = t('app.sa0301be') + error.message + t('app.se81663c');
+  const retry = document.createElement('button'); retry.textContent = t('app.se2d53a6'); retry.onclick = () => location.reload();
   host.append(message, retry); document.body.append(host); throw error;
 }
 if (globalThis.rpenDesktopStorage) globalThis.rpenFlushPreferences = flushLocalPreferences;
@@ -133,13 +147,33 @@ const displayFields = [
   ['preserve-pitch', 'preservePitch', true], ['autoplay-view', 'autoplayView', true], ['highlight-notes', 'highlight', true],
   ['autosave-enabled', 'autoSave', true], ['autosave-seconds', 'autoSaveSeconds', 60], ['autosave-limit', 'autoSaveLimit', 10],
 ];
-const settingsDialog = createSettingsPanel();
+const settingsDialog = createSettingsPanel({
+  onLocaleChange: (locale, previousLocale) => {
+    // Parts of the editor (skins, mods, toolbar buttons…) build their DOM once
+    // at startup, so a live switch would leave them in the old language. Reload
+    // instead and reopen the chart the user was editing.
+    if (hasDocument && (session.history.dirty || assetDirty || !libraryProject?.id)) {
+      // Report in the language the user is still looking at.
+      if (previousLocale) setLocale(previousLocale);
+      notify(t('notify.localeNeedsSave'), 'warning');
+      return false;
+    }
+    writeLocalePreference(locale.locale);
+    try { if (hasDocument && libraryProject?.id) sessionStorage.setItem(LOCALE_REOPEN_KEY, libraryProject.id); } catch { /* storage unavailable */ }
+    location.reload();
+    return true;
+  },
+});
+// Static markup is translated once here; the language switch reloads the page.
+installDomTranslation(() => { document.documentElement.lang = currentLocale().locale; renderSession(); });
 installNumericExpressionInputs();
 let session = new EditorSession();
 let assets = new Map();
 let assetFolders = new Set();
 let assetDirty = false;
 let chartName = 'chart.json';
+// A brand-new chart stores the reference-language sentinel; show it localized.
+const chartTitle = () => chartDisplayName(session.chart.META.name);
 let recoveryId = crypto.randomUUID();
 let tempo = new TempoMap(session.chart.BPMList);
 let tempoEntries = session.chart.BPMList;
@@ -156,6 +190,8 @@ let editorPreferences = { ...DEFAULT_EDITOR_PREFERENCES, ...readEditorPreference
 const fileOptions = () => ({ includeBackupCharts: editorPreferences.includeBackupCharts === true });
 let atHome = true;
 let hasDocument = false;
+// Set right before a language switch reloads the page so the same chart reopens.
+const LOCALE_REOPEN_KEY = 'rpe-next-reopen-project';
 let previewReturnTime = 0;
 let placementContext;
 let heldPreview;
@@ -228,7 +264,7 @@ timeline.onNoteHover = entry => {
     if (noteHoverKey !== key || !entry?.lineIndex && entry?.lineIndex !== 0) return;
     const line = session.chart.judgeLineList?.[entry.lineIndex];
     if (!line) return;
-    toast.textContent = `该音符来自 ${entry.lineIndex} 号线 · 点击切换`;
+    toast.textContent = t('app.sb6e1d2c', { p0: entry.lineIndex });
     toast.hidden = false;
     toast.onclick = () => { session.selectLine(entry.lineIndex); clearNoteSourceToast(); invalidate(); };
   }, 1000);
@@ -288,11 +324,11 @@ const assetLibrary = new AssetLibraryPanel(element('#asset-library'), () => ({ a
   onChange: (nextAssets, nextFolders, paths) => {
     const nextChart = remapAssetReferences(session.chart, assets, nextAssets, paths, chartName);
     assets = nextAssets; assetFolders = new Set(nextFolders ?? []); assetDirty = true;
-    if (nextChart !== session.chart) session.commit('同步图片资源路径', nextChart);
-    images.load(session.chart, assets, chartName); status('素材库已修改，请保存谱面以保留资源'); renderSession();
+    if (nextChart !== session.chart) session.commit(t('app.s66f5500'), nextChart);
+    images.load(session.chart, assets, chartName); status(t('app.s61fc662')); renderSession();
   },
   openFolder: nativeStorage ? async (path, folder) => {
-    if (!libraryProject || assetDirty) throw Error('请先保存谱面和素材修改，再打开本地位置');
+    if (!libraryProject || assetDirty) throw Error(t('app.s7d40547'));
     await nativeStorage.call('openAssetFolder', libraryProject.id, path, folder);
   } : undefined,
 });
@@ -312,7 +348,7 @@ function clipboardTargetLine() {
 const pasteGesture = new PasteGesture({
   paste: context => { try { pasteObjects(session, context.beat, { ...timeline.clipboardMode, targetLineIndex: clipboardTargetLine() }); } catch (error) { reportError(error); } },
   open: () => { activatePane('clipboard'); renderClipboardPanel(); },
-  reportError: error => notify(`剪贴板历史：${error.message}`, 'error'),
+  reportError: error => notify(t('app.s70852e2', { p0: error.message }), 'error'),
   valid: context => context.session === session && context.chart === session.chart && context.layer === timeline.layer && !atHome && !preview.visible && !dialogOpen() && !isTextEntry(document.activeElement),
 });
 window.addEventListener('blur', () => pasteGesture.cancel());
@@ -373,16 +409,16 @@ timeline.curvePick = note => {
     curveAnchorMode = null;
     element('#curve-start')?.classList.remove('active');
     curveValues.startTime = anchor.startTime; curveValues.startX = anchor.positionX; updateCurvePanel();
-    status('曲线起点已选择；请选择终点音符');
+    status(t('app.s55fff36'));
     invalidate();
     return true;
   }
-  if (!curveStart) { curveAnchorMode = null; status('请先选择曲线起点'); return true; }
+  if (!curveStart) { curveAnchorMode = null; status(t('app.s0b8378a')); return true; }
   curveEnd = anchor;
   curveAnchorMode = null;
   element('#curve-end')?.classList.remove('active');
   curveValues.endTime = anchor.startTime; curveValues.endX = anchor.positionX; updateCurvePanel();
-  status('曲线终点已选择，可在右侧调整参数并生成');
+  status(t('app.s3739e90'));
   return true;
 };
 timeline.curveGhost = () => {
@@ -412,41 +448,86 @@ function notify(message, level = 'success', duration = 2800) {
 timeline.notify = (message, level = 'warning') => notify(message, level);
 const reportError = error => {
   const message = storageFailure(error); status(message); notify(message, 'error', 7000);
-  const host = showDialog(error.name === 'ProjectConflictError' ? '保存冲突，已保留当前编辑' : '操作未完成', message);
+  const host = showDialog(error.name === 'ProjectConflictError' ? t('app.s61fa498') : t('app.s223fb3c'), message);
   if (error.name === 'ProjectConflictError' && libraryProject?.id === error.projectId && hasDocument) {
-    for (const [label, run] of [['导出当前谱面 PEZ', () => showExportDialog(session.chart, assets, chartName, (_name, format) => { if (format === 'pez') noteExternalBackup(); }, libraryProject?.identifier, fileOptions())],
-      ['另存为新项目', async () => { libraryProject = null; session.history.savedDocument = null; await save(); }]]) {
+    for (const [label, run] of [[t('app.s15e8f96'), () => showExportDialog(session.chart, assets, chartName, (_name, format) => { if (format === 'pez') noteExternalBackup(); }, libraryProject?.identifier, fileOptions())],
+      [t('app.s53213ef'), async () => { libraryProject = null; session.history.savedDocument = null; await save(); }]]) {
       const button = document.createElement('button'); button.type = 'button'; button.textContent = label;
       button.onclick = async () => { element('#modal').close(); try { await run(); } catch (failure) { reportError(failure); } }; host.append(button);
     }
   }
 };
-document.addEventListener('rpen-storage-blocked', () => notify('数据库正在等待其他编辑器窗口释放，请关闭旧窗口后重试。', 'warning', 7000));
-const tips = [
-  'Tips: 坐标系范围为 [-675,675]x[-450,450]', 'Tips: 速度为10表示每秒移动 1200 像素~', 'Tips: 编辑器的分辨率正比于 1920*1080', 'Tips: 很多金色的组件都是可以被点击的',
-  'Tips: 谱面名可不为英文，但标识名只能是一串数字', 'Tips: 添加资源文件时闪退可能是其损坏，常见于直接改后缀名', 'Tips: CTRL+滚轮 可以快速切换线',
-  'Tips: 选中事件 CTRL+滚轮 可以微调事件数值', 'Tips: 善用多音符和多事件编辑能在几步内做出大量常用效果', 'Tips: 开启实时显示预览可能会降低帧率',
-  'Tips: 如果帧率过低，可以试试降低分辨率哦', 'Tips: 请务必安装 /Resources/fonts 中的字体！', 'Tips: 按住 Z键 用鼠标左右键可以拖动音符和事件的头或尾',
-  'Tips: 速度事件只能线性变化', 'Tips: 按住 T 和 Y 可以分别进行两种预览', 'Tips: UIOP 键对应左上角的四个预览相关按钮',
-  'Tips: 最好让右上部的两条横线时刻保持绿色（认真', 'Tips: .pez就是压缩文件', 'Tips: 右上部第一条线为红色代表很可能有严重错误，看看纠错！',
-  'Tips: 按住 CTRL键 并按下数字可以跳转所在线号', 'Tips: 按住 CTRL 并点击可以进行单击多选', 'Tips: 按住 SHIFT键 点击并移动鼠标，再次点击鼠标以进行框选',
-  'Tips: 按下 D键和鼠标右键 可以删除选中的内容', 'Tips: 常看谱面纠错是个好习惯', 'Tips: Error尽量改，Warning仔细看，Caution作参考',
-  'Tips: 自动保存会表明每个文件保存的时间', 'Tips: 不要调戏音频库————', 'Tips: 新建的线会放入一个各类事件来垫底，不应该被删除',
-  'Tips: 编辑器配置在 Settings.json 中存储', 'Tips: 编辑器热键在 Hotkey.txt 中存储', 'Tips: 编辑器UI在 UI.txt 中存储',
-  'Tips: 试试在曲线填充中用 CTRL+F/G', 'Tips: 有很多东西可以在设置中调整', 'Tips: BPM 列表过长的时候可以用滚轮或方向键操作',
-  'Tips: 移动和旋转事件最好不要全用线性变化', 'Tips: 慎用音符差速', 'Tips: 竖线不宜调太多或太少', 'Tips: 不确定采音的时候，试试倍速！',
-  'Tips: 判定线遮罩属性指是否显示线下方的音符', 'Tips: 每条判定线可以更改贴图，需将贴图放在 /Resources下', 'Tips: 判定线 Z轴属性 用来控制线之间的遮挡关系',
-  'Tips: 即使开了自动保存，多保存依然是好习惯', 'Tips: Tip大概每 10 秒切换一次', 'Tips: 事件编辑窗下方的按钮用来切换层级',
-  'Tips: 实时预览帧率过低时可以降低分辨率', 'Tips: 密度条显示音符和当前事件层的分布',
-  'Tips: 次透明化控制选中线以外的音符透明度，试试置为负数？', 'Tips: 选中音符按住 CTRL键 使用滚轮可以调整音符宽度', 'Tips: 线上标注的数字可以在设置中关闭',
-  'Tips: 粘合会将事件的初始数值置为前一个的结束数值', 'Tips: 下方的状态栏会显示一些有用的信息', 'Tips: 不限量的判定线！',
-  'Tips: 如果太多音符闪退，或许是电脑内存不够用', 'Tips: 你无法删除所有线', 'Tips: 开始框选后松开 SHIFT，就可以随意调整时刻',
-  'Tips: 研究表明，对自己谱面的喜爱程度随时间而快速下降', 'Tips: 不支持脑内想法投射', 'Tips: 据说演出应该锦上添花而不是雪中送碳',
-  'Tips: 集齐所有Tips召唤神龙', 'Tips: 世界是离散的', 'Tips: 怎么也飞不出，花花的世界', 'Tips: 没有 tips 就是最好的 tips',
-  'Tips: 不要弄错你的目标判定线哦～', 'Tips: 长时间使用电脑要注意保持正确姿势哦', 'Tips: Re:Phiedit 被玩坏了！这绝对不是 Re:Phiedit 的错，绝对不是！'
+document.addEventListener('rpen-storage-blocked', () => notify(t('app.sc0d447d'), 'warning', 7000));
+// Tips are stored as keys so switching the language swaps the text too.
+const tipKeys = [
+  'app.s4bf04e3',
+  'app.s6861f58',
+  'app.s7b81457',
+  'app.s02fa461',
+  'app.saeff07b',
+  'app.s2b801b6',
+  'app.s7795e1c',
+  'app.sc5574a8',
+  'app.s99a95fb',
+  'app.sc9bc457',
+  'app.sd67584b',
+  'app.sad8e978',
+  'app.s18f7e80',
+  'app.sf35446f',
+  'app.sf50c3c5',
+  'app.s1ed117b',
+  'app.s860780f',
+  'app.saf9dadc',
+  'app.s7a89e84',
+  'app.s3f8c4d7',
+  'app.s5ed173f',
+  'app.s801fd0c',
+  'app.s61024c2',
+  'app.s2f3f064',
+  'app.s2fa0c57',
+  'app.s46e26f6',
+  'app.s58b1d6f',
+  'app.s26acb9c',
+  'app.s7bce64d',
+  'app.s9e43446',
+  'app.s02c2119',
+  'app.sc21eb7c',
+  'app.s4963c44',
+  'app.s9320781',
+  'app.sffe6b8a',
+  'app.sb329966',
+  'app.s1332d89',
+  'app.s4648271',
+  'app.s760f48e',
+  'app.s074da51',
+  'app.sce9623e',
+  'app.sd7c1b2e',
+  'app.s7dc5fa4',
+  'app.s15c86b5',
+  'app.s4a39c08',
+  'app.s6f9d89a',
+  'app.s669449c',
+  'app.sfd56c24',
+  'app.sa302181',
+  'app.s094100c',
+  'app.sfb6f94a',
+  'app.s3816d85',
+  'app.s53040c5',
+  'app.sa5551d9',
+  'app.sbc9e4e2',
+  'app.sb1d120a',
+  'app.sf47134d',
+  'app.s88df27a',
+  'app.s5d11416',
+  'app.s7ba89fe',
+  'app.sa668593',
+  'app.sa4488e7',
+  'app.s9c16d38',
+  'app.sd64fc07',
+  'app.sbff4832',
 ];
 let tipIndex = 0;
-function rotateTip() { const target = element('#tips'); if (!target || editorPreferences.tipsEnabled === false || atHome) { if (target) target.textContent = ''; return; } target.textContent = tips[tipIndex++ % tips.length]; }
+function rotateTip() { const target = element('#tips'); if (!target || editorPreferences.tipsEnabled === false || atHome) { if (target) target.textContent = ''; return; } target.textContent = t(tipKeys[tipIndex++ % tipKeys.length]); }
 setInterval(rotateTip, 10000);
 const offsetSeconds = () => Number(session.chart.META.offset ?? 0) / 1000;
 const chartSeconds = () => audio.time - offsetSeconds();
@@ -462,7 +543,7 @@ const advanceEditClock = timestamp => {
 const formatEditTime = seconds => `${String(Math.floor(seconds / 3600)).padStart(2, '0')} h, ${String(Math.floor(seconds / 60) % 60).padStart(2, '0')} m, ${String(Math.floor(seconds) % 60).padStart(2, '0')} s`;
 const currentBeat = () => tempo.beat(chartSeconds(), noiseEditor.active || globalEvents.active ? 1 : session.line?.bpmfactor ?? 1);
 let collaborationJoining = false;
-const collaborationTool = document.createElement('button'); collaborationTool.id = 'collaboration-tool'; collaborationTool.textContent = '联机协作'; element('[data-panel="chart"] .action-grid').append(collaborationTool);
+const collaborationTool = document.createElement('button'); collaborationTool.id = 'collaboration-tool'; collaborationTool.textContent = t('app.se55c4de'); element('[data-panel="chart"] .action-grid').append(collaborationTool);
 const collaboration = new CollaborationPanel(element('#collaboration-panel'), () => ({
   session, timeline, interactionBusy: batchControls.active, seconds: chartSeconds(), offset: offsetSeconds(), duration: Number(element('#scrubber').max) || 600,
   seek: seconds => playback.seek(seconds + offsetSeconds()),
@@ -500,8 +581,8 @@ const autoSave = new AutoSaveClock(async () => {
   const current = session; const document = current.chart; const snapshot = { ...document }; delete snapshot.chartTime;
   const media = [...assets], folders = [...assetFolders];
   await saveSnapshot(libraryProject?.id ?? recoveryId, chartName, snapshot, media, editorPreferences.autoSaveLimit ?? preferences.settings.autoSaveLimit, { lineIndex: current.lineIndex, vcsId: versionRepoId });
-  if (current === session) { lastDraftDocument = document; lastDraftAssets = media; lastDraftFolders = folders; status('自动备份已保存（包含音乐、曲绘与编辑位置）'); notify('自动备份已保存', 'success'); }
-}, error => { const message = `自动备份失败：${storageFailure(error)}，请导出 PEZ 保留当前修改`; status(message); notify(message, 'error', 7000); });
+  if (current === session) { lastDraftDocument = document; lastDraftAssets = media; lastDraftFolders = folders; status(t('app.s43755f3')); notify(t('app.s0d49e0d'), 'success'); }
+}, error => { const message = t('app.sf83f150', { p0: storageFailure(error) }); status(message); notify(message, 'error', 7000); });
 timeline.onWheel = event => {
   if (event.ctrlKey) {
     if (event.deltaY) {
@@ -552,7 +633,7 @@ element('#preview').addEventListener('pointermove', event => {
   toast.hidden = true;
   noteHoverTimer = setTimeout(() => {
     if (noteHoverKey !== key || !preview.visible) return;
-    toast.textContent = `该音符来自 ${lineIndex} 号线 · 点击切换`;
+    toast.textContent = t('app.s33058f1', { p0: lineIndex });
     toast.hidden = false;
     toast.onclick = () => { session.selectLine(lineIndex); clearNoteSourceToast(); invalidate(); };
   }, 1000);
@@ -561,7 +642,7 @@ element('#preview').addEventListener('pointerleave', event => { if (!element('#n
 timeline.previewPick = () => false;
 const home = new ProjectHome(async id => {
   const project = await readProject(id);
-  if (!project) throw new Error('此项目不存在');
+  if (!project) throw new Error(t('app.s4572dcf'));
   guardReplace(() => loadCandidate({ chart: project.chart, name: project.chartName, info: project.info, project }, new Map(project.assets)).catch(reportError));
 }, reportError, project => {
   if (libraryProject?.id === project.id) {
@@ -578,12 +659,18 @@ const home = new ProjectHome(async id => {
     const renamed = libraryProject.chart.META.name !== project.chart.META.name;
     libraryProject = project;
     if (!session.history.dirty) {
-      session.commit('更新项目信息', project.chart); session.history.markSaved(); renderSession();
-    } else if (renamed) session.commit('更新项目名称', { ...session.chart, META: { ...session.chart.META, name: project.chart.META.name } });
+      session.commit(t('app.sc456347'), project.chart); session.history.markSaved(); renderSession();
+    } else if (renamed) session.commit(t('app.sf1249c2'), { ...session.chart, META: { ...session.chart.META, name: project.chart.META.name } });
   }
 });
+// After a language switch the page reloads; reopen the chart that was open so
+// the user lands back where they were.
+try {
+  const reopen = sessionStorage.getItem(LOCALE_REOPEN_KEY);
+  if (reopen) { sessionStorage.removeItem(LOCALE_REOPEN_KEY); home.openProject(reopen).catch(reportError); }
+} catch { /* storage unavailable */ }
 const storagePanel = new StoragePanel(settingsDialog, { reportError, notify, fileOptions, canSwitchLibrary: () => {
-  if (hasDocument && (session.history.dirty || assetDirty)) { notify('请先保存或放弃当前谱面的修改，再切换谱面库', 'warning'); return false; }
+  if (hasDocument && (session.history.dirty || assetDirty)) { notify(t('app.sa139201'), 'warning'); return false; }
   return true;
 } });
 async function persistVersionRepoId() {
@@ -611,7 +698,7 @@ document.addEventListener('rpen-preference-error', event => reportError(event.de
 document.addEventListener('rpen-library-refresh', () => home.refresh().catch(reportError));
 subscribeLibrary(change => {
   if (atHome) home.refresh().catch(reportError);
-  if (libraryProject?.id === change.id && change.revision !== libraryProject.storageRevision) notify(change.deleted ? '当前项目已在另一个窗口删除。这里的编辑仍保留，可另存为新项目或导出 PEZ。' : '当前项目已在另一个窗口保存。这里再次保存时会检查冲突，避免覆盖。', 'warning', 7000);
+  if (libraryProject?.id === change.id && change.revision !== libraryProject.storageRevision) notify(change.deleted ? t('app.s6516ed3') : t('app.s69c0878'), 'warning', 7000);
 });
 
 function setHome(visible) {
@@ -621,7 +708,7 @@ function setHome(visible) {
   if (visible) clearNoteSourceToast();
   if (visible) { lineSwitcher.reset(); hitSounds.onlyCurrentLine = false; element('#mute-current-line')?.setAttribute('aria-pressed', 'false'); element('#mute-current-line')?.classList.remove('active'); }
   if (visible) { lineInfoVisible = false; element('#line-info-overlay')?.setAttribute('hidden', ''); }
-  element('#document-name').textContent = visible ? '谱面库' : `${session.history.dirty ? '● ' : ''}${session.chart.META.name ?? chartName}`;
+  element('#document-name').textContent = visible ? t('app.sc3dbce4') : `${session.history.dirty ? '● ' : ''}${chartTitle()}`;
   element('#home').hidden = !visible;
   element('.workspace').hidden = visible;
   element('.transport').hidden = visible;
@@ -659,7 +746,7 @@ function openTimelineContextMenu(event, canvas = null, markerIndex = null) {
   element('#timeline-add-marker').hidden = !canvas;
   element('#timeline-delete-marker').hidden = markerIndex === null;
   element('#timeline-selection-interval').hidden = markerIndex !== null;
-  element('#timeline-selection-interval').textContent = `间隔多选（${timeline.selectionInterval ?? 1}）…`;
+  element('#timeline-selection-interval').textContent = t('app.s3f3831b', { p0: timeline.selectionInterval ?? 1 });
   const selections = session.multiLineActive && session.multiLineMode === 'events'
     ? [...session.multiEventSelection].flatMap(([lineIndex, keys]) => [...keys].map(key => ({ lineIndex, key })))
     : [...session.eventSelection].map(key => ({ lineIndex: session.lineIndex, key }));
@@ -676,18 +763,18 @@ function openTimelineContextMenu(event, canvas = null, markerIndex = null) {
 function closeTimelineContextMenu() { const menu = element('#timeline-context-menu'); if (menu) menu.hidden = true; pendingTimelineMenu = null; }
 function addTimelineMarker() {
   const pending = pendingTimelineMenu; closeTimelineContextMenu(); if (!pending || !Number.isFinite(pending.time)) return;
-  const content = showDialog('添加时间标记', `将在 ${pending.time.toFixed(3)} 秒处添加标记。`);
-  const input = document.createElement('input'); input.type = 'text'; input.placeholder = '例如：副歌开始'; input.setAttribute('aria-label', '标记名称'); content.append(input);
+  const content = showDialog(t('app.s0898b72'), t('app.sc340606', { p0: pending.time.toFixed(3) }));
+  const input = document.createElement('input'); input.type = 'text'; input.placeholder = t('app.sd762586'); input.setAttribute('aria-label', t('app.sd410ed1')); content.append(input);
   const apply = element('#modal-apply'); apply.hidden = false; apply.onclick = () => {
-    const name = String(input.value ?? '').trim(); if (!name) { element('#modal-error').textContent = '请输入标记名称'; return; }
+    const name = String(input.value ?? '').trim(); if (!name) { element('#modal-error').textContent = t('app.s7d9692d'); return; }
     const markers = [...timelineMarkers(), { time: pending.time, name }].sort((left, right) => left.time - right.time);
-    session.commit('添加时间标记', { ...session.chart, markers }); element('#modal').close();
+    session.commit(t('app.s0898b72'), { ...session.chart, markers }); element('#modal').close();
   }; input.focus();
 }
 function deleteTimelineMarker() {
   const pending = pendingTimelineMenu; closeTimelineContextMenu(); if (!pending || pending.markerIndex === null) return;
   const markers = timelineMarkers().filter((unused, index) => index !== pending.markerIndex);
-  session.commit('删除时间标记', { ...session.chart, markers });
+  session.commit(t('app.sa5ceb33'), { ...session.chart, markers });
 }
 window.addEventListener('pointerdown', event => { const menu = element('#timeline-context-menu'); if (menu && !menu.contains(event.target)) closeTimelineContextMenu(); }, true);
 element('#timeline-add-marker').addEventListener('click', addTimelineMarker);
@@ -701,7 +788,7 @@ function persistEditor() {
     realtime: realtimePreview.visible, realtimeAlpha: Number(element('#realtime-alpha').value), volume: audio.volume, hitVolume: hitSounds.volume,
     hitEnabled: hitSounds.enabled, allLines: preview.allLines, toolbarMode: editorPreferences.toolbarMode ?? 'icons',
     analysisEnabled: audioAnalysis.enabled, analysisMode: audioAnalysis.mode, analysisAlpha: audioAnalysis.alpha, analysisWidth: audioAnalysis.width };
-  try { writeEditorPreferences(editorPreferences); } catch (error) { status(`设置保存失败：${error.message}`); }
+  try { writeEditorPreferences(editorPreferences); } catch (error) { status(t('app.s0971abd', { p0: error.message })); }
 }
 
 function activatePane(name) {
@@ -737,7 +824,7 @@ function openGlobalEvents() {
   globalEvents.open();
   renderSession();
 }
-const globalEventsTool = document.createElement('button'); globalEventsTool.id = 'global-events-tool'; globalEventsTool.textContent = '全局事件'; element('#noise-areas-tool').after(globalEventsTool);
+const globalEventsTool = document.createElement('button'); globalEventsTool.id = 'global-events-tool'; globalEventsTool.textContent = t('app.s895a20e'); element('#noise-areas-tool').after(globalEventsTool);
 globalEventsTool.onclick = openGlobalEvents;
 element('#close-global-events').onclick = () => { globalEvents.close(); renderSession(); };
 element('#noise-areas-tool').addEventListener('click', openNoisePanel);
@@ -773,7 +860,7 @@ function togglePreview(force, stay = false, replay = false, { autoplay = true } 
   globalEvents.syncChrome();
   element('#multi-line-labels').hidden = preview.visible;
   element('#multi-line-scroll').hidden = preview.visible;
-  element('#preview-title').textContent = session.chart.META.name ?? '';
+  element('#preview-title').textContent = chartDisplayName(session.chart.META.name);
   timeline.origin = currentBeat();
   invalidate();
 }
@@ -866,14 +953,14 @@ function renderSession() {
   updateLineInfo();
   session.eventWheelSteps = Object.fromEntries(['moveXEvents', 'moveYEvents', 'rotateEvents', 'alphaEvents', 'speedEvents', 'scaleXEvents', 'scaleYEvents'].flatMap((key, index) => Number.isFinite(preferences.originalSettings.scrollValueIncrement?.[index]) ? [[key, preferences.originalSettings.scrollValueIncrement[index]]] : []));
   timeline.origin = currentBeat();
-  element('#document-name').textContent = atHome ? '谱面库' : `${session.history.dirty ? '● ' : ''}${session.chart.META.name ?? chartName}`;
+  element('#document-name').textContent = atHome ? t('app.sc3dbce4') : `${session.history.dirty ? '● ' : ''}${chartTitle()}`;
   renderTimelineMarkers();
   element('#note-count').textContent = `${session.notes.length} notes`;
   const countEvents = line => [...(line.eventLayers ?? []), line.extended ?? {}].reduce((total, layer) => total + Object.entries(layer ?? {}).filter(([type, events]) => type !== 'paintEvents' && Array.isArray(events)).reduce((count, [, events]) => count + events.length, 0), 0) + shaderEvents(session.chart, session.chart.judgeLineList?.indexOf(line) ?? -1).length;
   const totalLines = session.chart.judgeLineList?.length ?? 0;
   const totalNotes = (session.chart.judgeLineList ?? []).reduce((count, line) => count + (line.notes?.length ?? 0), 0);
   const totalEvents = (session.chart.judgeLineList ?? []).reduce((count, line) => count + countEvents(line), 0);
-  const chartInfo = [['谱面统计', `Notes: ${session.notes.length}  Events: ${countEvents(session.line ?? {})}  TotalLines: ${totalLines}  TotalNotes: ${totalNotes}  TotalEvents: ${totalEvents}  Time: ${formatEditTime(editTimeSeconds)}`]];
+  const chartInfo = [[t('app.sd3892f9'), `Notes: ${session.notes.length}  Events: ${countEvents(session.line ?? {})}  TotalLines: ${totalLines}  TotalNotes: ${totalNotes}  TotalEvents: ${totalEvents}  Time: ${formatEditTime(editTimeSeconds)}`]];
   element('#chart-info').replaceChildren(...chartInfo.flatMap(([label, value]) => {
     const term = document.createElement('dt');
     term.textContent = label;
@@ -883,14 +970,14 @@ function renderSession() {
   }));
   const songName = session.chart.META?.song;
   const backgroundName = session.chart.META?.background;
-  const missingMedia = [!songName || !assets.has(songName) ? '音乐' : '', !backgroundName || !assets.has(backgroundName) ? '封面' : ''].filter(Boolean);
+  const missingMedia = [!songName || !assets.has(songName) ? t('app.safb3c40') : '', !backgroundName || !assets.has(backgroundName) ? t('app.sb8bb31e') : ''].filter(Boolean);
   const materialHint = element('#chart-material-hint');
-  if (materialHint) materialHint.textContent = missingMedia.length ? `缺少${missingMedia.join('、')} · 进入谱面信息添加` : '';
+  if (materialHint) materialHint.textContent = missingMedia.length ? t('app.s1674bb2', { p0: missingMedia.join('、') }) : '';
   const mediaStatus = element('#metadata-media-status');
-  if (mediaStatus) mediaStatus.textContent = `音乐：${songName && assets.has(songName) ? songName : '未载入'}　封面：${backgroundName && assets.has(backgroundName) ? backgroundName : '未载入'}`;
+  if (mediaStatus) mediaStatus.textContent = t('app.s40fd2fc', { p0: songName && assets.has(songName) ? songName : t('app.sab8115f'), p1: backgroundName && assets.has(backgroundName) ? backgroundName : t('app.sab8115f') });
   syncProjectFolderButton();
   if (!session.liveBeatEdit) element('#offset').value = session.chart.META.offset ?? 0;
-  element('#selection-info').textContent = session.focus === 'events' ? `${session.eventSelection.size} 个事件已选` : `${session.selection.size} 个音符已选`;
+  element('#selection-info').textContent = session.focus === 'events' ? t('app.sa922b31', { p0: session.eventSelection.size }) : t('app.s4112683', { p0: session.selection.size });
   element('#undo').disabled = !session.history.undoStack.length;
   element('#redo').disabled = !session.history.redoStack.length;
   element('#batch-run').disabled = !session.selection.size;
@@ -912,7 +999,7 @@ function renderSession() {
   element('#multi-line-next-remove').disabled = !hasLines;
   element('#line-next').disabled = element('#line-previous').disabled = session.chart.judgeLineList.length < 2;
   const lineGroup = element('#line-group-label');
-  if (lineGroup) { const line = session.line; lineGroup.textContent = line && !isDefaultLineGroup(session.chart, line) ? lineGroupName(session.chart, line) : ''; lineGroup.title = lineGroup.textContent ? `当前判定线分组：${lineGroup.textContent}` : ''; }
+  if (lineGroup) { const line = session.line; lineGroup.textContent = line && !isDefaultLineGroup(session.chart, line) ? lineGroupName(session.chart, line) : ''; lineGroup.title = lineGroup.textContent ? t('app.s595b038', { p0: lineGroup.textContent }) : ''; }
   if (activePaneName === 'lines') linePanel.render();
   updateLayerButtons();
   const liveIssues = diagnose(session.chart);
@@ -920,7 +1007,7 @@ function renderSession() {
   if (lastDiagnosticSignature !== null && liveSignature !== lastDiagnosticSignature && activePaneName !== 'diagnose') {
     const previous = new Set(lastDiagnosticSignature.split('|').filter(Boolean));
     const addedErrors = liveIssues.filter(issue => issue.severity === 'error' && !previous.has(`${issue.severity}:${issue.path}:${issue.message}`));
-    if (addedErrors.length) notify(`谱面检查新增 ${addedErrors.length} 个错误`, 'error', 4200);
+    if (addedErrors.length) notify(t('app.sd10d488', { p0: addedErrors.length }), 'error', 4200);
   }
   lastDiagnosticSignature = liveSignature;
   if (activePaneName === 'diagnose') renderDiagnostics();
@@ -974,7 +1061,7 @@ function renderSession() {
     else if (!['multi-line', 'lines', 'assets', 'collaboration', 'version-control'].includes(activePaneName)) activatePane('chart');
   }
   const limits = previewLimitations(session.chart);
-  element('#compatibility').textContent = '已使用原 RPE 音符素材与打击音；支持封面、静态纹理、多线与控制曲线。尚需原版逐帧对照。' + (limits.length ? `需进一步验证：${limits.join('、')}。` : '');
+  element('#compatibility').textContent = t('app.s22feffd') + (limits.length ? t('app.s7f51215', { p0: limits.join('、') }) : '');
   invalidate();
   globalEvents.syncChrome();
   versionControl?.tick?.();
@@ -1019,17 +1106,17 @@ function replaceChart(chart, name, nextAssets = new Map(), nextFolders = [], opt
   timeline.layer = 0;
   timeline.cancelPlacement();
   preview.visible = false; element('.preview-wrap').hidden = true; element('#view-toggle').classList.remove('active');
-  element('#preview-title').textContent = chart.META.name ?? '';
-  element('#music-name').textContent = '无音乐 · 时钟预览';
+  element('#preview-title').textContent = chartDisplayName(chart.META.name);
+  element('#music-name').textContent = t('app.sbefb963');
   element('#scrubber').max = 600;
   renderSession();
   hasDocument = true; setHome(false);
-  status(`已打开 ${name}`);
+  status(t('app.s5e07c0a', { p0: name }));
 }
 
 function guardReplace(action) {
   noiseEditor.flush();
-  if (hasDocument && (session.history.dirty || assetDirty)) confirmAction('切换谱面？', action);
+  if (hasDocument && (session.history.dirty || assetDirty)) confirmAction(t('app.s13472be'), action);
   else action();
 }
 
@@ -1043,12 +1130,12 @@ async function loadCandidate(candidate, nextAssets, options = {}) {
   const references = resourceReferences(candidate.chart, assets, chartName, candidate.info);
   const bytes = assetBytes(assets, references.song, chartName);
   if (bytes) await loadMusic(bytes, references.song, false);
-  else if (references.song) status(`谱面已打开，未找到音乐：${references.song}，请手动选择音乐`);
+  else if (references.song) status(t('app.s54ac1d5', { p0: references.song }));
   if (session.chart === candidate.chart && candidate.project?.viewState) {
     const view = candidate.project.viewState;
     if (Number.isInteger(view.lineIndex) && session.chart.judgeLineList?.[view.lineIndex]) session.selectLine(view.lineIndex);
   }
-  if (session.chart === candidate.chart && candidate.chart.rpeNextLegacySource?.format === 'phigros-v3') notify(`官谱转换完成：${candidate.chart.judgeLineList.length} 条判定线，${candidate.chart.blockAreaList?.length ?? 0} 个噪域`, 'success');
+  if (session.chart === candidate.chart && candidate.chart.rpeNextLegacySource?.format === 'phigros-v3') notify(t('app.s2882e27', { p0: candidate.chart.judgeLineList.length, p1: candidate.chart.blockAreaList?.length ?? 0 }), 'success');
 }
 
 function loadVersionSnapshot(snapshot, { force = false } = {}) {
@@ -1060,12 +1147,12 @@ function loadVersionSnapshot(snapshot, { force = false } = {}) {
   );
   if (force || !hasDocument || (!session.history.dirty && !assetDirty)) return run();
   return new Promise((resolve, reject) => {
-    showDialog('切换谱面？', '当前谱面有未保存修改。继续会放弃本次修改；可取消并保存到谱面库或导出 PEZ。自动备份仅在设定间隔到达后生成。');
+    showDialog(t('app.s13472be'), t('app.s47a52ce'));
     const modal = element('#modal');
     const apply = element('#modal-apply');
     let done = false;
     apply.hidden = false;
-    apply.textContent = '继续';
+    apply.textContent = t('app.s1fc1afc');
     modal.addEventListener('close', () => { if (!done) { done = true; resolve(); } }, { once: true });
     apply.onclick = () => { done = true; modal.close(); run().then(resolve, reject); };
   });
@@ -1084,7 +1171,7 @@ async function loadMusic(bytes, name, updateMetadata = true, recordHistory = tru
   renderTimelineMarkers();
   if (updateMetadata) {
     assetDirty = true;
-    if (recordHistory) session.commit('选择音乐', { ...session.chart, META: { ...session.chart.META, song: name } });
+    if (recordHistory) session.commit(t('app.s47261a4'), { ...session.chart, META: { ...session.chart.META, song: name } });
     else session.replaceMusicResource(name);
   }
   playback.seek(chartPosition + offsetSeconds());
@@ -1092,16 +1179,16 @@ async function loadMusic(bytes, name, updateMetadata = true, recordHistory = tru
 }
 
 function prependAudioSilence() {
-  if (!audio.buffer) { notify('请先载入可解码的音乐', 'error'); return; }
+  if (!audio.buffer) { notify(t('app.s510310b'), 'error'); return; }
   const targetSession = session; const buffer = audio.buffer; const revision = audio.loadRevision;
   const first = [...session.chart.BPMList].sort((left, right) => beatValue(left.startTime) - beatValue(right.startTime))[0];
   const seconds = 240 / Number(first?.bpm);
-  if (!(seconds > 0 && Number.isFinite(seconds))) { notify('起始 BPM 无效', 'error'); return; }
-  showDialog('音频开头增加 4 拍空白？', `根据已应用的起始 BPM ${first.bpm}，增加 ${Number(seconds.toFixed(3))} 秒静音。将生成 WAV 音频并替换当前音乐；此操作不可撤销，谱面延迟保持不变，完成后需要保存。`);
-  const apply = element('#modal-apply'); apply.hidden = false; apply.textContent = '确认增加';
+  if (!(seconds > 0 && Number.isFinite(seconds))) { notify(t('app.s3820b91'), 'error'); return; }
+  showDialog(t('app.s9329c06'), t('app.sa860bb7', { p0: first.bpm, p1: Number(seconds.toFixed(3)) }));
+  const apply = element('#modal-apply'); apply.hidden = false; apply.textContent = t('app.s95f5c3a');
   apply.onclick = async () => {
     element('#modal').close();
-    const button = element('#audio-leading-silence'); button.disabled = true; button.textContent = '正在生成空白音频…';
+    const button = element('#audio-leading-silence'); button.disabled = true; button.textContent = t('app.se86312b');
     const cancelled = () => session !== targetSession || audio.loadRevision !== revision;
     try {
       if (cancelled()) return;
@@ -1114,9 +1201,9 @@ function prependAudioSilence() {
       const stem = sourceName.replaceAll('\\', '/').split('/').at(-1).replace(/\.[^.]+$/, '') + '-leading';
       let name = stem + '.wav'; let suffix = 2;
       while (assetBytes(assets, name, chartName)) name = `${stem}-${suffix++}.wav`;
-      if (await loadMusic(bytes, name, true, false)) notify('已增加 4 拍空白，谱面延迟未改变；请保存谱面', 'success');
+      if (await loadMusic(bytes, name, true, false)) notify(t('app.sad632ef'), 'success');
     } catch (error) { reportError(error); }
-    finally { button.disabled = false; button.textContent = '音频开头增加 4 拍空白'; invalidate(); }
+    finally { button.disabled = false; button.textContent = t('app.s763d8cd'); invalidate(); }
   };
 }
 
@@ -1139,9 +1226,9 @@ function save() {
   const savingSession = session;
   return manualSaves.save(savingSession, () => {
     const document = session.chart; const snapshot = { ...document }; delete snapshot.chartTime;
-    const project = { ...(libraryProject ?? { id: crypto.randomUUID(), source: 'Next 本地项目', imported: Date.now() }),
+    const project = { ...(libraryProject ?? { id: crypto.randomUUID(), source: t('app.s70d7944'), imported: Date.now() }),
       chart: snapshot, chartName, vcsId: versionRepoId, assets: [...assets], assetFolders: [...assetFolders], bytes: [...assets.values()].reduce((sum, bytes) => sum + bytes.length, 0), updated: Date.now(), viewState: { lineIndex: session.lineIndex } };
-    status('正在后台保存，可继续编辑…');
+    status(t('app.se64da0d'));
     return { document, project };
   }, ({ document, project }) => {
     savingSession.history.markSaved(document);
@@ -1151,7 +1238,7 @@ function save() {
     assetDirty = assets.size !== project.assets.length || project.assets.some(([name, bytes]) => assets.get(name) !== bytes)
       || assetFolders.size !== project.assetFolders.length || project.assetFolders.some(folder => !assetFolders.has(folder));
     renderSession();
-    const message = session.history.dirty || assetDirty ? '已保存开始保存时的版本；后续修改尚未保存' : '已保存到谱面库';
+    const message = session.history.dirty || assetDirty ? t('app.s46644e0') : t('app.s09bce60');
     status(message); notify(message, 'success'); editorSkinSignal('save-succeeded');mods?.runtime.emit('editor:save-succeeded',{message});
   }).catch(error => { editorSkinSignal('save-failed');mods?.runtime.emit('editor:save-failed',{error}); throw error; });
 }
@@ -1159,7 +1246,7 @@ function save() {
 function validateCommit(label, next) { assertChart(next); session.commit(label, next); }
 
 function editEvent(type, index, beat = currentBeat()) {
-  if (!session.line) { status('请先添加判定线'); return; }
+  if (!session.line) { status(t('app.sb9277d1')); return; }
   timeline.eventPlacementType = type;
   timeline.extended = !EVENT_TYPES.includes(type);
   timeline.indexedLayer = null;
@@ -1167,7 +1254,7 @@ function editEvent(type, index, beat = currentBeat()) {
   activatePane('events');
   if (index !== null) { session.eventSelection = new Set([eventKey(type, index)]); session.notify(); return; }
   timeline.eventInteraction.place(type, beat);
-  status(timeline.eventInteraction.pending ? '移到事件终点，按 R 或点击完成；Esc 取消' : '事件放置完成');
+  status(timeline.eventInteraction.pending ? t('app.s5d00864') : t('app.sbf92ebb'));
 }
 
 listen('#new', () => guardReplace(() => replaceChart(createChart(), 'chart.json')));
@@ -1179,23 +1266,23 @@ listen('#open', () => { element('#file-input').click(); });
 element('#file-input').addEventListener('change', async event => {
   try {
     const loaded = await openFiles(event.target.files, { ...fileOptions(), confirmLargeArchive: info => new Promise(resolve => {
-      const host = showDialog('确认导入大谱面包', `目录声明解压后 ${(info.declaredBytes / 1024 ** 2).toFixed(1)} MiB，共 ${info.count} 个文件。大体积或异常压缩倍率可能耗尽内存；只继续导入来源可信的谱面。`);
+      const host = showDialog(t('app.sfa57b17'), t('app.s3e6d0c4', { p0: (info.declaredBytes / 1024 ** 2).toFixed(1), p1: info.count }));
       const modal = host.closest('dialog'), apply = element('#modal-apply'); let decided = false;
       modal.addEventListener('close', () => { if (!decided) resolve(false); }, { once: true });
-      apply.hidden = false; apply.textContent = '确认来源可信，继续导入';
+      apply.hidden = false; apply.textContent = t('app.s797d0a5');
       apply.onclick = () => { decided = true; modal.close(); resolve(true); };
     }) });
     if (!loaded) return;
     const proceed = () => {
       if (loaded.candidates.length === 1) loadCandidate(loaded.candidates[0], loaded.assets).catch(reportError);
-      else choose('选择谱面', '包中有多份 RPE 谱面，其他文件会随 PEZ 导出保留。', loaded.candidates, candidate => `${candidate.name} · ${candidate.chart.META.name ?? ''}`, candidate => loadCandidate(candidate, loaded.assets));
+      else choose(t('app.s47008a9'), t('app.sb2a3d63'), loaded.candidates, candidate => `${candidate.name} · ${candidate.chart.META.name ?? ''}`, candidate => loadCandidate(candidate, loaded.assets));
     };
     guardReplace(proceed);
   } catch (error) { reportError(error); }
   finally { event.target.value = ''; }
 });
 listen('#save', () => save());
-listen('#export', () => { noiseEditor.flush(); showExportDialog(session.chart, assets, chartName, (name, format) => { status(`已发起下载：${name}`); if (format === 'pez') { noteExternalBackup(); storagePanel.refresh().catch(() => {}); } }, libraryProject?.identifier ?? libraryProject?.info?.Path, fileOptions()); });
+listen('#export', () => { noiseEditor.flush(); showExportDialog(session.chart, assets, chartName, (name, format) => { status(t('app.s94b8e7e', { p0: name })); if (format === 'pez') { noteExternalBackup(); storagePanel.refresh().catch(() => {}); } }, libraryProject?.identifier ?? libraryProject?.info?.Path, fileOptions()); });
 listen('#view-toggle', () => togglePreview());
 listen('#close-preview', () => togglePreview(false, true));
 listen('#background', () => element('#background-input').click());
@@ -1206,7 +1293,7 @@ element('#background-input').addEventListener('change', async event => {
     const bytes = new Uint8Array(await file.arrayBuffer());
     if (session !== loadingSession) return;
     assets.set(file.name, bytes);
-    session.commit('选择封面', { ...session.chart, META: { ...session.chart.META, background: file.name } });
+    session.commit(t('app.s3ace90d'), { ...session.chart, META: { ...session.chart.META, background: file.name } });
     await images.load(session.chart, assets, chartName);
   } catch (error) { reportError(error); }
   finally { event.target.value = ''; }
@@ -1226,12 +1313,12 @@ element('#music-input').addEventListener('change', async event => {
 });
 listen('#recover', async () => {
   const drafts = await listDrafts(atHome ? null : (libraryProject?.id ?? recoveryId));
-  choose('恢复自动备份', drafts.length ? '新备份包含媒体；0.3 及更早的草稿仅包含谱面。恢复后请保存到谱面库。' : '此浏览器尚无自动备份。', drafts,
+  choose(t('app.s4d3e2db'), drafts.length ? t('app.s413ad27') : t('app.s96b0de9'), drafts,
     draft => `${draft.title} · ${new Date(draft.updated).toLocaleString()}`,
     entry => { guardReplace(async () => {
       try {
         const draft = await readDraft(entry.id);
-        if (!draft) throw new Error('此备份已被轮替，请重新打开备份列表');
+        if (!draft) throw new Error(t('app.s2dee158'));
         await loadCandidate({ chart: draft.chart, name: draft.name, project: { viewState: draft.viewState, vcsId: draft.viewState?.vcsId } }, new Map(draft.assets ?? []));
         libraryProject = null; session.history.savedDocument = null; renderSession();
       } catch (error) { reportError(error); }
@@ -1246,7 +1333,7 @@ element('#offset').addEventListener('change', event => {
   const value = Number(event.target.value);
   if (!Number.isFinite(value)) { event.target.value = session.chart.META.offset ?? 0; return; }
   const chartPosition = chartSeconds();
-  session.commit('修改谱面延迟', { ...session.chart, META: { ...session.chart.META, offset: value } });
+  session.commit(t('app.s2f6297b'), { ...session.chart, META: { ...session.chart.META, offset: value } });
   playback.seek(chartPosition + value / 1000);
 });
 element('#chart-info-toggle').addEventListener('click', event => {
@@ -1270,7 +1357,7 @@ element('#snap-x').addEventListener('change', event => { timeline.snapX = event.
 function updateLayerButtons() {
   const container = element('#layer');
   if (!container.children.length) for (let index = 0; index <= MAX_BASE_LAYERS; index++) {
-    const button = document.createElement('button'); button.type = 'button'; button.textContent = index === MAX_BASE_LAYERS ? '特' : String(index);
+    const button = document.createElement('button'); button.type = 'button'; button.textContent = index === MAX_BASE_LAYERS ? t('app.s20d7a24') : String(index);
     button.onclick = () => {
       timeline.cancelPlacement(); timeline.extended = index === MAX_BASE_LAYERS;
       if (!timeline.extended) timeline.layer = index;
@@ -1286,7 +1373,7 @@ function updateLayerButtons() {
     button.dataset.state = state;
     button.classList.toggle('active', timeline.extended ? index === MAX_BASE_LAYERS : index === timeline.layer);
     button.setAttribute('aria-pressed', String(button.classList.contains('active')));
-    button.title = `${index === MAX_BASE_LAYERS ? '特殊层' : `第 ${index} 层`} · ${state === 'empty' ? '空层' : state === 'visible' ? '当前视野内有事件' : '事件在当前视野外'}`;
+    button.title = t('app.s1e8776f', { p0: index === MAX_BASE_LAYERS ? t('app.s0804a42') : t('app.sfb282c2', { p0: index }), p1: state === 'empty' ? t('app.s1525642') : state === 'visible' ? t('app.s9728cde') : t('app.sc6758d7') });
   });
 }
 element('#line-select').addEventListener('change', event => { timeline.cancelPlacement(); session.selectLine(Number(event.target.value)); });
@@ -1307,7 +1394,7 @@ for (const selector of ['#loop-start', '#loop-end', '#loop-enabled']) element(se
   try {
     const start = beatValue(parseBeat(element('#loop-start').value));
     const end = beatValue(parseBeat(element('#loop-end').value));
-    if (start < 0 || end <= start) throw new Error('循环止拍必须大于起拍，起拍不能为负');
+    if (start < 0 || end <= start) throw new Error(t('app.s982f6d2'));
     loop = element('#loop-enabled').checked ? { start, end } : null;
   } catch (error) { loop = null; element('#loop-enabled').checked = false; reportError(error); }
 });
@@ -1323,9 +1410,9 @@ function travel(direction, silent = false) {
   timeline.cancelPlacement();
   const stack = direction === 'undo' ? session.history.undoStack : session.history.redoStack;
   const command = stack.at(-1);
-  if (!command) { notify(direction === 'undo' ? '没有可撤销的编辑' : '没有可重做的编辑', 'warning'); return; }
+  if (!command) { notify(direction === 'undo' ? t('app.s5f3dcc0') : t('app.s89594eb'), 'warning'); return; }
   session.travel(direction);
-  if (!silent) notify(`${direction === 'undo' ? '撤销' : '重做'}：${command.label}`, 'success');
+  if (!silent) notify(t('app.sf1164c8', { p0: direction === 'undo' ? t('app.s9fcefd8') : t('app.s1238f0d'), p1: command.label }), 'success');
 }
 listen('#undo', () => travel('undo'));
 listen('#redo', () => travel('redo'));
@@ -1364,10 +1451,10 @@ function captureCurve(end) {
   if (preview.visible) return;
   if (!curveEditorOpen) openCurvePanel();
   curveAnchorMode = end ? 'end' : 'start';
-  if (end && !curveStart) { curveAnchorMode = null; throw new Error('请先按 Ctrl+F 选择曲线起点'); }
+  if (end && !curveStart) { curveAnchorMode = null; throw new Error(t('app.se232390')); }
   element('#curve-start')?.classList.toggle('active', !end);
   element('#curve-end')?.classList.toggle('active', end);
-  status(end ? '曲线终点选择中：点击一个音符' : '曲线起点选择中：点击一个音符');
+  status(end ? t('app.s6737539') : t('app.s96cf478'));
 }
 listen('#notes-only', switchNoteView);
 listen('#reset-camera', () => resetCamera(true));
@@ -1390,7 +1477,7 @@ function copySelection() {
   if (globalEvents.active) { globalEvents.copy(); return; }
   if (noiseEditor.active) { noiseEditor.copy(); return; }
   const count = copyObjects(session);
-  if (count) { clipboardHistory.remember(session); status(`已复制 ${count} 个物件`); }
+  if (count) { clipboardHistory.remember(session); status(t('app.s44cef9c', { p0: count })); }
   invalidate();
 }
 function deleteSelection() { if (globalEvents.active) { globalEvents.safely(() => globalEvents.remove()); return; } if (noiseEditor.active) { noiseEditor.remove(); return; } deleteObjects(session); }
@@ -1412,14 +1499,14 @@ element('#batch-action').onchange();
 listen('#batch-run', () => applyBatchAction(session, element('#batch-action').value, timeline.gridCount));
 listen('#delete', deleteSelection);
 listen('#mirror', () => {
-  if (session.focus === 'events') transformEvents(session, '镜像 X / 旋转事件', (event, type) => ['moveXEvents', 'rotateEvents'].includes(type) ? { ...event, start: -event.start, end: -event.end } : event);
-  else session.transformSelection('镜像音符', note => ({ ...note, positionX: -note.positionX }));
+  if (session.focus === 'events') transformEvents(session, t('app.sd39cfc6'), (event, type) => ['moveXEvents', 'rotateEvents'].includes(type) ? { ...event, start: -event.start, end: -event.end } : event);
+  else session.transformSelection(t('app.sd8373bc'), note => ({ ...note, positionX: -note.positionX }));
 });
 function syncProjectFolderButton() {
   const button = element('#open-project-folder');
   button.hidden = !nativeStorage;
   button.disabled = !nativeStorage || !libraryProject?.id;
-  button.title = libraryProject?.id ? '打开当前谱面在本地谱面库中的存档文件夹' : '请先保存到谱面库，再打开所在文件夹';
+  button.title = libraryProject?.id ? t('app.s5cf10e1') : t('app.s265de32');
 }
 listen('#metadata', () => { activatePane('metadata'); renderMetadataPanel(session, element('#metadata-editor'), () => { activatePane('chart'); renderSession(); }); });
 listen('#open-project-folder', async () => {
@@ -1436,17 +1523,17 @@ function renderHistoryPanel() {
   const host = element('#history-results'); if (!host) return;
   host.replaceChildren();
   const history = session.history; const current = history.undoStack.length;
-  const entries = [{ label: '当前可回退的起点', index: 0 }, ...history.undoStack.map((command, index) => ({ label: command.label, index: index + 1 })), ...history.redoStack.toReversed().map((command, index) => ({ label: command.label, index: current + index + 1 }))];
+  const entries = [{ label: t('app.sc43a712'), index: 0 }, ...history.undoStack.map((command, index) => ({ label: command.label, index: index + 1 })), ...history.redoStack.toReversed().map((command, index) => ({ label: command.label, index: current + index + 1 }))];
   for (const entry of entries) {
     const button = document.createElement('button'); button.type = 'button'; button.className = entry.index === current ? 'active' : ''; button.textContent = `${entry.index === current ? '● ' : ''}${entry.index} · ${entry.label}`;
-    button.onclick = () => { const direction = entry.index < current ? 'undo' : 'redo'; for (let count = 0; count < Math.abs(entry.index - current); count++) travel(direction, true); renderHistoryPanel(); notify(`已定位到编辑历史第 ${entry.index} 步`, 'success', 1800); };
+    button.onclick = () => { const direction = entry.index < current ? 'undo' : 'redo'; for (let count = 0; count < Math.abs(entry.index - current); count++) travel(direction, true); renderHistoryPanel(); notify(t('app.sf2d283b', { p0: entry.index }), 'success', 1800); };
     host.append(button);
   }
 }
 listen('#history-panel', () => { activatePane('history'); renderHistoryPanel(); });
 listen('#version-control-tool', () => activatePane('version-control'));
 listen('#clear-clipboard', () => { if (globalEvents.active) { globalEvents.document.editor.eventClipboard = []; globalEvents.document.editor.clipboardVisible = false; invalidate(); return; } noiseEditor.clipboard = null; clipboardHistory.clearCurrent(session); timeline.clipboardMode = {}; invalidate(); });
-const clipboardButton = document.createElement('button'); clipboardButton.id = 'clipboard-history'; clipboardButton.textContent = '剪贴板历史'; clipboardButton.title = '长按 Ctrl+V';
+const clipboardButton = document.createElement('button'); clipboardButton.id = 'clipboard-history'; clipboardButton.textContent = t('app.sb377bb5'); clipboardButton.title = t('app.s4c6bff4');
 element('[data-panel="chart"] .action-grid').append(clipboardButton);
 function renderClipboardPanel() {
   renderClipboardHistory(element('#clipboard-results'), clipboardHistory, {
@@ -1465,13 +1552,13 @@ clipboardHistory.addEventListener('change', event => {
   invalidate();
   if (!event.persist) return;
   const entries = structuredClone(clipboardHistory.entries);
-  clipboardSave = clipboardSave.then(() => storeClipboardHistory(entries)).catch(error => status(`剪贴板历史保存失败：${error.message}`));
+  clipboardSave = clipboardSave.then(() => storeClipboardHistory(entries)).catch(error => status(t('app.s205b4b6', { p0: error.message })));
 });
-readClipboardHistory().then(entries => clipboardHistory.restore(entries)).catch(error => status(`剪贴板历史读取失败：${error.message}`));
+readClipboardHistory().then(entries => clipboardHistory.restore(entries)).catch(error => status(t('app.sbabe9e5', { p0: error.message })));
 function deleteDiagnosticIssue(issue) {
   if (issue.path.startsWith('paintEvents[')) {
-    session.commit('删除着色器检查项', replaceShaderEvents(session.chart, issue.line, shaderEvents(session.chart, issue.line).filter((event, index) => index !== issue.index)));
-    notify('已删除检查项对应对象', 'success'); return;
+    session.commit(t('app.s35d1128'), replaceShaderEvents(session.chart, issue.line, shaderEvents(session.chart, issue.line).filter((event, index) => index !== issue.index)));
+    notify(t('app.s1788c09'), 'success'); return;
   }
   const chart = structuredClone(session.chart);
   if (issue.noiseArea !== undefined) {
@@ -1488,7 +1575,7 @@ function deleteDiagnosticIssue(issue) {
     layer[type].splice(issue.index, 1);
   }
   else return;
-  session.commit('删除检查项', chart); notify('已删除检查项对应对象', 'success');
+  session.commit(t('app.s634fa27'), chart); notify(t('app.s1788c09'), 'success');
 }
 function renderDiagnostics() {
   const host = element('#diagnose-results'); if (!host) return;
@@ -1498,16 +1585,16 @@ function renderDiagnostics() {
   if (lastDiagnosticSignature !== null && signature !== lastDiagnosticSignature) {
     const previous = new Set(lastDiagnosticSignature.split('|').filter(Boolean));
     const added = issues.filter(issue => !previous.has(`${issue.severity}:${issue.path}:${issue.message}`));
-    if (added.some(issue => issue.severity === 'error')) notify(`谱面检查发现 ${added.filter(issue => issue.severity === 'error').length} 个错误`, 'error', 4200);
-    else if (added.some(issue => issue.severity === 'warning')) notify(`谱面检查新增 ${added.filter(issue => issue.severity === 'warning').length} 个警告`, 'warning', 3600);
+    if (added.some(issue => issue.severity === 'error')) notify(t('app.s8d9e4b5', { p0: added.filter(issue => issue.severity === 'error').length }), 'error', 4200);
+    else if (added.some(issue => issue.severity === 'warning')) notify(t('app.sf801b1e', { p0: added.filter(issue => issue.severity === 'warning').length }), 'warning', 3600);
   }
   lastDiagnosticSignature = signature;
   const category = issue => {
-    const top = issue.noiseArea !== undefined ? '噪域' : issue.path.startsWith('notes[') ? '音符' : issue.path.match(/Events\[/) ? '事件' : '其他';
-    const sub = issue.message.includes('超出') ? '超界' : issue.message.includes('重叠') ? '重叠' : issue.message.includes('时长') ? '时长' : issue.message.includes('父线') ? '父线' : '其他';
+    const top = issue.noiseArea !== undefined ? t('app.s81b3bb2') : issue.path.startsWith('notes[') ? t('app.s7ac3289') : issue.path.match(/Events\[/) ? t('app.s550e328') : t('app.s1a26edf');
+    const sub = issue.message.includes(t('app.s53bf944')) ? t('app.sdf2ad20') : issue.message.includes(t('app.s00ddbc0')) ? t('app.s00ddbc0') : issue.message.includes(t('app.s29d0552')) ? t('app.s29d0552') : issue.message.includes(t('app.s2249d71')) ? t('app.s2249d71') : t('app.s1a26edf');
     return [top, sub];
   };
-  for (const [severity, title] of [['error', '错误'], ['warning', '警告'], ['info', '提示']]) {
+  for (const [severity, title] of [['error', t('app.sb859c7b')], ['warning', t('app.s5521e36')], ['info', t('app.sab3656a')]]) {
     const list = issues.filter(issue => issue.severity === severity && (visible || severity !== 'info'));
     const details = document.createElement('details'); details.className = `diagnose-group ${severity}`; details.open = true;
     const summary = document.createElement('summary'); summary.textContent = `${title}（${list.length}）`; details.append(summary);
@@ -1521,9 +1608,9 @@ function renderDiagnostics() {
         const subsummary = document.createElement('summary'); subsummary.textContent = `${sub}（${grouped.length}）`; subgroup.append(subsummary);
         for (const issue of grouped) {
           const row = document.createElement('div'); row.className = `diagnose-item ${severity}`;
-          const locate = document.createElement('button'); locate.type = 'button'; locate.textContent = `${issue.noiseArea !== undefined ? '噪域 ' + issue.noiseArea : 'Line ' + issue.line} · ${issue.beat} 拍 · ${issue.message}`;
+          const locate = document.createElement('button'); locate.type = 'button'; locate.textContent = t('app.s42c758e', { p0: issue.noiseArea !== undefined ? t('app.s3a2d2c2') + issue.noiseArea : 'Line ' + issue.line, p1: issue.beat, p2: issue.message });
           locate.onclick = () => { if (issue.noiseArea !== undefined) { openNoisePanel(); noiseEditor.select(issue.noiseArea, issue.noiseTrack ? { type: issue.noiseTrack, index: issue.index } : null); } else session.selectLine(issue.line); seekBeat(issue.beat); };
-          const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = '删除'; remove.disabled = !issue.path.includes('[') && issue.path !== 'father'; remove.onclick = () => deleteDiagnosticIssue(issue);
+          const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = t('app.s3755f56'); remove.disabled = !issue.path.includes('[') && issue.path !== 'father'; remove.onclick = () => deleteDiagnosticIssue(issue);
           row.append(locate, remove); subgroup.append(row);
         }
         parent.append(subgroup);
@@ -1532,7 +1619,7 @@ function renderDiagnostics() {
     }
     host.append(details);
   }
-  if (!issues.length) { const empty = document.createElement('p'); empty.className = 'hint'; empty.textContent = '未发现当前检查规则覆盖的问题。'; host.append(empty); }
+  if (!issues.length) { const empty = document.createElement('p'); empty.className = 'hint'; empty.textContent = t('app.sad38555'); host.append(empty); }
 }
 listen('#diagnose', () => { activatePane('diagnose'); renderDiagnostics(); });
 element('#diagnose-show-low').addEventListener('change', renderDiagnostics);
@@ -1557,13 +1644,13 @@ function updateCurvePanel() {
   if (!curveEditorOpen) return;
   const root = element('#curve-editor');
   if (!root.children.length) {
-    root.append(curveField('curve-start-time', '起点拍', formatBeat(curveValues.startTime)), curveField('curve-end-time', '终点拍', formatBeat(curveValues.endTime)),
-      curveField('curve-start-x', '起点 X', curveValues.startX, 'number'), curveField('curve-end-x', '终点 X', curveValues.endX, 'number'),
-      curveField('curve-density', '密度', curveValues.density, 'number'), curveField('curve-type', '类型', curveValues.type, 'select', [['1', 'Tap'], ['3', 'Flick'], ['4', 'Drag']]), curveField('curve-easing', '缓动编号（1–29）', curveValues.easingType, 'number'));
+    root.append(curveField('curve-start-time', t('app.sfb9f6db'), formatBeat(curveValues.startTime)), curveField('curve-end-time', t('app.s1e77861'), formatBeat(curveValues.endTime)),
+      curveField('curve-start-x', t('app.sf9dc1c1'), curveValues.startX, 'number'), curveField('curve-end-x', t('app.s908b423'), curveValues.endX, 'number'),
+      curveField('curve-density', t('app.sf90554a'), curveValues.density, 'number'), curveField('curve-type', t('app.se4e46c7'), curveValues.type, 'select', [['1', 'Tap'], ['3', 'Flick'], ['4', 'Drag']]), curveField('curve-easing', t('app.s6537c87'), curveValues.easingType, 'number'));
     root.addEventListener('input', () => {
       try {
         curveValues = { startTime: parseBeat(element('#curve-start-time').value), endTime: parseBeat(element('#curve-end-time').value), startX: Number(element('#curve-start-x').value), endX: Number(element('#curve-end-x').value), density: Number(element('#curve-density').value), type: Number(element('#curve-type').value), easingType: Number(element('#curve-easing').value) };
-        element('#curve-summary').textContent = `${generatedCurveCount()} 个中间音符 · 端点不重复添加`;
+        element('#curve-summary').textContent = t('app.s32e6942', { p0: generatedCurveCount() });
         curveEasingPicker.select(curveValues.easingType);
         invalidate();
       } catch (error) { element('#curve-summary').textContent = error.message; }
@@ -1574,14 +1661,14 @@ function updateCurvePanel() {
   }
   const values = [['#curve-start-time', formatBeat(curveValues.startTime)], ['#curve-end-time', formatBeat(curveValues.endTime)], ['#curve-start-x', curveValues.startX], ['#curve-end-x', curveValues.endX], ['#curve-density', curveValues.density], ['#curve-type', curveValues.type], ['#curve-easing', curveValues.easingType]];
   for (const [selector, value] of values) if (document.activeElement !== element(selector)) element(selector).value = value;
-  element('#curve-summary').textContent = `${generatedCurveCount()} 个中间音符 · 端点不重复添加`;
+  element('#curve-summary').textContent = t('app.s32e6942', { p0: generatedCurveCount() });
   curveEasingPicker.select(curveValues.easingType);
   invalidate();
 }
 function openCurvePanel() {
   curveEditorOpen = true; curveStart = null; curveEnd = null; curveAnchorMode = null;
   element('#curve-start')?.classList.remove('active'); element('#curve-end')?.classList.remove('active');
-  activatePane('curve'); updateCurvePanel(); status('曲线编辑：请选择起点音符');
+  activatePane('curve'); updateCurvePanel(); status(t('app.sd847adc'));
 }
 function closeCurvePanel() {
   curveEditorOpen = false; curveStart = null; curveEnd = null; curveAnchorMode = null;
@@ -1591,12 +1678,12 @@ function closeCurvePanel() {
 listen('#curve-generate', () => {
   try {
     const notes = generateCurveNotes({ ...curveValues, division: timeline.division });
-    if (!notes.length) throw new Error('当前参数没有可生成的中间音符');
-    session.focus = 'notes'; session.eventSelection.clear(); session.insertNotes(notes, '生成曲线音符'); closeCurvePanel(); notify(`已生成 ${notes.length} 个曲线音符`, 'success');
+    if (!notes.length) throw new Error(t('app.s2124d24'));
+    session.focus = 'notes'; session.eventSelection.clear(); session.insertNotes(notes, t('app.s7f30a53')); closeCurvePanel(); notify(t('app.sac98de3', { p0: notes.length }), 'success');
   } catch (error) { reportError(error); }
 });
 listen('#curve-cancel', closeCurvePanel);
-listen('#help', () => showDialog('Re:PhiEdit Next · 迁移预览版', HELP_TEXT));
+listen('#help', () => showDialog(t('app.s066b024'), HELP_TEXT));
 
 let playbackSpaceHeld = false;
 let lineSwitchDigits = 0;
@@ -1836,12 +1923,12 @@ function frame(timestamp) {
     }
     noiseEditor.drawSample();
     eventSampler.draw();
-    element('#play').textContent = audio.playing ? 'Ⅱ 暂停' : '▶ 播放';
+    element('#play').textContent = audio.playing ? t('app.s87aecc9') : t('app.sb410f77');
     element('#play').dataset.playing = String(audio.playing);
     const skinBeat = Math.floor(beat);
     if (audio.playing && document.documentElement.dataset.rpenBeat !== String(skinBeat)) editorSkinSignal('beat');
     editorSkinState({ playing: audio.playing, beat: skinBeat, dirty: session.history.dirty || assetDirty, location: atHome ? 'home' : preview.visible ? 'preview' : 'editor' });
-    element('#play').title = audio.playing ? '暂停' : '播放';
+    element('#play').title = audio.playing ? t('app.s130448b') : t('app.s2192535');
     timeReadouts.update(chartSeconds(), audio.duration, beat);
     element('#scrubber').value = audio.time;
     const tempoPoint = tempo.points[Math.max(0, upperBound(tempo.points, beat, point => point.beat) - 1)];
@@ -1852,9 +1939,9 @@ function frame(timestamp) {
     const draggedNote = ['move', 'startTime', 'endTime'].includes(timeline.drag?.kind) ? timeline.movedNote(draggedSource) : null;
     const positionInput = element('#properties input[aria-label="X 坐标"]');
     if (draggedNote && positionInput && document.activeElement !== positionInput) positionInput.value = Number(draggedNote.positionX).toFixed(2);
-    element('#cursor-position').textContent = draggedNote ? `X ${draggedNote.positionX.toFixed(2)} · ${beatValue(draggedNote.startTime).toFixed(3)} 拍` : timeline.cursor ? `X ${timeline.positionAt(timeline.cursor.x).toFixed(2)} · ${timeline.snappedBeat(timeline.cursor.y).toFixed(3)} 拍` : '';
+    element('#cursor-position').textContent = draggedNote ? t('app.sd67248b', { p0: draggedNote.positionX.toFixed(2), p1: beatValue(draggedNote.startTime).toFixed(3) }) : timeline.cursor ? t('app.sa1e6c17', { p0: timeline.positionAt(timeline.cursor.x).toFixed(2), p1: timeline.snappedBeat(timeline.cursor.y).toFixed(3) }) : '';
     if (timestamp - lastPaint > 400) {
-      element('#performance').textContent = `绘制 ${(performance.now() - start).toFixed(1)} ms`;
+      element('#performance').textContent = t('app.s274ea37', { p0: (performance.now() - start).toFixed(1) });
       lastPaint = timestamp;
     }
     dirtyFrame = false;
@@ -1868,6 +1955,14 @@ requestAnimationFrame(frame);
 function applyPreferences(next) {
   next = { ...next, hotkeys: { ...DEFAULT_HOTKEYS, ...next.hotkeys } };
   preferences = next;
+  // Migrated RPE settings carry an interface language; honour it unless the
+  // user already picked one explicitly in this editor.
+  if (!readLocalePreference()) {
+    for (const candidate of localeCandidates(next.originalSettings)) {
+      const applied = setLocale(candidate);
+      if (applied.locale) { document.documentElement.lang = applied.locale; break; }
+    }
+  }
   audio.setVolume(editorPreferences.volume ?? next.settings.volume);
   element('#volume').value = audio.volume;
   hitSounds.setVolume(editorPreferences.hitVolume ?? next.settings.hitVolume);
@@ -1899,7 +1994,7 @@ function applyPreferences(next) {
   timeline.scrollSpeed = next.settings.scrollSpeed / 5;
   session.history.limit = next.settings.historyLimit;
   element('#hotkey-help').hidden = !next.settings.showHotkey;
-  element('#hotkey-help').textContent = `Tap ${next.hotkeys.AddTap} · Drag ${next.hotkeys.AddDrag} · Flick ${next.hotkeys.AddFlick} · Hold ${next.hotkeys.AddHold} 两次定位 · 事件 ${next.hotkeys.AddEvent} 两次定位 · 播放 ${next.hotkeys.Pause}。预览 ${next.hotkeys.StartView}，返回 ${next.hotkeys.EndView}，留在当前时间 ${next.hotkeys.JumpView}；按住预览 ${next.hotkeys.StartView_HOLD}/${next.hotkeys.JumpView_HOLD}。布局 ${next.hotkeys.SwitchUI}，重置视区 ${next.hotkeys.ResetCamera}，曲线端点 ${next.hotkeys.CurveBegin}/${next.hotkeys.CurveEnd}。滚轮向上前进并暂停；Shift 或右键两次框选，空白处拖动划线选择。`;
+  element('#hotkey-help').textContent = t('app.s3789316', { p0: next.hotkeys.AddTap, p1: next.hotkeys.AddDrag, p2: next.hotkeys.AddFlick, p3: next.hotkeys.AddHold, p4: next.hotkeys.AddEvent, p5: next.hotkeys.Pause, p6: next.hotkeys.StartView, p7: next.hotkeys.EndView, p8: next.hotkeys.JumpView, p9: next.hotkeys.StartView_HOLD, p10: next.hotkeys.JumpView_HOLD, p11: next.hotkeys.SwitchUI, p12: next.hotkeys.ResetCamera, p13: next.hotkeys.CurveBegin, p14: next.hotkeys.CurveEnd });
   applyDisplaySettings();
   renderSession();
 }
@@ -1915,26 +2010,26 @@ function applyMigratedPreferences(next) {
 }
 
 listen('#migrate', async () => {
-  const content = showDialog('选择原 RPE 主文件夹', '请选择包含 Resources、Hotkey.txt、Settings.json 的目录。读取后会先展示项目清单，再由你选择迁移内容。');
+  const content = showDialog(t('app.sa14179a'), t('app.s0d0658f'));
   if (window.showDirectoryPicker) {
-    const select = document.createElement('button'); select.type = 'button'; select.className = 'primary'; select.textContent = '只读选择文件夹';
+    const select = document.createElement('button'); select.type = 'button'; select.className = 'primary'; select.textContent = t('app.s1da6c74');
     select.onclick = async () => {
       try {
         const directory = await window.showDirectoryPicker({ mode: 'read' });
-        status('正在扫描旧 RPE 目录…');
+        status(t('app.s6f10570'));
         const entries = await directoryEntries(directory);
         migrationDialog(await scanMigration(entries, directory.name, fileOptions()), applyMigratedPreferences);
       } catch (error) { if (error.name !== 'AbortError') reportError(error); }
     };
     content.append(select);
   }
-  const fallback = document.createElement('button'); fallback.type = 'button'; fallback.textContent = '兼容方式选择文件夹';
+  const fallback = document.createElement('button'); fallback.type = 'button'; fallback.textContent = t('app.s92f35bf');
   fallback.onclick = () => element('#directory-input').click(); content.append(fallback);
 });
 element('#directory-input').addEventListener('change', async event => {
   try {
     if (!event.target.files.length) return;
-    status('正在扫描旧 RPE 目录…');
+    status(t('app.s6f10570'));
     const entries = uploadedEntries(event.target.files);
     const name = event.target.files[0].webkitRelativePath.split('/')[0];
     migrationDialog(await scanMigration(entries, name, fileOptions()), applyMigratedPreferences);
@@ -1946,10 +2041,10 @@ listen('#library', () => {
   noiseEditor.flush();
   playback.pause();
   if (!session.history.dirty && !assetDirty) { setHome(true); return; }
-  choose('返回主界面前保存修改？', '保存会更新谱面库及资源；不保存会丢弃本次未保存修改。', ['保存并返回', '不保存并返回'], value => value, async value => {
-    if (value === '保存并返回') {
+  choose(t('app.s6ae650b'), t('app.s873b360'), [t('app.s78b733b'), t('app.s09bc228')], value => value, async value => {
+    if (value === t('app.s78b733b')) {
       await save();
-      if (session.history.dirty || assetDirty) throw new Error('仍有未保存修改，请等待保存结束后重试');
+      if (session.history.dirty || assetDirty) throw new Error(t('app.sec16507'));
     }
     else { hasDocument = false; session.history.markSaved(); assetDirty = false; }
     setHome(true);
@@ -1963,7 +2058,7 @@ listen('#advanced-preferences', () => {
 });
 readPreferences().then(saved => {
   if (saved) applyPreferences(migratePreferences(JSON.stringify(saved.originalSettings), Object.entries(saved.originalHotkeys).map(([key, value]) => `${key} ${value}`).join('\n'), saved.originalUI));
-}).catch(error => status(`无法读取偏好设置：${error.message}`));
+}).catch(error => status(t('app.s01610aa', { p0: error.message })));
 
 function applyDisplaySettings() {
   const fpsLimit = editorPreferences.fpsLimit ?? preferences.settings.fpsLimit;
@@ -1990,12 +2085,12 @@ function applyDisplaySettings() {
     renderer.noisePreview.forceSimple = editorPreferences.forceSimpleNoise ?? false;
     renderer.noisePreview.getAssets = () => assets;
     renderer.noisePreview.invalidate = invalidate;
-    renderer.noisePreview.report = message => notify(message + '；暂用简易渲染', 'error');
+    renderer.noisePreview.report = message => notify(message + t('app.s9c427ae'), 'error');
   }
   const toolbarMode = editorPreferences.toolbarMode ?? 'icons';
   element('.editor-toolbar').classList.remove('mode-compact', 'mode-icons', 'mode-wide');
   element('.editor-toolbar').classList.add(`mode-${toolbarMode}`);
-  element('#toolbar-mode').title = `工具栏：${toolbarMode === 'icons' ? '图标' : toolbarMode === 'wide' ? '完整' : '紧凑'}（点击切换）`;
+  element('#toolbar-mode').title = t('app.sdb02ef4', { p0: toolbarMode === 'icons' ? t('app.s1f24c1e') : toolbarMode === 'wide' ? t('app.s6e6e581') : t('app.sc837edc') });
   timeline.barWidth = Number(element('#bar-width').value); timeline.barAlpha = Number(element('#bar-alpha').value); timeline.judgementOffset = Number(element('#judgement-offset').value);
   timeline.judgementColor = element('#judgement-color').value;
   timeline.eventValueFontSize = Number(element('#event-value-size').value); timeline.eventValueThreshold = Number(element('#event-value-threshold').value); timeline.eventCurveThreshold = Number(element('#event-curve-threshold').value); timeline.eventOpacity = Number(element('#event-opacity').value); timeline.eventBarWidth = Number(element('#event-bar-width').value);
@@ -2028,7 +2123,7 @@ function applyFpsLimit() {
   input.disabled = unlimited;
   const value = unlimited ? 0 : Number(input.value);
   const valid = unlimited || input.value.trim() && value > 10 && validFpsLimit(value);
-  input.setCustomValidity(valid ? '' : '帧率上限必须是大于 10 的有限数字');
+  input.setCustomValidity(valid ? '' : t('app.sbb9273d'));
   element('#fps-limit-error').hidden = Boolean(valid);
   if (!valid) return;
   editorPreferences.fpsLimit = value;
@@ -2063,7 +2158,7 @@ const modEditor={
   removeAsset:path=>{assets.delete(path);assetDirty=true;images.load(session.chart,assets,chartName);invalidate();},
   raw:{get session(){return session;},get chart(){return session.chart;},set chart(value){session.history.document=value;session.notify();},get assets(){return assets;},get tempo(){return tempo;},set tempo(value){tempo=value;timeline.tempo=value;invalidate();},renderSession,replaceChart,activatePane,togglePlayback,togglePreview,save,applyDisplaySettings,persistEditor,setHome},
   beginPreviewSession(){
-    if(atHome||!hasDocument)throw Error('请先打开谱面');
+    if(atHome||!hasDocument)throw Error(t('app.s21c0425'));
     const snapshot={visible:preview.visible,pane:activePaneName,allLines:preview.allLines,lineNumbers:preview.lineNumbers,lineArrows:preview.lineArrows,lineTint:preview.lineTint,cameraX:preview.cameraX,viewDivisor:preview.viewDivisor,collisionGeometry:preview.collisionGeometry};
     playback.pause();timeline.cancelPlacement();batchControls.cancel();pasteGesture.cancel();heldPreview=null;playbackSpaceHeld=false;clearNoteSourceToast();
     eventSampler.finish?.(false);noiseEditor.endSample(false);noiseEditor.flush();noiseTrackingPanel.endSample();activatePane('chart');

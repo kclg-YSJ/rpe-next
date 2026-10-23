@@ -5,6 +5,7 @@ import { beatValue, fromNumber } from '../core/beat.mjs';
 import { eventKey, selectAllEvents, transformEvents, deleteEvents, copyEvents, pasteEvents } from '../application/event-commands.mjs';
 import { GlobalEventInspector } from './global-event-inspector.mjs';
 import { editorSkinContext, editorCanvasRevision } from './editor-skin-canvas.mjs';
+import { t } from '../i18n.mjs';
 
 const node = (tag, className, text) => { const element = document.createElement(tag); if (className) element.className = className; if (text) element.textContent = text; return element; };
 class GlobalTimeline extends Timeline {
@@ -43,13 +44,13 @@ export class GlobalEventsEditor {
     this.timeline.panEventColumns = delta => { this.canvas.parentElement.scrollLeft -= delta; };
     this.timeline.onWheel = event => this.wheel(event); this.timeline.onDragScroll = seconds => this.context.timeline.onDragScroll?.(seconds);
     this.timeline.createPlacedEvent = (session, key, first, second, easing, line, inst, preview) => {
-      const entry = this.document.columns.find(column => column.key === key); if (!entry) throw Error('请选择全局事件列');
+      const entry = this.document.columns.find(column => column.key === key); if (!entry) throw Error(t('global-events.s140de47'));
       return placedGlobalEvent(entry.type, entry.column, entry.events, first, second, easing, inst, preview);
     };
     this.timeline.formatEventValue = (value, key) => {
       const column = this.document.columns.find(column => column.key === key)?.column;
       if (column?.formatValue) return String(column.formatValue(value));
-      return typeof value === 'number' ? String(Math.round(value * 1000) / 1000) : typeof value === 'boolean' ? value ? '是' : '否' : typeof value === 'object' ? JSON.stringify(value) : String(value ?? '');
+      return typeof value === 'number' ? String(Math.round(value * 1000) / 1000) : typeof value === 'boolean' ? value ? t('global-events.s30160a2') : t('global-events.s8bf5c10') : typeof value === 'object' ? JSON.stringify(value) : String(value ?? '');
     };
     this.timeline.decorateEvent = (context, rectangle, event, selected) => {
       const entry = this.document.columns.find(column => column.key === rectangle.type);
@@ -89,7 +90,7 @@ export class GlobalEventsEditor {
     if (close.hidden !== !this.active) close.hidden = !this.active;
     if (this.active) {
       for (const selector of ['#mirror', '#batch-run', '#notes-only']) { const button = document.querySelector(selector); if (!button.disabled) button.disabled = true; }
-      const label = document.querySelector('#selection-info'), text = `${this.selection.size} 个全局事件已选`;
+      const label = document.querySelector('#selection-info'), text = t('global-events.sdb21b0d', { p0: this.selection.size });
       if (label.textContent !== text) label.textContent = text;
     }
   }
@@ -129,7 +130,7 @@ export class GlobalEventsEditor {
       }
       context.stroke();
     }
-    else { const { context, width, height } = prepareCanvas(this.canvas); this.timeline.grid(context, width, height, beat); context.fillStyle = '#dddddd'; context.font = '14px RPE,sans-serif'; context.fillText('暂无可用的全局事件类型', 20, 45); }
+    else { const { context, width, height } = prepareCanvas(this.canvas); this.timeline.grid(context, width, height, beat); context.fillStyle = '#dddddd'; context.font = '14px RPE,sans-serif'; context.fillText(t('global-events.sa95cbd6'), 20, 45); }
     this.drawDensity();
   }
   autoScroll(elapsed) {
@@ -156,13 +157,13 @@ export class GlobalEventsEditor {
       if (!this.selection.size) { const hit = this.timeline.eventCursor && this.timeline.eventInteraction.hit(this.timeline.eventCursor); if (hit) session.eventSelection = new Set([eventKey(hit.type, hit.index)]); }
       this.remove();
     }
-    else if (['NumberMirror', 'NumberFill'].includes(action)) transformEvents(session, '修改全局事件数值', (event, key) => {
+    else if (['NumberMirror', 'NumberFill'].includes(action)) transformEvents(session, t('global-events.s3f09fbb'), (event, key) => {
       const column = this.document.columns.find(column => column.key === key)?.column;
       if (column?.shortcut) return column.shortcut({ action, event: structuredClone(event) }) ?? event;
       if (typeof event.start !== 'number' || typeof event.end !== 'number') return event;
       return action === 'NumberMirror' ? { ...event, start: -event.start, end: -event.end } : { ...event, end: event.start };
     });
-    else if (['PageUp', 'PageDown'].includes(action)) { const delta = (action === 'PageUp' ? 1 : -1) / this.timeline.division; transformEvents(session, '移动全局事件', event => ({ ...event, startTime: fromNumber(beatValue(event.startTime) + delta), endTime: fromNumber(beatValue(event.endTime) + delta) })); }
+    else if (['PageUp', 'PageDown'].includes(action)) { const delta = (action === 'PageUp' ? 1 : -1) / this.timeline.division; transformEvents(session, t('global-events.sa0942cd'), event => ({ ...event, startTime: fromNumber(beatValue(event.startTime) + delta), endTime: fromNumber(beatValue(event.endTime) + delta) })); }
     else if (['PageLeft', 'PageRight', 'AddDrag', 'AddFlick', 'AddHold', 'ToggleMultiLine', 'SwitchMultiLineMode', 'SwitchUI', 'ClipboardHistory', 'CurveBegin', 'CurveEnd'].includes(action)) { /* These operations have no global-column equivalent. */ }
     else if (action === 'Esc') { this.timeline.cancelPlacement(); session.eventSelection.clear(); session.clipboardVisible = false; session.notify(); }
     else return false;
@@ -176,26 +177,26 @@ export class GlobalEventsEditor {
   renderOverview() {
     this.inspector.dispose();
     const scroll = this.host.scrollTop; this.host.replaceChildren();
-    const heading = node('div', 'panel-title', '全局事件'); heading.append(node('small', '', `${this.document.types.length} 类`)); this.host.append(heading);
+    const heading = node('div', 'panel-title', t('global-events.s895a20e')); heading.append(node('small', '', t('global-events.s17a8500', { p0: this.document.types.length }))); this.host.append(heading);
     const summary = node('div', 'global-events-types'); this.host.append(summary); this.densityBars = [];
     for (const type of this.document.types) {
       const entries = this.document.columns.filter(entry => entry.type.id === type.id), count = entries.reduce((sum, entry) => sum + entry.events.length, 0);
       const card = node('div', 'global-event-kind'); card.dataset.globalEventType = type.id;
       const title = node('button', 'global-event-kind-title', type.name); title.type = 'button'; title.onclick = () => { const index = this.document.columns.findIndex(entry => entry.type.id === type.id); this.canvas.parentElement.scrollLeft = this.geometry[index]?.left ?? 0; this.canvas.focus({ preventScroll: true }); };
-      title.append(node('small', '', `${count} 个 · ${type.columns.length} 列`)); card.append(title);
-      if (type.source.kind === 'mod') card.append(node('div', 'hint global-event-source', `${type.source.name}（${type.source.author}）${type.readonly ? ' · 未加载' : ''}`));
-      else if (!type.persistent) card.append(node('div', 'hint global-event-source', '临时测试 · 不保存到谱面'));
-      const density = node('canvas', 'global-event-density'); density.dataset.skinCanvas = 'global-density'; density.setAttribute('aria-label', type.name + '全曲分布'); density.title = '点击跳转至对应时间';
+      title.append(node('small', '', t('global-events.s487bf7d', { p0: count, p1: type.columns.length }))); card.append(title);
+      if (type.source.kind === 'mod') card.append(node('div', 'hint global-event-source', t('global-events.s862e20d', { p0: type.source.name, p1: type.source.author, p2: type.readonly ? t('global-events.s90ce677') : '' })));
+      else if (!type.persistent) card.append(node('div', 'hint global-event-source', t('global-events.s2372654')));
+      const density = node('canvas', 'global-event-density'); density.dataset.skinCanvas = 'global-density'; density.setAttribute('aria-label', type.name + t('global-events.s3c63e9d')); density.title = t('global-events.se13c9ff');
       density.onclick = event => { const rect = density.getBoundingClientRect(); this.seek(this.context.tempo.beat(Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)) * this.densityDuration())); };
       card.append(density); summary.append(card); this.densityBars.push({ canvas: density, type: type.id, entries });
     }
-    this.host.append(node('p', 'hint', 'Q / R 两次放置 · 拖动移动或调整首尾 · Shift / 中键框选 · 空白处横向拖动浏览事件列。多选支持时间轴操作，暂不提供右侧批量属性编辑。密度条可点击定位。'));
+    this.host.append(node('p', 'hint', t('global-events.s757a231')));
     this.host.append(this.closeButton());
-    const returnToTools = node('button', 'wide-button', '返回谱面工具'); returnToTools.type = 'button'; returnToTools.onclick = () => this.activate('chart'); this.host.append(returnToTools);
+    const returnToTools = node('button', 'wide-button', t('global-events.sb3669b2')); returnToTools.type = 'button'; returnToTools.onclick = () => this.activate('chart'); this.host.append(returnToTools);
     this.host.scrollTop = scroll; this.drawDensity();
   }
   closeButton() {
-    const button = node('button', 'wide-button', '关闭全局事件编辑'); button.type = 'button'; button.dataset.globalEventsClose = 'true'; button.onclick = () => this.close(); return button;
+    const button = node('button', 'wide-button', t('global-events.s60a080c')); button.type = 'button'; button.dataset.globalEventsClose = 'true'; button.onclick = () => this.close(); return button;
   }
   densityDuration() {
     const context = this.context, duration = Math.max(0, context.duration() - (context.session.chart.META.offset ?? 0) / 1000);

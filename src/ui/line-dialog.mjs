@@ -1,17 +1,18 @@
 import { showDialog } from './dialog.mjs';
 import { reorderLine, deleteLine, duplicateLine, setLineParent } from '../application/line-commands.mjs';
+import { t } from '../i18n.mjs';
 
 export function manageLines(session) {
-  if (!session.line) throw new Error('请先添加判定线');
-  const content = showDialog('管理判定线', '调整顺序会同步更新父线编号；删除会解除直接子线的父引用。操作可撤销。复制保留音符、事件及所有附加字段。');
+  if (!session.line) throw new Error(t('line-dialog.sb9277d1'));
+  const content = showDialog(t('line-dialog.s505e7f5'), t('line-dialog.s9579e4a'));
   const summary = document.createElement('p');
-  summary.textContent = `当前：${session.lineIndex} · ${session.line.Name || '未命名'}`;
+  summary.textContent = t('line-dialog.s1220357', { p0: session.lineIndex, p1: session.line.Name || t('line-dialog.s3556306') });
   content.append(summary);
   const failure = document.createElement('p'); failure.setAttribute('role', 'alert');
   const button = (name, action, disabled = false) => {
     const element = document.createElement('button'); element.type = 'button'; element.textContent = name; element.disabled = disabled;
     element.onclick = () => {
-      try { action(); if (session.line) manageLines(session); else showDialog('判定线已删除', '可以撤销，或添加新的判定线。'); }
+      try { action(); if (session.line) manageLines(session); else showDialog(t('line-dialog.sa9b55d8'), t('line-dialog.scffd687')); }
       catch (error) { failure.textContent = error.message; }
     };
     content.append(element);
@@ -23,27 +24,27 @@ export function manageLines(session) {
     session.eventSelection.clear();
     session.commit(label, chart, beforeSelection);
   };
-  const name = document.createElement('input'); name.value = session.line.Name || ''; name.setAttribute('aria-label', '判定线名称'); content.append(name);
-  button('重命名', () => session.updateLine('重命名判定线', line => ({ ...line, Name: name.value })));
-  const parent = document.createElement('select'); parent.setAttribute('aria-label', '父判定线');
-  for (const [index, line] of [[-1, { Name: '无父线' }], ...session.chart.judgeLineList.entries()]) {
+  const name = document.createElement('input'); name.value = session.line.Name || ''; name.setAttribute('aria-label', t('line-dialog.s6b5b88f')); content.append(name);
+  button(t('line-dialog.s1cd80fd'), () => session.updateLine(t('line-dialog.sfecb2bd'), line => ({ ...line, Name: name.value })));
+  const parent = document.createElement('select'); parent.setAttribute('aria-label', t('line-dialog.sa378d28'));
+  for (const [index, line] of [[-1, { Name: t('line-dialog.s656be2d') }], ...session.chart.judgeLineList.entries()]) {
     if (index === session.lineIndex) continue;
-    const option = document.createElement('option'); option.value = index; option.textContent = `${index} · ${line.Name || '未命名'}`; parent.append(option);
+    const option = document.createElement('option'); option.value = index; option.textContent = t('line-dialog.sf21fa0c', { p0: index, p1: line.Name || t('line-dialog.s3556306') }); parent.append(option);
   }
   parent.value = session.line.father ?? -1;
   if (!parent.value) parent.value = -1;
   content.append(parent);
-  button('设置父线', () => apply('设置父线', setLineParent(session.chart, session.lineIndex, Number(parent.value))));
-  const zOrder = document.createElement('input'); zOrder.type = 'number'; zOrder.step = '1'; zOrder.value = Number(session.line.zOrder ?? 0); zOrder.setAttribute('aria-label', '判定线 zOrder'); content.append(zOrder);
-  const rotateWithFather = document.createElement('label'); const rotateToggle = document.createElement('input'); rotateToggle.type = 'checkbox'; rotateToggle.checked = session.line.rotateWithFather ?? ((session.chart.META?.RPEVersion ?? 0) >= 163); rotateToggle.setAttribute('aria-label', '父线旋转继承'); rotateWithFather.append(rotateToggle, ' 父线旋转继承'); content.append(rotateWithFather);
-  button('应用渲染属性', () => {
+  button(t('line-dialog.sd897aca'), () => apply(t('line-dialog.sd897aca'), setLineParent(session.chart, session.lineIndex, Number(parent.value))));
+  const zOrder = document.createElement('input'); zOrder.type = 'number'; zOrder.step = '1'; zOrder.value = Number(session.line.zOrder ?? 0); zOrder.setAttribute('aria-label', t('line-dialog.s7f92380')); content.append(zOrder);
+  const rotateWithFather = document.createElement('label'); const rotateToggle = document.createElement('input'); rotateToggle.type = 'checkbox'; rotateToggle.checked = session.line.rotateWithFather ?? ((session.chart.META?.RPEVersion ?? 0) >= 163); rotateToggle.setAttribute('aria-label', t('line-dialog.s84cf796')); rotateWithFather.append(rotateToggle, t('line-dialog.s6f0d8d8')); content.append(rotateWithFather);
+  button(t('line-dialog.s3323ffb'), () => {
     const value = Number(zOrder.value);
-    if (!Number.isFinite(value)) throw new Error('zOrder 必须是有限数字');
-    session.updateLine('更新判定线渲染属性', line => ({ ...line, zOrder: Math.trunc(value), rotateWithFather: rotateToggle.checked }));
+    if (!Number.isFinite(value)) throw new Error(t('line-dialog.s7d66d27'));
+    session.updateLine(t('line-dialog.sbbc3369'), line => ({ ...line, zOrder: Math.trunc(value), rotateWithFather: rotateToggle.checked }));
   });
-  button('上移', () => apply('上移判定线', reorderLine(session.chart, session.lineIndex, session.lineIndex - 1), session.lineIndex - 1), session.lineIndex === 0);
-  button('下移', () => apply('下移判定线', reorderLine(session.chart, session.lineIndex, session.lineIndex + 1), session.lineIndex + 1), session.lineIndex === session.chart.judgeLineList.length - 1);
-  button('复制判定线', () => apply('复制判定线', duplicateLine(session.chart, session.lineIndex), session.chart.judgeLineList.length));
-  button('删除判定线', () => apply('删除判定线', deleteLine(session.chart, session.lineIndex), Math.max(0, session.lineIndex - 1)));
+  button(t('line-dialog.s8a0c839'), () => apply(t('line-dialog.s8f391a6'), reorderLine(session.chart, session.lineIndex, session.lineIndex - 1), session.lineIndex - 1), session.lineIndex === 0);
+  button(t('line-dialog.s05c46fa'), () => apply(t('line-dialog.s95827fe'), reorderLine(session.chart, session.lineIndex, session.lineIndex + 1), session.lineIndex + 1), session.lineIndex === session.chart.judgeLineList.length - 1);
+  button(t('line-dialog.s745900a'), () => apply(t('line-dialog.s745900a'), duplicateLine(session.chart, session.lineIndex), session.chart.judgeLineList.length));
+  button(t('line-dialog.s6245754'), () => apply(t('line-dialog.s6245754'), deleteLine(session.chart, session.lineIndex), Math.max(0, session.lineIndex - 1)));
   content.append(failure);
 }

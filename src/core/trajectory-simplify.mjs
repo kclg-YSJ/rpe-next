@@ -1,15 +1,16 @@
 import { easing } from './easing.mjs';
+import { t } from '../i18n.mjs';
 
 export const DEFAULT_TRAJECTORY_SPLIT = Object.freeze({ simplify: true, tolerance: 1 });
 
 export function trajectorySplitSettings(value = {}) {
   const settings = { ...DEFAULT_TRAJECTORY_SPLIT, ...value };
-  if (typeof settings.simplify !== 'boolean' || !Number.isFinite(settings.tolerance) || settings.tolerance <= 0 || settings.tolerance > 10000) throw new Error('拆分容忍度须大于 0 且不超过 10000');
+  if (typeof settings.simplify !== 'boolean' || !Number.isFinite(settings.tolerance) || settings.tolerance <= 0 || settings.tolerance > 10000) throw new Error(t('trajectory-simplify.sf285167'));
   return settings;
 }
 
 export function simplifyTrajectorySamples(values, tolerance) {
-  if (values.length < 2 || !values.every(Number.isFinite) || !Number.isFinite(tolerance) || tolerance <= 0) throw new Error('轨迹拟合输入无效');
+  if (values.length < 2 || !values.every(Number.isFinite) || !Number.isFinite(tolerance) || tolerance <= 0) throw new Error(t('trajectory-simplify.s16bd8d9'));
   const pieces = []; const pending = [[0, values.length - 1]];
   const fits = (first, last, type) => {
     const count = last - first; const initial = values[first]; const change = values[last] - initial;

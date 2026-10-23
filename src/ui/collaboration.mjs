@@ -10,6 +10,7 @@ import { isTextEntry, usesNativeTextShortcut } from './keyboard.mjs';
 import { download } from '../platform/files.mjs';
 import { collaborationMarkerPosition, collaborationLabelBackground } from './collaboration-display.mjs';
 import { editorSkinState, editorSkinSignal } from './editor-skin-state.mjs';
+import { t } from '../i18n.mjs';
 
 const node = (tag, text, className) => { const element = document.createElement(tag); if (text) element.textContent = text; if (className) element.className = className; return element; };
 const button = (text, run) => { const element = node('button', text); element.type = 'button'; element.onclick = run; return element; };
@@ -35,7 +36,7 @@ export class CollaborationPanel {
     this.transport.media.addEventListener('progress', event => this.mediaProgress(event.detail));
     this.createForm(); this.createChat();
     this.cursors = node('div', '', 'collaboration-cursors'); document.body.append(this.cursors);
-    this.markers = node('div', '', 'collaboration-markers'); this.markers.setAttribute('aria-label', '协作者时间位置'); document.querySelector('.scrubber-wrap').append(this.markers);
+    this.markers = node('div', '', 'collaboration-markers'); this.markers.setAttribute('aria-label', t('collaboration.s28c8b58')); document.querySelector('.scrubber-wrap').append(this.markers);
     this.banner = node('div', '', 'collaboration-banner'); document.querySelector('.stage').append(this.banner); this.banner.hidden = true;
     for (const [area, canvas] of [['notes', context().timeline.notesCanvas], ['events', context().timeline.eventsCanvas]]) {
       canvas.addEventListener('pointermove', event => this.pointer(event, canvas, area));
@@ -47,7 +48,7 @@ export class CollaborationPanel {
         const item = area === 'notes' ? hit?.item : hit && eventListAt(context().session, hit.lineIndex ?? context().session.lineIndex, hit.type, timeline.layer)?.[hit.index];
         const owner = item && this.client.locks.get(item[COLLAB_ID]);
         if (owner && owner !== this.client.id || !this.client.ready) {
-          event.preventDefault(); event.stopImmediatePropagation(); notify(owner ? '该物件正由其他人编辑' : '连接未就绪，编辑暂停', 'warning');
+          event.preventDefault(); event.stopImmediatePropagation(); notify(owner ? t('collaboration.s16f918a') : t('collaboration.sd340f13'), 'warning');
         }
       }, true);
     }
@@ -60,47 +61,47 @@ export class CollaborationPanel {
     if (fragment) { this.invitation.value = fragment; history.replaceState(null, '', location.pathname + location.search); }
   }
   createForm() {
-    const title = node('h3', '联机协作'); this.host.append(title);
-    const intro = node('p', '创建房间后复制邀请；伙伴粘贴邀请并等待房主批准。编辑自动同步，各自播放位置独立。', 'hint'); this.host.append(intro);
-    this.name = input(this.host, '昵称', 'text', localPreferences.getItem('rpe-collab-name') ?? '制谱者'); this.name.maxLength = 32;
-    this.color = input(this.host, '我的远端鼠标颜色', 'color', localPreferences.getItem('rpe-collab-color') ?? '#64dba5');
-    this.server = input(this.host, '服务器地址', 'url', localPreferences.getItem('rpe-collab-server') ?? 'ws://127.0.0.1:4182/collab');
-    this.server.placeholder = '由维护者提供，通常为 wss://域名/collab';
-    this.creationKey = input(this.host, '创建房间密钥（可选）', 'password');
-    this.invitation = input(this.host, '粘贴邀请链接');
-    this.acceptAssets = input(this.host, '接收房主发送的音乐和图片', 'checkbox'); this.acceptAssets.checked = false;
+    const title = node('h3', t('collaboration.se55c4de')); this.host.append(title);
+    const intro = node('p', t('collaboration.s2966cdd'), 'hint'); this.host.append(intro);
+    this.name = input(this.host, t('collaboration.s25124ed'), 'text', localPreferences.getItem('rpe-collab-name') ?? t('collaboration.s9d3c09a')); this.name.maxLength = 32;
+    this.color = input(this.host, t('collaboration.s68c5010'), 'color', localPreferences.getItem('rpe-collab-color') ?? '#64dba5');
+    this.server = input(this.host, t('collaboration.s2eb291f'), 'url', localPreferences.getItem('rpe-collab-server') ?? 'ws://127.0.0.1:4182/collab');
+    this.server.placeholder = t('collaboration.s2d25e9f');
+    this.creationKey = input(this.host, t('collaboration.s25a791c'), 'password');
+    this.invitation = input(this.host, t('collaboration.s3549f91'));
+    this.acceptAssets = input(this.host, t('collaboration.s45f3d47'), 'checkbox'); this.acceptAssets.checked = false;
     this.transport.subscribeAssets(false);
     this.acceptAssets.onchange = () => this.transport.subscribeAssets(this.acceptAssets.checked);
-    this.host.append(node('p', '勾选后自动接收房主最近发布的音乐和图片；以后发布的新一组也会自动接收。需要新版服务器。', 'hint'));
+    this.host.append(node('p', t('collaboration.s7bcd4eb'), 'hint'));
     const actions = node('div', '', 'collaboration-actions');
-    this.create = button('创建房间', () => this.connect());
-    this.join = button('加入邀请', () => this.confirmJoin(() => this.connect(true)));
-    this.copy = button('复制邀请', async () => {
+    this.create = button(t('collaboration.s1688ee1'), () => this.connect());
+    this.join = button(t('collaboration.s8ea651e'), () => this.confirmJoin(() => this.connect(true)));
+    this.copy = button(t('collaboration.sf729372'), async () => {
       try {
         const payload = encodeURIComponent(JSON.stringify({ server: this.client.server, room: this.client.room, token: this.client.token }));
         const invitation = `rpenext:${payload}`;
-        await navigator.clipboard.writeText(invitation); this.invitation.value = invitation; this.notify('邀请已复制，房主批准后才能加入', 'success');
+        await navigator.clipboard.writeText(invitation); this.invitation.value = invitation; this.notify(t('collaboration.sf55ea1c'), 'success');
       } catch (error) { this.notify(error.message, 'warning'); }
     });
-    this.leave = button('离开房间', () => this.client.leave());
-    this.share = button('发送本谱面引用的音乐和图片', () => this.shareAssets());
-    this.recovery = button('导出冲突前本地副本', () => { if (this.client.recoveryChart) download(new Blob([JSON.stringify(this.client.recoveryChart)], { type: 'application/json' }), 'collaboration-recovery.json'); });
-    this.diagnostics = button('导出联机诊断', () => download(new Blob([JSON.stringify({ format: 2, diagnosticBuild: 'media-local-route-v3', framed: true, mediaHttp: this.transport.mediaHttp === true, activeMedia: this.transport.media.diagnostics.snapshot(), entries: this.transport.diagnostics }, null, 2)], { type: 'text/plain' }), 'rpe-collaboration-diagnostics.log'));
+    this.leave = button(t('collaboration.s8e1df6d'), () => this.client.leave());
+    this.share = button(t('collaboration.sa500676'), () => this.shareAssets());
+    this.recovery = button(t('collaboration.s7f8282e'), () => { if (this.client.recoveryChart) download(new Blob([JSON.stringify(this.client.recoveryChart)], { type: 'application/json' }), 'collaboration-recovery.json'); });
+    this.diagnostics = button(t('collaboration.s845467e'), () => download(new Blob([JSON.stringify({ format: 2, diagnosticBuild: 'media-local-route-v3', framed: true, mediaHttp: this.transport.mediaHttp === true, activeMedia: this.transport.media.diagnostics.snapshot(), entries: this.transport.diagnostics }, null, 2)], { type: 'text/plain' }), 'rpe-collaboration-diagnostics.log'));
     actions.append(this.create, this.join, this.copy, this.leave, this.share, this.recovery, this.diagnostics); this.host.append(actions);
-    this.host.append(node('p', '诊断包含校验、请求、上传确认各阶段的耗时、文件序号与大小，每 10 秒记录仍在等待的阶段；不包含文件名、哈希值、谱面内容、昵称、服务器地址或邀请凭据。卡住时可直接导出。', 'hint'));
+    this.host.append(node('p', t('collaboration.s0fd2c08'), 'hint'));
     this.status = node('p', '', 'hint'); this.status.setAttribute('role', 'status'); this.host.append(this.status);
     this.assetStatus = node('p', '', 'hint'); this.assetStatus.setAttribute('role', 'status'); this.host.append(this.assetStatus);
     this.requests = node('div'); this.host.append(this.requests);
     this.users = node('div', '', 'collaboration-users'); this.host.append(this.users);
-    this.host.append(node('p', '传输：编辑操作经服务器可靠确认；鼠标优先 P2P，失败自动回退。昵称/颜色只保存在本机；邀请和密钥不写入设置。房间保留在服务器内存中，请正常保存或导出谱面。', 'hint'));
+    this.host.append(node('p', t('collaboration.see8ebec'), 'hint'));
     this.renderState();
   }
   connect(joining = false) {
     try {
       const invitation = joining ? parseInvitation(this.invitation.value) : null;
       const url = new URL(invitation?.server ?? this.server.value.trim());
-      if (!['ws:', 'wss:'].includes(url.protocol) || url.username || url.password || url.hash || url.search) throw new Error('请使用有效的 ws:// 或 wss:// 服务器地址');
-      if (location.protocol === 'https:' && url.protocol !== 'wss:') throw new Error('在线 HTTPS 编辑器须使用 wss:// 公网入口');
+      if (!['ws:', 'wss:'].includes(url.protocol) || url.username || url.password || url.hash || url.search) throw new Error(t('collaboration.sde8b807'));
+      if (location.protocol === 'https:' && url.protocol !== 'wss:') throw new Error(t('collaboration.s1c13ed1'));
       localPreferences.setItem('rpe-collab-name', this.name.value); localPreferences.setItem('rpe-collab-color', this.color.value); localPreferences.setItem('rpe-collab-server', url.href);
       this.client.connect(url.href, { name: this.name.value, color: this.color.value }, invitation, this.creationKey.value); this.creationKey.value = '';
     } catch (error) { this.notify(error.message, 'error'); }
@@ -112,21 +113,21 @@ export class CollaborationPanel {
     this.copy.disabled = !client.ready; this.leave.disabled = !active; this.share.hidden = !active || !host; this.share.disabled = this.sharing || !client.ready;
     this.recovery.hidden = !client.recoveryChart;
     const direct = [...this.transport.peers.values()].filter(peer => peer.channel?.readyState === 'open').length;
-    this.status.textContent = `${client.state}${active ? ` · ${client.latency ?? 0} ms · ${client.queue.length} 项待确认 · ${direct} 位鼠标直连` : ''}${client.ready ? this.transport.mediaHttp ? ' · 素材快速通道' : ' · 素材兼容通道（升级服务器可提速和自动补收）' : ''}`;
+    this.status.textContent = t('collaboration.sf720e94', { p0: client.state, p1: active ? t('collaboration.s28865e2', { p0: client.latency ?? 0, p1: client.queue.length, p2: direct }) : '', p2: client.ready ? this.transport.mediaHttp ? t('collaboration.s0192379') : t('collaboration.sa04a1ee') : '' });
     const requestSignature = JSON.stringify([host, client.requests]);
     if (requestSignature !== this.requestSignature) {
       this.requestSignature = requestSignature; this.requests.replaceChildren();
       if (host) for (const request of client.requests) {
-        const row = node('div', '', 'collaboration-user'); row.append(node('span', `${request.profile.name} 请求加入`), button('允许', () => client.approve(request.request, true)), button('拒绝', () => client.approve(request.request, false))); this.requests.append(row);
+        const row = node('div', '', 'collaboration-user'); row.append(node('span', t('collaboration.s3fd4176', { p0: request.profile.name })), button(t('collaboration.s4c0c0ae'), () => client.approve(request.request, true)), button(t('collaboration.s03e210a'), () => client.approve(request.request, false))); this.requests.append(row);
       }
     }
     const signature = JSON.stringify(client.members.map(member => [member.id, member.online, member.stats, Math.round((member.id === client.id ? client.latency ?? 0 : member.presence?.latency ?? 0) / 10)]));
     if (signature !== this.userSignature) {
       this.userSignature = signature; this.users.replaceChildren();
       for (const member of client.members) {
-        const row = node('div', '', 'collaboration-user'); const name = node('strong', `${member.name}${member.host ? ' · 房主' : ''}${member.id === client.id ? '（我）' : ''}`); name.style.color = member.color;
-        row.append(name, node('span', `${member.online ? '在线' : '离线'} · ${Math.round(member.id === client.id ? client.latency ?? 0 : member.presence?.latency ?? 0)} ms`), node('small', `本次操作涉及：音符 ${member.stats.notes} · 事件 ${member.stats.events} · 提交 ${member.stats.operations}`));
-        if (host && member.id !== client.id) row.append(button('移出', () => this.transport.send({ type: 'kick', id: member.id })));
+        const row = node('div', '', 'collaboration-user'); const name = node('strong', t('collaboration.s2698673', { p0: member.name, p1: member.host ? t('collaboration.sa231459') : '', p2: member.id === client.id ? t('collaboration.s0820a2a') : '' })); name.style.color = member.color;
+        row.append(name, node('span', t('collaboration.s300c7a2', { p0: member.online ? t('collaboration.s0373ff9') : t('collaboration.s211357d'), p1: Math.round(member.id === client.id ? client.latency ?? 0 : member.presence?.latency ?? 0) })), node('small', t('collaboration.s32e2dfa', { p0: member.stats.notes, p1: member.stats.events, p2: member.stats.operations })));
+        if (host && member.id !== client.id) row.append(button(t('collaboration.s0d01c5a'), () => this.transport.send({ type: 'kick', id: member.id })));
         this.users.append(row);
       }
     }
@@ -135,7 +136,7 @@ export class CollaborationPanel {
   createChat() {
     this.chatBox = node('div', '', 'collaboration-chat'); this.chatBox.hidden = true;
     this.chatLog = node('div', '', 'collaboration-chat-log'); this.chatLog.setAttribute('role', 'log');
-    this.chatInput = node('input'); this.chatInput.maxLength = 1000; this.chatInput.placeholder = 'Enter 发送 · Esc 关闭'; this.chatInput.setAttribute('aria-label', '联机聊天');
+    this.chatInput = node('input'); this.chatInput.maxLength = 1000; this.chatInput.placeholder = t('collaboration.s428e4b0'); this.chatInput.setAttribute('aria-label', t('collaboration.sae0c322'));
     this.chatBox.append(this.chatLog, this.chatInput); document.body.append(this.chatBox);
     window.addEventListener('keydown', event => this.handleChatKey(event), true);
     this.toast = node('div', '', 'collaboration-chat-toast'); this.toast.hidden = true; this.toast.setAttribute('role', 'log'); document.body.append(this.toast);
@@ -220,11 +221,11 @@ export class CollaborationPanel {
     for (const marker of this.markers.children) if (!visibleMembers.some(member => member.id === marker.dataset.member)) marker.remove();
     const selectedOwner = client.selectionIds().map(id => client.locks.get(id)).find(owner => owner && owner !== client.id);
     this.banner.hidden = !client.active || client.ready && !selectedOwner;
-    this.banner.textContent = selectedOwner ? `由 ${client.members.find(member => member.id === selectedOwner)?.name ?? '他人'} 编辑中 · 只读查看` : '联机编辑暂停 · 等待连接或房主恢复';
+    this.banner.textContent = selectedOwner ? t('collaboration.s669d40d', { p0: client.members.find(member => member.id === selectedOwner)?.name ?? t('collaboration.s24fb8a8') }) : t('collaboration.s4742276');
     const markerRows = [];
     const scrubber = document.querySelector('#scrubber'); const track = scrubber.getBoundingClientRect(); const markerBounds = this.markers.getBoundingClientRect();
     for (const member of visibleMembers) {
-      const presence = member.presence; const label = `${member.name} 线:${presence.line}`;
+      const presence = member.presence; const label = t('collaboration.s255ad81', { p0: member.name, p1: presence.line });
       const position = track.left - markerBounds.left + collaborationMarkerPosition(presence.seconds, { offset: this.context().offset, minimum: scrubber.min || 0, maximum: scrubber.max || duration, width: track.width });
       let row = markerRows.findIndex(end => position - 65 > end); if (row < 0) row = markerRows.length; markerRows[row] = position + 65;
       let marker = [...this.markers.children].find(marker => marker.dataset.member === member.id);
@@ -261,39 +262,39 @@ export class CollaborationPanel {
       if (this.transport.mediaHttp) {
         const files = sharedAssets().filter(([name, bytes]) => /\.(png|jpe?g|webp|gif|ogg|mp3|wav|flac|m4a)$/i.test(name) && bytes.length > 0 && bytes.length <= 128 * 1024 * 1024);
         await this.transport.media.publish(files);
-        this.notify('素材组已发布；勾选接收的成员及后来加入的成员将自动下载', 'success'); return;
+        this.notify(t('collaboration.s4547a3e'), 'success'); return;
       }
       for (const [name, bytes] of sharedAssets()) {
         if (!/\.(png|jpe?g|webp|gif|ogg|mp3|wav|flac|m4a)$/i.test(name) || bytes.length > 128 * 1024 * 1024) continue;
-        this.assetStatus.textContent = `正在后台校验：${name}`;
+        this.assetStatus.textContent = t('collaboration.sce43ded', { p0: name });
         const digest = await this.transport.media.hash(bytes, undefined, { direction: 'upload', fileIndex: count, kind: /\.(png|jpe?g|webp|gif)$/i.test(name) ? 'image' : 'audio' }); const started = performance.now();
-        this.assetStatus.textContent = `正在发送：${name} · 等待接收确认`;
+        this.assetStatus.textContent = t('collaboration.s47e18a2', { p0: name });
         const delivered = this.transport.media.diagnostics.start('legacy-delivery', { fileIndex: count, bytes: bytes.length });
         try { await sendCollaborationAsset(this.transport, name, bytes, digest, (sent, total) => {
           const speed = sent / Math.max(0.1, (performance.now() - started) / 1000) / 1048576;
-          this.assetStatus.textContent = `发送 ${name} · ${Math.floor(sent / total * 100)}% · ${speed.toFixed(2)} MiB/s`;
+          this.assetStatus.textContent = t('collaboration.sca15567', { p0: name, p1: Math.floor(sent / total * 100), p2: speed.toFixed(2) });
         }); delivered(); } catch (error) { delivered('failed', { error: mediaErrorCode(error) }); throw error; }
         count++;
       }
-      this.assetStatus.textContent = `已传输 ${count} 个引用素材，接收端会校验并载入`;
+      this.assetStatus.textContent = t('collaboration.sb559c8c', { p0: count });
       this.notify(this.assetStatus.textContent, 'success');
     } catch (error) { this.transport.trace?.('media-share-failed', { error: mediaErrorCode(error) }); this.assetStatus.textContent = error.message; this.notify(error.message, 'warning'); }
     finally { this.sharing = false; this.renderState(); }
   }
   mediaProgress(progress) {
     if (!this.assetStatus) return;
-    if (progress.phase === 'hash') this.assetStatus.textContent = `正在校验：${progress.name}`;
-    else if (progress.phase === 'prepare') this.assetStatus.textContent = '本地校验已完成，正在等待服务器准备上传…';
-    else if (progress.phase === 'upload-fallback') this.assetStatus.textContent = 'HTTP 上传无进展，已切换备用通道续传…';
-    else if (progress.phase === 'upload-transfer') this.assetStatus.textContent = `备用通道正在传输当前分片 · ${Math.floor(progress.sent / progress.total * 100)}% · 等待服务器保存`;
-    else if (progress.phase === 'upload' && !progress.bytes) this.assetStatus.textContent = progress.total ? '正在上传素材，等待首个分片确认…' : '服务器已有相同素材，准备发布…';
-    else if (progress.phase === 'commit') this.assetStatus.textContent = '正在服务器校验并发布整组素材…';
-    else if (progress.phase === 'verify') this.assetStatus.textContent = `正在校验 ${progress.name}…`;
-    else if (progress.phase === 'published') this.assetStatus.textContent = `已发布 ${progress.count} 个素材 · 新成员可自动补收${progress.skippedBytes ? ' · 已复用相同文件' : ''}`;
-    else if (progress.phase === 'received') this.assetStatus.textContent = `最近一组 ${progress.count} 个素材已就绪`;
+    if (progress.phase === 'hash') this.assetStatus.textContent = t('collaboration.s1066a16', { p0: progress.name });
+    else if (progress.phase === 'prepare') this.assetStatus.textContent = t('collaboration.s1130683');
+    else if (progress.phase === 'upload-fallback') this.assetStatus.textContent = t('collaboration.s2432e5e');
+    else if (progress.phase === 'upload-transfer') this.assetStatus.textContent = t('collaboration.sf201469', { p0: Math.floor(progress.sent / progress.total * 100) });
+    else if (progress.phase === 'upload' && !progress.bytes) this.assetStatus.textContent = progress.total ? t('collaboration.s558732c') : t('collaboration.sb3715ce');
+    else if (progress.phase === 'commit') this.assetStatus.textContent = t('collaboration.se84bc77');
+    else if (progress.phase === 'verify') this.assetStatus.textContent = t('collaboration.s882ed5f', { p0: progress.name });
+    else if (progress.phase === 'published') this.assetStatus.textContent = t('collaboration.sfa8f4ce', { p0: progress.count, p1: progress.skippedBytes ? t('collaboration.s9e303d3') : '' });
+    else if (progress.phase === 'received') this.assetStatus.textContent = t('collaboration.s7617e24', { p0: progress.count });
     else {
       const speed = progress.bytes / Math.max(0.1, progress.seconds) / 1048576;
-      this.assetStatus.textContent = `${progress.phase === 'upload-stream' ? '服务器接收中' : progress.phase === 'upload' ? '上传' : '下载'} ${progress.name} · ${Math.floor(progress.bytes / progress.total * 100)}% · ${speed.toFixed(2)} MiB/s · ${progress.channel === 'socket' ? '备用联机通道' : progress.channel === 'local' ? '本机直连' : 'HTTP 4 路并发'}`;
+      this.assetStatus.textContent = t('collaboration.s2ba55e0', { p0: progress.phase === 'upload-stream' ? t('collaboration.s46377c7') : progress.phase === 'upload' ? t('collaboration.sa977650') : t('collaboration.s2b9d013'), p1: progress.name, p2: Math.floor(progress.bytes / progress.total * 100), p3: speed.toFixed(2), p4: progress.channel === 'socket' ? t('collaboration.s5a30350') : progress.channel === 'local' ? t('collaboration.s9ba0ee2') : t('collaboration.s5ee1ff9') });
     }
   }
   async asset(message) {
@@ -305,12 +306,12 @@ export class CollaborationPanel {
     if (!transfer) { transfer = { chunks: new Map(), size: 0, name: message.name, total: message.total, hash: message.hash }; this.transfers.set(key, transfer); }
     if (transfer.total !== message.total || transfer.name !== message.name || transfer.hash !== message.hash || transfer.chunks.has(message.index)) return;
     const bytes = Uint8Array.from(atob(message.data), character => character.charCodeAt(0)); transfer.chunks.set(message.index, bytes); transfer.size += bytes.length;
-    this.assetStatus.textContent = `接收 ${message.name} · ${Math.floor(transfer.chunks.size / transfer.total * 100)}% · ${(transfer.size / 1048576).toFixed(1)} MiB`;
-    if (transfer.size > 128 * 1024 * 1024) { this.transfers.delete(key); throw new Error('接收素材超过 128 MiB，已停止'); }
+    this.assetStatus.textContent = t('collaboration.sace7f0c', { p0: message.name, p1: Math.floor(transfer.chunks.size / transfer.total * 100), p2: (transfer.size / 1048576).toFixed(1) });
+    if (transfer.size > 128 * 1024 * 1024) { this.transfers.delete(key); throw new Error(t('collaboration.s67059a7')); }
     if (transfer.chunks.size !== transfer.total) return;
     const result = new Uint8Array(transfer.size); let offset = 0;
     for (let index = 0; index < transfer.total; index++) { const chunk = transfer.chunks.get(index); result.set(chunk, offset); offset += chunk.length; }
-    this.transfers.delete(key); if (await hash(result) !== message.hash) throw new Error('素材校验失败，请重新发送');
-    await this.receiveAsset(message.name, result); this.notify(`已接收素材：${message.name}`, 'success');
+    this.transfers.delete(key); if (await hash(result) !== message.hash) throw new Error(t('collaboration.s3a96dd8'));
+    await this.receiveAsset(message.name, result); this.notify(t('collaboration.s3924d1b', { p0: message.name }), 'success');
   }
 }

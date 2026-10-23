@@ -3,6 +3,7 @@ import { migratePreferences } from '../core/preferences.mjs';
 import { decodeLegacy, parseInfo } from './legacy-text.mjs';
 import { assetBytes } from './files.mjs';
 import { isBackupChartFile, isChartDocumentFile } from '../core/chart-backups.mjs';
+import { t } from '../i18n.mjs';
 export { decodeLegacy, parseInfo } from './legacy-text.mjs';
 
 async function migrationProjectId(sourceName, path) {
@@ -71,7 +72,7 @@ export async function scanMigration(entries, sourceName, { includeBackupCharts =
     const path = directory + (info.Chart ?? '');
     if (!includeBackupCharts && isBackupChartFile(path)) continue;
     const entry = lookup.get(path.toLowerCase());
-    if (!entry) { failures.push({ path, message: 'info.txt 引用的谱面不存在' }); continue; }
+    if (!entry) { failures.push({ path, message: t('migration.s4e26df0') }); continue; }
     selectedPaths.add(entry.path);
     projects.push({ path: entry.path, directory, info, entry });
   }

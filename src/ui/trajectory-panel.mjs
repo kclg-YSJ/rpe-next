@@ -9,14 +9,15 @@ import { prepareCanvas } from './timeline.mjs';
 import { editorSkinContext } from './editor-skin-canvas.mjs';
 import { trajectorySplitSettings } from '../core/trajectory-simplify.mjs';
 import { parseCurvePreset, saveCurvePreset, deleteCurvePreset, copyCurvePreset } from '../core/trajectory-presets.mjs';
+import { t } from '../i18n.mjs';
 
 const STORAGE_KEY = 'rpe-next-trajectory-presets-v1';
 const COMMON_FIELDS = [
-  ['trimStart', '截取起点（0–1）', 'number', 0, 1, 0.01], ['trimEnd', '截取终点（0–1）', 'number', 0, 1, 0.01],
-  ['rotation', '整体旋转（度）', 'number', -3600, 3600, 1],
-  ['scaleX', '横向倍率', 'number', -100, 100, 0.1], ['scaleY', '纵向倍率', 'number', -100, 100, 0.1],
-  ['alignStart', '将截取后的起点对齐', 'checkbox'], ['startX', '实际起点 X', 'number', -100000, 100000, 1], ['startY', '实际起点 Y', 'number', -100000, 100000, 1],
-  ['randomness', '随机化程度', 'range', 0, 1, 0.01], ['seed', '随机种子', 'number', 0, 100000, 1],
+  ['trimStart', t('trajectory-panel.s7c203c4'), 'number', 0, 1, 0.01], ['trimEnd', t('trajectory-panel.s9ce7cd3'), 'number', 0, 1, 0.01],
+  ['rotation', t('trajectory-panel.sb23ce41'), 'number', -3600, 3600, 1],
+  ['scaleX', t('trajectory-panel.s7447117'), 'number', -100, 100, 0.1], ['scaleY', t('trajectory-panel.sb79bebd'), 'number', -100, 100, 0.1],
+  ['alignStart', t('trajectory-panel.sc31190f'), 'checkbox'], ['startX', t('trajectory-panel.s7316a5b'), 'number', -100000, 100000, 1], ['startY', t('trajectory-panel.s0125dac'), 'number', -100000, 100000, 1],
+  ['randomness', t('trajectory-panel.s57a4a6f'), 'range', 0, 1, 0.01], ['seed', t('trajectory-panel.sed73926'), 'number', 0, 100000, 1],
 ];
 
 function field(host, key, title, value, type = 'text', minimum, maximum, step, choices) {
@@ -31,7 +32,7 @@ function field(host, key, title, value, type = 'text', minimum, maximum, step, c
   if (type === 'checkbox') input.checked = Boolean(value); else input.value = value ?? '';
   if (key === 'seed') {
     const controls = document.createElement('span'); controls.className = 'trajectory-seed';
-    const randomize = document.createElement('button'); randomize.type = 'button'; randomize.textContent = '⚄'; randomize.title = '随机种子'; randomize.setAttribute('aria-label', '生成随机种子');
+    const randomize = document.createElement('button'); randomize.type = 'button'; randomize.textContent = '⚄'; randomize.title = t('trajectory-panel.sed73926'); randomize.setAttribute('aria-label', t('trajectory-panel.sa598266'));
     randomize.onclick = () => { const previous = Number(input.value); input.value = (previous + 1 + crypto.getRandomValues(new Uint32Array(1))[0] % 100000) % 100001; input.dispatchEvent(new Event('input', { bubbles: true })); };
     controls.append(input, randomize); label.append(controls);
   } else label.append(input);
@@ -85,20 +86,20 @@ export class TrajectoryPanel {
     this.host.replaceChildren();
     this.content = document.createElement('div'); this.content.className = 'trajectory-scroll'; this.host.append(this.content);
     this.fields = document.createElement('div'); this.fields.className = 'trajectory-fields';
-    field(this.fields, 'lineIndex', '目标线号', this.lineIndex, 'number', 0, this.getContext().session.chart.judgeLineList.length - 1, 1);
-    field(this.fields, 'layerIndex', '基础层', this.layerIndex, 'number', 0, 3, 1);
-    field(this.fields, 'startTime', '开始拍', formatBeat(this.startTime));
-    field(this.fields, 'endTime', '结束拍', formatBeat(this.endTime));
-    field(this.fields, 'mode', '方程类型', this.options.mode, 'text', undefined, undefined, undefined, [['parametric', '参数方程 x(t), y(t)'], ['polar', '极坐标 r(θ)']]);
-    for (const [key, title] of [['xExpression', 'x(t)'], ['yExpression', 'y(t)'], ['parameterStart', '参数 t 起点'], ['parameterEnd', '参数 t 终点'], ['radiusExpression', 'r(θ)'], ['angleStart', 'θ 起点（弧度）'], ['angleEnd', 'θ 终点（弧度）'], ['rotationExpression', '判定线角度（可空）']]) field(this.fields, key, title, this.options[key]);
-    field(this.fields, 'tangentRotation', '自动计算切线角度（顺时针为正）', this.options.tangentRotation, 'checkbox');
-    for (const [key, title] of [['easingX', 'X / θ 参数缓动'], ['easingY', 'Y 参数缓动']]) field(this.fields, key, title, this.options[key], 'number', 1, 29, 1);
+    field(this.fields, 'lineIndex', t('trajectory-panel.sc167205'), this.lineIndex, 'number', 0, this.getContext().session.chart.judgeLineList.length - 1, 1);
+    field(this.fields, 'layerIndex', t('trajectory-panel.s16ad9eb'), this.layerIndex, 'number', 0, 3, 1);
+    field(this.fields, 'startTime', t('trajectory-panel.s087c451'), formatBeat(this.startTime));
+    field(this.fields, 'endTime', t('trajectory-panel.sc4d3fa4'), formatBeat(this.endTime));
+    field(this.fields, 'mode', t('trajectory-panel.scd3b8cd'), this.options.mode, 'text', undefined, undefined, undefined, [['parametric', t('trajectory-panel.s362b25f')], ['polar', t('trajectory-panel.s882f015')]]);
+    for (const [key, title] of [['xExpression', 'x(t)'], ['yExpression', 'y(t)'], ['parameterStart', t('trajectory-panel.s44de969')], ['parameterEnd', t('trajectory-panel.s71bb1db')], ['radiusExpression', 'r(θ)'], ['angleStart', t('trajectory-panel.sef63303')], ['angleEnd', t('trajectory-panel.s9f7c0f3')], ['rotationExpression', t('trajectory-panel.s515a05a')]]) field(this.fields, key, title, this.options[key]);
+    field(this.fields, 'tangentRotation', t('trajectory-panel.s9d776f8'), this.options.tangentRotation, 'checkbox');
+    for (const [key, title] of [['easingX', t('trajectory-panel.s7e43ff4')], ['easingY', t('trajectory-panel.s1671cb2')]]) field(this.fields, key, title, this.options[key], 'number', 1, 29, 1);
     for (const [key, title, type, minimum, maximum, step] of COMMON_FIELDS) field(this.fields, key, title, this.options[key], type, minimum, maximum, step);
-    const parameters = field(this.fields, 'parametersJson', '表达式参数（JSON）', JSON.stringify(this.options.parameters ?? {})); parameters.title = '例如 {"radius":200}，表达式可直接使用 radius';
-    field(this.fields, 'segments', '拆分 / 兼容导出段数', this.segments, 'number', 4, 8192, 1);
-    field(this.fields, 'simplify', '拆分时以较少缓动事件近似', this.splitSettings.simplify, 'checkbox');
-    field(this.fields, 'tolerance', '拆分容忍度（坐标 / 度）', this.splitSettings.tolerance, 'number', 0.001, 10000, 0.1);
-    field(this.fields, 'replace', '替换区间内已有事件', this.replace, 'checkbox');
+    const parameters = field(this.fields, 'parametersJson', t('trajectory-panel.sea12a51'), JSON.stringify(this.options.parameters ?? {})); parameters.title = t('trajectory-panel.s71b971a');
+    field(this.fields, 'segments', t('trajectory-panel.s179ca94'), this.segments, 'number', 4, 8192, 1);
+    field(this.fields, 'simplify', t('trajectory-panel.sc6ed56c'), this.splitSettings.simplify, 'checkbox');
+    field(this.fields, 'tolerance', t('trajectory-panel.s5664b24'), this.splitSettings.tolerance, 'number', 0.001, 10000, 0.1);
+    field(this.fields, 'replace', t('trajectory-panel.s8b5b963'), this.replace, 'checkbox');
     this.content.append(this.fields);
     this.fields.oninput = () => {
       try {
@@ -113,23 +114,23 @@ export class TrajectoryPanel {
       } catch (error) { this.error(error); }
     };
     const syntax = document.createElement('details'); syntax.className = 'trajectory-syntax';
-    const summary = document.createElement('summary'); summary.textContent = '语法与坐标说明';
+    const summary = document.createElement('summary'); summary.textContent = t('trajectory-panel.sa4ecb8d');
     const hint = document.createElement('p'); hint.className = 'hint';
-    hint.textContent = '这里生成判定线的 X、Y 位移和可选旋转事件，不生成音符。t 在指定参数区间变化；θ / theta 使用弧度，pi / π 为圆周率；兼容原版 $t$、Pi。u 为轨迹进度 0–1。支持 + - * / ^、比较、条件 ? :，以及 sin cos tan sqrt abs min max floor round lerp clamp ease。坐标采用原 RPE 的中心原点、X 向右、Y 向上（1350×900），角度事件以度为单位。截取后仍覆盖完整起止拍；整体旋转不改变判定线自身角度。随机曲线同一种子始终一致。轨迹在 X 轨道显示为一个整体，拖动和拉伸同时作用于 X、Y 和角度；需要普通事件时再拆分。';
-    hint.textContent += ' 自动切线角度在变换后的曲线上数值求导，采用 RPE 顺时针为正的角度并连续展开跨周角度；勾选后保留但暂不使用手填角度。拆分近似的容忍度相对于等分碎事件，限制每轴坐标或角度的最大偏差。';
+    hint.textContent = t('trajectory-panel.sbc6218f');
+    hint.textContent += t('trajectory-panel.s56fe877');
     syntax.append(summary, hint); this.content.append(syntax);
     this.controls = document.createElement('div');
-    field(this.controls, 'enabled', '在左侧预览轨迹', this.enabled, 'checkbox');
-    field(this.controls, 'animate', '暂停时循环演示', this.animate, 'checkbox');
+    field(this.controls, 'enabled', t('trajectory-panel.s49c9c0f'), this.enabled, 'checkbox');
+    field(this.controls, 'animate', t('trajectory-panel.s0ae9268'), this.animate, 'checkbox');
     this.controls.oninput = () => { Object.assign(this, readFields(this.controls, {})); this.invalidate(); };
     this.content.append(this.controls);
-    this.canvas = document.createElement('canvas'); this.canvas.width = 500; this.canvas.height = 240; this.canvas.className = 'trajectory-preview'; this.canvas.setAttribute('aria-label', '轨迹动态预览'); this.content.append(this.canvas);
+    this.canvas = document.createElement('canvas'); this.canvas.width = 500; this.canvas.height = 240; this.canvas.className = 'trajectory-preview'; this.canvas.setAttribute('aria-label', t('trajectory-panel.s7a910a1')); this.content.append(this.canvas);
     this.message = document.createElement('p'); this.message.className = 'hint'; this.message.setAttribute('role', 'status'); this.content.append(this.message);
     const actions = document.createElement('div'); actions.className = 'trajectory-footer';
-    this.applyButton = action(this.editing ? '应用轨迹修改' : '生成整体轨迹事件', () => this.apply());
-    this.splitButton = action('拆分为普通事件', () => this.split()); this.splitButton.hidden = !this.editing;
+    this.applyButton = action(this.editing ? t('trajectory-panel.s2e1a917') : t('trajectory-panel.sf248e5c'), () => this.apply());
+    this.splitButton = action(t('trajectory-panel.s53a23c2'), () => this.split()); this.splitButton.hidden = !this.editing;
     this.applyButton.className = 'primary';
-    actions.append(this.splitButton, action('返回谱面工具', () => this.activate('chart')), this.applyButton); this.host.append(actions);
+    actions.append(this.splitButton, action(t('trajectory-panel.sb3669b2'), () => this.activate('chart')), this.applyButton); this.host.append(actions);
     this.gallery = document.createElement('div'); this.gallery.className = 'trajectory-gallery'; this.content.append(this.gallery); this.renderPresets();
     this.renderCustom();
   }
@@ -137,7 +138,7 @@ export class TrajectoryPanel {
   renderPresets() {
     const expanded = new Set([...this.gallery.querySelectorAll('details[open]')].map(group => group.dataset.category));
     this.gallery.replaceChildren();
-    for (const category of ['基本图形', '进阶图形', '其他', '自定义']) {
+    for (const category of [t('trajectory-panel.s3bfba45'), t('trajectory-panel.sf505d38'), t('trajectory-panel.s1a26edf'), t('trajectory-panel.sc493338')]) {
       const group = document.createElement('details'); const title = document.createElement('summary'); title.textContent = category; group.append(title);
       group.dataset.category = category; group.open = expanded.has(category);
       const grid = document.createElement('div'); grid.className = 'trajectory-preset-grid'; group.append(grid);
@@ -160,14 +161,14 @@ export class TrajectoryPanel {
     card.setAttribute('aria-expanded', 'true');
     const panel = document.createElement('div'); panel.className = 'trajectory-preset-editor';
     grid.insertBefore(panel, card.nextSibling);
-    const title = document.createElement('strong'); title.textContent = preset.name + ' · 调整后填入'; panel.append(title);
+    const title = document.createElement('strong'); title.textContent = preset.name + t('trajectory-panel.sd9a0c51'); panel.append(title);
     if (this.custom.includes(preset)) {
-      panel.append(action('编辑预设定义', () => this.loadCustom(preset, preset.name)), action('删除此预设', () => {
+      panel.append(action(t('trajectory-panel.s6e5d996'), () => this.loadCustom(preset, preset.name)), action(t('trajectory-panel.sffb3981'), () => {
         try {
           const custom = deleteCurvePreset(this.custom, preset.name);
           localPreferences.setItem(STORAGE_KEY, JSON.stringify(custom)); this.custom = custom;
           if (this.customEditingName === preset.name) { this.customEditingName = null; this.validateCustom(); }
-          this.presetDraft = null; this.renderPresets(); this.refresh(); this.notify('自定义预设已删除', 'success');
+          this.presetDraft = null; this.renderPresets(); this.refresh(); this.notify(t('trajectory-panel.s1bd0271'), 'success');
         } catch (error) { this.customError(error); }
       }));
     }
@@ -182,11 +183,11 @@ export class TrajectoryPanel {
       try {
         const options = { ...base, ...readFields(common, {}), parameters: { ...base.parameters, ...readFields(parameters, {}) } };
         const points = sampleCurveTrajectory(options, 257);
-        this.presetDraft = { options, points, canvas, preset }; error.textContent = '当前仅预览预设草稿；正式填入后才更改上方参数。'; this.refresh();
+        this.presetDraft = { options, points, canvas, preset }; error.textContent = t('trajectory-panel.sf36ad83'); this.refresh();
       } catch (problem) { error.textContent = problem.message; this.presetDraft = null; this.error(problem); }
     };
     panel.oninput = update;
-    panel.append(action('正式填入轨迹参数', () => {
+    panel.append(action(t('trajectory-panel.sbb6ccd7'), () => {
       if (!this.presetDraft) return;
       this.options = structuredClone(this.presetDraft.options);
       for (const input of this.fields.querySelectorAll('[data-key]')) {
@@ -194,20 +195,20 @@ export class TrajectoryPanel {
         if (key === 'parametersJson') input.value = JSON.stringify(this.options.parameters);
         else if (Object.hasOwn(this.options, key)) { if (input.type === 'checkbox') input.checked = this.options[key]; else input.value = this.options[key]; }
       }
-      this.presetDraft = null; this.refresh(); error.textContent = '已填入上方轨迹参数，可生成或继续调整。';
+      this.presetDraft = null; this.refresh(); error.textContent = t('trajectory-panel.s636a8ec');
     }));
     update();
   }
 
   renderCustom() {
-    const group = document.createElement('details'); const title = document.createElement('summary'); title.textContent = '自定义预设编辑器'; group.append(title);
+    const group = document.createElement('details'); const title = document.createElement('summary'); title.textContent = t('trajectory-panel.sa51b1ba'); group.append(title);
     this.customGroup = group;
-    const source = document.createElement('textarea'); source.className = 'trajectory-preset-source'; source.setAttribute('aria-label', '自定义预设 JSON');
+    const source = document.createElement('textarea'); source.className = 'trajectory-preset-source'; source.setAttribute('aria-label', t('trajectory-panel.s2062cd0'));
     this.customInput = source;
-    source.value = this.customSource ?? JSON.stringify({ name: '我的轨迹', mode: 'parametric', xExpression: 'radius*cos(2*pi*t)', yExpression: 'radius*sin(2*pi*t)', parameters: [{ key: 'radius', label: '半径', value: 200, min: 1, max: 2000, step: 1 }] }, null, 2); group.append(source);
-    const help = document.createElement('p'); help.className = 'hint'; help.textContent = '保存、另存和导出使用本框 JSON。保存修改会更新正在编辑的预设（name 改名也更新原项）；另存为新预设会立即添加，重名自动加副本编号。参数方程填写 xExpression、yExpression；极坐标填写 mode: "polar" 和 radiusExpression。parameters 声明 key、label、value 和可选 min/max/step。'; group.append(help);
+    source.value = this.customSource ?? JSON.stringify({ name: t('trajectory-panel.s7146275'), mode: 'parametric', xExpression: 'radius*cos(2*pi*t)', yExpression: 'radius*sin(2*pi*t)', parameters: [{ key: 'radius', label: t('trajectory-panel.sb29ee13'), value: 200, min: 1, max: 2000, step: 1 }] }, null, 2); group.append(source);
+    const help = document.createElement('p'); help.className = 'hint'; help.textContent = t('trajectory-panel.sac74843'); group.append(help);
     this.customMessage = document.createElement('p'); this.customMessage.className = 'hint'; this.customMessage.setAttribute('role', 'status'); group.append(this.customMessage);
-    this.customCanvas = document.createElement('canvas'); this.customCanvas.width = 500; this.customCanvas.height = 180; this.customCanvas.className = 'trajectory-preview'; this.customCanvas.setAttribute('aria-label', '自定义预设预览'); group.append(this.customCanvas);
+    this.customCanvas = document.createElement('canvas'); this.customCanvas.width = 500; this.customCanvas.height = 180; this.customCanvas.className = 'trajectory-preview'; this.customCanvas.setAttribute('aria-label', t('trajectory-panel.s81cae20')); group.append(this.customCanvas);
     const guarded = callback => () => { try { callback(); } catch (error) { this.customError(error); } };
     const save = (preset, originalName) => {
       const custom = saveCurvePreset(this.custom, preset, originalName);
@@ -215,19 +216,19 @@ export class TrajectoryPanel {
       this.customEditingName = preset.name; source.value = JSON.stringify(preset, null, 2);
       this.presetDraft = null; this.renderPresets(); this.refresh(); this.validateCustom();
       this.gallery.querySelector('[data-category="自定义"]').open = true;
-      this.customMessage.textContent = `已保存：${preset.name}。可在“自定义”分类选用或继续编辑。`; this.notify('自定义轨迹预设已保存', 'success');
+      this.customMessage.textContent = t('trajectory-panel.s131f057', { p0: preset.name }); this.notify(t('trajectory-panel.sd504761'), 'success');
     };
-    this.customSave = action('添加到自定义预设', guarded(() => save(parseCurvePreset(source.value), this.customEditingName ?? null)));
-    this.customCopy = action('另存为新预设', guarded(() => save(copyCurvePreset(this.custom, parseCurvePreset(source.value)), null)));
-    this.customExport = action('导出编写的预设', guarded(() => { const preset = parseCurvePreset(source.value); download(new Blob([JSON.stringify(preset, null, 2)], { type: 'application/json' }), preset.name + '.trajectory.json'); }));
+    this.customSave = action(t('trajectory-panel.s99c5368'), guarded(() => save(parseCurvePreset(source.value), this.customEditingName ?? null)));
+    this.customCopy = action(t('trajectory-panel.s5d93a90'), guarded(() => save(copyCurvePreset(this.custom, parseCurvePreset(source.value)), null)));
+    this.customExport = action(t('trajectory-panel.s2e18ef8'), guarded(() => { const preset = parseCurvePreset(source.value); download(new Blob([JSON.stringify(preset, null, 2)], { type: 'application/json' }), preset.name + '.trajectory.json'); }));
     group.append(this.customSave, this.customCopy, this.customExport);
-    const load = action('用当前轨迹填充 JSON', guarded(() => this.loadCustom(copyCurvePreset(this.custom, validateCurvePreset({ ...this.options, name: this.options.name ?? '我的轨迹', parameters: Object.entries(this.options.parameters ?? {}).map(([key, value]) => ({ key, label: key, value })) })))));
-    load.title = '将上方轨迹参数复制到下面的编辑框；之后点击添加到自定义预设才会保存';
+    const load = action(t('trajectory-panel.se01224b'), guarded(() => this.loadCustom(copyCurvePreset(this.custom, validateCurvePreset({ ...this.options, name: this.options.name ?? t('trajectory-panel.s7146275'), parameters: Object.entries(this.options.parameters ?? {}).map(([key, value]) => ({ key, label: key, value })) })))));
+    load.title = t('trajectory-panel.sa2bd587');
     group.insertBefore(load, source);
     source.oninput = () => this.validateCustom();
     const file = document.createElement('input'); file.type = 'file'; file.accept = '.json'; file.hidden = true;
-    file.onchange = async () => { try { const selected = file.files[0]; if (!selected) return; if (selected.size > 65536) throw new Error('预设文件不能超过 64 KiB'); this.loadCustom(parseCurvePreset(await selected.text())); } catch (error) { this.customError(error); } finally { file.value = ''; } };
-    group.append(action('导入单个预设', () => file.click()), file); this.content.append(group);
+    file.onchange = async () => { try { const selected = file.files[0]; if (!selected) return; if (selected.size > 65536) throw new Error(t('trajectory-panel.s7df46a3')); this.loadCustom(parseCurvePreset(await selected.text())); } catch (error) { this.customError(error); } finally { file.value = ''; } };
+    group.append(action(t('trajectory-panel.s5dc5e2b'), () => file.click()), file); this.content.append(group);
     this.validateCustom();
   }
 
@@ -242,12 +243,12 @@ export class TrajectoryPanel {
 
   validateCustom() {
     this.customSource = this.customInput.value;
-    this.customSave.textContent = this.customEditingName ? '保存修改（更新原预设）' : '添加到自定义预设';
+    this.customSave.textContent = this.customEditingName ? t('trajectory-panel.s4a61bde') : t('trajectory-panel.s99c5368');
     try {
       const preset = parseCurvePreset(this.customSource);
       this.customCopy.hidden = !this.customEditingName && !this.custom.some(entry => entry.name === preset.name);
       drawPath(this.customCanvas, sampleCurveTrajectory(presetOptions(preset), 257));
-      this.customMessage.textContent = this.customEditingName ? `正在编辑：${this.customEditingName}。保存修改更新此项；另存为新预设保留原项。` : '新预设草稿，尚未保存。点击“添加到自定义预设”保存到本机。';
+      this.customMessage.textContent = this.customEditingName ? t('trajectory-panel.s81bf38c', { p0: this.customEditingName }) : t('trajectory-panel.s22f4a49');
       this.customMessage.classList.remove('error'); this.customSave.disabled = false; this.customCopy.disabled = false; this.customExport.disabled = false; this.customInput.removeAttribute('aria-invalid');
     } catch (error) {
       this.customError(error); drawPath(this.customCanvas, null);
@@ -270,7 +271,7 @@ export class TrajectoryPanel {
       const { tempo } = this.getContext(); const factor = session.chart.judgeLineList[this.lineIndex].bpmfactor ?? 1;
       this.beginSeconds = tempo.seconds(this.startTime, factor); this.endSeconds = tempo.seconds(this.endTime, factor);
       this.worldPoints = this.points.map((point, index) => this.scene.sample(this.beginSeconds + (this.endSeconds - this.beginSeconds) * index / (this.points.length - 1))[this.lineIndex]);
-      this.message.textContent = this.presetDraft ? '预设草稿预览中；生成前请先正式填入参数。' : 'X 轨道保存一个整体轨迹事件，包含 Y 和可选角度；拖动端点可整体改变时长。';
+      this.message.textContent = this.presetDraft ? t('trajectory-panel.s1980bf3') : t('trajectory-panel.s25de9dc');
       this.message.classList.remove('error'); this.applyButton.disabled = Boolean(this.presetDraft);
       for (const key of ['xExpression', 'yExpression', 'parameterStart', 'parameterEnd']) this.fields.querySelector('[data-key="' + key + '"]').closest('label').hidden = this.options.mode === 'polar';
       for (const key of ['radiusExpression', 'angleStart', 'angleEnd']) this.fields.querySelector('[data-key="' + key + '"]').closest('label').hidden = this.options.mode !== 'polar';
@@ -283,15 +284,15 @@ export class TrajectoryPanel {
   apply() {
     try {
       const { session } = this.getContext();
-      if (this.presetDraft) throw new Error('请先正式填入预设参数');
+      if (this.presetDraft) throw new Error(t('trajectory-panel.s07ec0df'));
       const event = createTrajectoryEvent(this.options, this.startTime, this.endTime, this.segments, this.splitSettings);
       const chart = trajectoryChart(session.chart, this.lineIndex, this.layerIndex, event, this.editing, this.replace);
       this.editing = event;
       session.focus = 'events'; session.eventLayer = this.layerIndex;
       session.selection.clear(); session.eventSelection = new Set();
-      session.commit('生成 / 更新曲线轨迹', chart);
-      this.splitButton.hidden = false; this.applyButton.textContent = '应用轨迹修改';
-      this.refresh(); this.notify('整体曲线轨迹已应用', 'success');
+      session.commit(t('trajectory-panel.s91be5d8'), chart);
+      this.splitButton.hidden = false; this.applyButton.textContent = t('trajectory-panel.s2e1a917');
+      this.refresh(); this.notify(t('trajectory-panel.sb6ac442'), 'success');
     } catch (error) { this.error(error); }
   }
 
@@ -299,8 +300,8 @@ export class TrajectoryPanel {
     try {
       const { session } = this.getContext();
       const chart = splitTrajectoryChart(session.chart, this.lineIndex, this.layerIndex, this.editing, { ...this.splitSettings, segments: this.segments });
-      this.editing = null; session.eventSelection.clear(); session.multiEventSelection.clear(); session.commit('拆分曲线轨迹', chart);
-      this.activate('chart'); this.notify('已拆分为普通 X、Y / 旋转事件，可一次撤销', 'success');
+      this.editing = null; session.eventSelection.clear(); session.multiEventSelection.clear(); session.commit(t('trajectory-panel.sd0b8713'), chart);
+      this.activate('chart'); this.notify(t('trajectory-panel.sc69dba2'), 'success');
     } catch (error) { this.error(error); }
   }
 
@@ -310,7 +311,7 @@ export class TrajectoryPanel {
       if (this.editing) {
         const selected = this.getContext().session.chart.judgeLineList.flatMap(line => (line.eventLayers ?? []).flatMap(layer => layer?.moveXEvents ?? [])).find(event => event.trajectory === this.editing.trajectory);
         if (selected) { this.editing = selected; this.startTime = selected.startTime; this.endTime = selected.endTime; for (const key of ['startTime', 'endTime']) this.fields.querySelector('[data-key="' + key + '"]').value = formatBeat(this[key]); }
-        else { this.editing = null; this.splitButton.hidden = true; this.applyButton.textContent = '生成整体轨迹事件'; }
+        else { this.editing = null; this.splitButton.hidden = true; this.applyButton.textContent = t('trajectory-panel.sf248e5c'); }
       }
       this.refresh();
     }
@@ -332,7 +333,7 @@ export class TrajectoryPanel {
       this.displayWorldPoints.forEach((point, index) => index ? context.lineTo(...screen(point)) : context.moveTo(...screen(point))); context.stroke();
       const marker = this.displayWorldPoints[Math.min(this.displayWorldPoints.length - 1, Math.floor(progress * (this.displayWorldPoints.length - 1)))];
       context.fillStyle = '#9cffcc'; context.beginPath(); context.arc(...screen(marker), 6, 0, Math.PI * 2); context.fill();
-      context.font = '13px RPE, sans-serif'; context.fillText('轨迹预览 · L' + this.lineIndex, 18 + viewport.left, 24 + viewport.top); context.restore();
+      context.font = '13px RPE, sans-serif'; context.fillText(t('trajectory-panel.s4c18e91') + this.lineIndex, 18 + viewport.left, 24 + viewport.top); context.restore();
     }
     return this.enabled && this.previewChart ? { chart: this.previewChart, seconds: playing || !this.animate ? seconds : this.beginSeconds + (this.endSeconds - this.beginSeconds) * progress } : null;
   }

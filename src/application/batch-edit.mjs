@@ -4,12 +4,13 @@ import { beatValue, fromNumber } from '../core/beat.mjs';
 import { snapPosition, verticalGrid } from '../core/edit-grid.mjs';
 import { alignShaderParameters } from '../core/shader-events.mjs';
 import { chartWithEventLists, eventList, eventListAt, eventKey, selectedEvents, transformEvents } from './event-commands.mjs';
+import { t } from '../i18n.mjs';
 
 export const BATCH_ACTIONS = [
-  ['MirrorY', '绕 X=0 镜像'], ['MirrorMid', '绕选中音符的横向中心镜像'],
-  ['SideSwitch', '切换上下侧'], ['SideUp', '全部移至上侧'], ['SideDown', '全部移至下侧'],
-  ['ToReal', '变为真音符'], ['ToFake', '变为假音符'], ['ToTap', '转为 Tap'],
-  ['ToFlick', '转为 Flick'], ['ToDrag', '转为 Drag'], ['ToHold', '转为 Hold（新增长度 1/4 拍）'], ['AttachX', '吸附至最近竖线'],
+  ['MirrorY', t('batch-edit.s8e30bb2')], ['MirrorMid', t('batch-edit.s89eacaf')],
+  ['SideSwitch', t('batch-edit.s5f6d625')], ['SideUp', t('batch-edit.se67c103')], ['SideDown', t('batch-edit.s3f373e0')],
+  ['ToReal', t('batch-edit.s9ec2db0')], ['ToFake', t('batch-edit.s6392caf')], ['ToTap', t('batch-edit.sdeddd25')],
+  ['ToFlick', t('batch-edit.sb646f8b')], ['ToDrag', t('batch-edit.se106cdc')], ['ToHold', t('batch-edit.sb33fb9b')], ['AttachX', t('batch-edit.s18e7d05')],
 ];
 
 export function captureSelection(session) {
@@ -135,13 +136,13 @@ export function nudgeSelection(session, direction, division, gridCount) {
   return commitSelectionEdit(session, editCapturedSelection(snapshot, {
     note: item => ({ ...shiftedTime(item, deltaBeat), positionX: item.positionX + deltaX }),
     event: item => shiftedTime(item, deltaBeat),
-  }), '方向键移动选中项');
+  }), t('batch-edit.sba1b1a0'));
 }
 
 export function applyBatchAction(session, action, gridCount) {
   const snapshot = captureSelection(session);
   if (!snapshot.notes.length) return false;
-  if (!BATCH_ACTIONS.some(([name]) => name === action)) throw new Error('未知批量操作');
+  if (!BATCH_ACTIONS.some(([name]) => name === action)) throw new Error(t('batch-edit.s8bd8d07'));
   const positions = snapshot.notes.map(entry => entry.note.positionX);
   const middleSum = positions.reduce((value, position) => Math.min(value, position), Infinity) + positions.reduce((value, position) => Math.max(value, position), -Infinity);
   const types = { ToTap: 1, ToFlick: 3, ToDrag: 4, ToHold: 2 };
@@ -158,7 +159,7 @@ export function applyBatchAction(session, action, gridCount) {
     const type = types[action];
     return { ...item, type, above: noteIsAbove(item) ? 1 : type === 2 ? 0 : 2,
       endTime: type === 2 ? item.type === 2 ? item.endTime : fromNumber(beatValue(item.startTime) + 0.25) : [...item.startTime] };
-  } }), `批量 ${action}`);
+  } }), t('batch-edit.s6bc2903', { p0: action }));
 }
 
 export function controlLineOffset(delta, events = false) {

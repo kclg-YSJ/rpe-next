@@ -4,6 +4,7 @@ import { fitNoiseSampleView } from '../core/noise-sampling.mjs';
 import { beatValue } from '../core/beat.mjs';
 import { chartWithEventLists, eventListAt, eventKey, transformedEventLists } from '../application/event-commands.mjs';
 import { prepareCanvas } from './timeline.mjs';
+import { t } from '../i18n.mjs';
 
 const sampledTypes = new Set(['moveXEvents', 'moveYEvents', 'rotateEvents']);
 const round = value => Math.round(value * 10000) / 10000;
@@ -15,8 +16,8 @@ export class EventSampler {
     this.mode = null; this.valueDraft = null; this.draftChart = null; this.drag = null; this.scene = new SceneRuntime();
     this.canvas = document.createElement('canvas'); this.canvas.className = 'event-sampler'; this.canvas.hidden = true; host.append(this.canvas);
     this.sampleBar = document.createElement('div'); this.sampleBar.className = 'noise-sample-bar event-sample-bar'; this.sampleBar.hidden = true;
-    const hint = document.createElement('p'); hint.className = 'hint'; hint.textContent = '拖动绿色控制点 · 可连续取样，完成统一应用 · Esc 全部取消'; this.sampleHint = hint; this.sampleBar.append(hint);
-    for (const [title, apply] of [['完成取样', true], ['取消', false]]) { const button = document.createElement('button'); button.type = 'button'; button.textContent = title; button.onclick = () => this.finish(apply); this.sampleBar.append(button); }
+    const hint = document.createElement('p'); hint.className = 'hint'; hint.textContent = t('event-sampler.s5cb983c'); this.sampleHint = hint; this.sampleBar.append(hint);
+    for (const [title, apply] of [[t('event-sampler.s2e0df4a'), true], [t('event-sampler.s4d0b468'), false]]) { const button = document.createElement('button'); button.type = 'button'; button.textContent = title; button.onclick = () => this.finish(apply); this.sampleBar.append(button); }
     host.append(this.sampleBar);
     this.canvas.addEventListener('pointerdown', event => this.down(event));
     this.canvas.addEventListener('pointermove', event => this.move(event));
@@ -99,7 +100,7 @@ export class EventSampler {
     return draft.range.start + span * phase;
   }
 
-  finishValue(apply, label = '应用事件取样') {
+  finishValue(apply, label = t('event-sampler.s542c443')) {
     if (!this.valueDraft) return;
     const draft = this.valueDraft, chart = draft.chart, current = this.valueDraftCurrent();
     draft.session.liveEventEdit = false;
@@ -124,8 +125,8 @@ export class EventSampler {
       this.mode.paired = this.findPairedMovement(source, this.mode);
     }
     this.sampleHint.textContent = this.mode.paired
-      ? '拖动绿色控制点 · 配套 X/Y 事件同时取样 · 完成统一应用 · Esc 全部取消'
-      : '拖动绿色控制点 · 可连续取样，完成统一应用 · Esc 全部取消';
+      ? t('event-sampler.s266cff8')
+      : t('event-sampler.s5cb983c');
     const factor = line.bpmfactor ?? 1;
     this.seconds = this.context.tempo.seconds(target.field === 'end' ? event.endTime : event.startTime, factor);
     this.session.liveEventEdit = true;
@@ -143,7 +144,7 @@ export class EventSampler {
     this.sampleZoom = null;
     this.mode = null; this.draftChart = null; this.drag = null; this.canvas.hidden = true; this.session.liveEventEdit = false;
     this.syncChrome();
-    if (apply && chart) this.session.commit('预览拖动取样', chart);
+    if (apply && chart) this.session.commit(t('event-sampler.seaab4c2'), chart);
     else if (!apply) this.session.notify();
     this.invalidate();
   }
@@ -306,6 +307,6 @@ export class EventSampler {
   draw() {
     if (!this.mode) return;
     const { context, width, height } = prepareCanvas(this.canvas); const view = this.view(); const point = view.screen(this.handle(this.draftChart));
-    context.save(); context.strokeStyle = '#70efaa'; context.lineWidth = 2; context.beginPath(); context.moveTo(point.x - 16, point.y); context.lineTo(point.x + 16, point.y); context.moveTo(point.x, point.y - 16); context.lineTo(point.x, point.y + 16); context.stroke(); context.fillStyle = '#d2ffe4'; context.font = '13px sans-serif'; context.fillText('拖动绿色控制点 · Esc 取消 · 完成后点击完成取样', 14, height - 18); context.restore();
+    context.save(); context.strokeStyle = '#70efaa'; context.lineWidth = 2; context.beginPath(); context.moveTo(point.x - 16, point.y); context.lineTo(point.x + 16, point.y); context.moveTo(point.x, point.y - 16); context.lineTo(point.x, point.y + 16); context.stroke(); context.fillStyle = '#d2ffe4'; context.font = '13px sans-serif'; context.fillText(t('event-sampler.sc21adcc'), 14, height - 18); context.restore();
   }
 }

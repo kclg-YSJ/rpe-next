@@ -1,10 +1,11 @@
 import { beatValue } from './beat.mjs';
 import { easing } from './easing.mjs';
 import { trajectoryEventValue } from './curve-trajectory.mjs';
+import { t } from '../i18n.mjs';
 
 export const SPECIAL_TRACKS = [
-  { key: 'scaleXEvents', label: '缩放 X' }, { key: 'scaleYEvents', label: '缩放 Y' },
-  { key: 'colorEvents', label: '颜色' }, { key: 'paintEvents', label: '着色器' }, { key: 'textEvents', label: '文字' },
+  { key: 'scaleXEvents', label: t('editor-display.s4175cf1') }, { key: 'scaleYEvents', label: t('editor-display.sd55daa9') },
+  { key: 'colorEvents', label: t('editor-display.s8ef4886') }, { key: 'paintEvents', label: t('editor-display.s14f807e') }, { key: 'textEvents', label: t('editor-display.sf4d3dab') },
 ];
 export const MAX_BASE_LAYERS = 4;
 

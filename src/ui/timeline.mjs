@@ -15,11 +15,13 @@ import { editorSkinContext } from './editor-skin-canvas.mjs';
 import { drawEventCurve, drawEventCurveBatch } from './event-curve.mjs';
 import { eventDisplayIndex, selectedEventGroups } from './event-display-index.mjs';
 import { intervalSelection, extendIntervalSelection } from '../core/selection-interval.mjs';
+import { t } from '../i18n.mjs';
 
 export const NOTE_COLORS = { 1: '#8acbff', 2: '#8acbff', 3: '#f596ac', 4: '#f1ce76' };
 const isHookedEvent = event => event?.inst === true || Number(event?.inst) === 1;
-const labels = ['X', 'Y', '旋转', '透明', '速度'];
-const extendedLabels = SPECIAL_TRACKS.map(track => track.label);
+// Resolved per frame so a language switch renames the columns without a reload.
+const labels = () => ['X', 'Y', t('timeline.sa69e51e'), t('timeline.sb1a302e'), t('timeline.sf2fdffb')];
+const extendedLabels = () => SPECIAL_TRACKS.map(track => track.label);
 
 export function prepareCanvas(canvas, rectangle = canvas.getBoundingClientRect()) {
   const ratio = globalThis.devicePixelRatio || 1;
@@ -243,7 +245,7 @@ export class Timeline {
     this.multiLineLabels.replaceChildren();
     if (!showLabels) return;
     const panelWidth = this.panelWidth(width, area); const stride = this.panelStride(width, area); const offset = this.multiLineViewportOffset(width, area);
-    const lines = this.panelCount(area) === 1 ? [{ index: session.targetLineIndices[0], text: session.multiLineMerge && area === 'notes' ? `多线合并 · ${session.targetLineIndices.map(index => lineDisplayLabel(session.chart, index)).join(' / ')}` : session.targetLineIndices.map(index => lineDisplayLabel(session.chart, index)).join(' · ') }] : session.targetLineIndices.map(index => ({ index, text: lineDisplayLabel(session.chart, index) }));
+    const lines = this.panelCount(area) === 1 ? [{ index: session.targetLineIndices[0], text: session.multiLineMerge && area === 'notes' ? t('timeline.s8137e64', { p0: session.targetLineIndices.map(index => lineDisplayLabel(session.chart, index)).join(' / ') }) : session.targetLineIndices.map(index => lineDisplayLabel(session.chart, index)).join(' · ') }] : session.targetLineIndices.map(index => ({ index, text: lineDisplayLabel(session.chart, index) }));
     for (const [panel, line] of lines.entries()) { const label = document.createElement('span'); label.textContent = line.text; label.style.width = `${panelWidth}px`; label.style.transform = `translateX(${panel * stride - offset}px)`; this.multiLineLabels.append(label); }
   }
 
@@ -446,11 +448,11 @@ export class Timeline {
         const snapshot = captureSelection(session);
         const result = editCapturedSelection(snapshot, { note: item => this.movedNote(item) });
         this.drag = null;
-        commitSelectionEdit(session, result, drag.kind === 'move' ? '移动音符' : '调整 Hold 长度');
+        commitSelectionEdit(session, result, drag.kind === 'move' ? t('timeline.s26c47ee') : t('timeline.se10e84d'));
       } else {
         const replacements = new Map([...session.selection].map(index => [session.notes[index], this.movedNote(session.notes[index])]));
         this.drag = null;
-        session.transformSelection(drag.kind === 'move' ? '移动音符' : '调整 Hold 长度', note => replacements.get(note));
+        session.transformSelection(drag.kind === 'move' ? t('timeline.s26c47ee') : t('timeline.se10e84d'), note => replacements.get(note));
       }
     }
     this.drag = null;
@@ -775,7 +777,7 @@ export class Timeline {
           context.textAlign = 'left';
         }
         context.fillStyle = '#303030'; context.fillRect(offset + channel * channelWidth, 0, channelWidth, 23);
-        if (channelWidth >= 48) { context.fillStyle = '#f5f5f5'; context.font = '12px RPE, sans-serif'; context.fillText((this.extended ? extendedLabels : labels)[channel] ?? '', offset + channel * channelWidth + 6, 16); }
+        if (channelWidth >= 48) { context.fillStyle = '#f5f5f5'; context.font = '12px RPE, sans-serif'; context.fillText((this.extended ? extendedLabels() : labels())[channel] ?? '', offset + channel * channelWidth + 6, 16); }
       });
       if (this.panelCount('events') > 1) { context.strokeStyle = '#333b45'; context.lineWidth = 2; context.beginPath(); context.moveTo(offset + panelWidth, 0); context.lineTo(offset + panelWidth, height); context.stroke(); }
     }
@@ -869,7 +871,7 @@ export class Timeline {
       if (type === 'paintEvents') {
         this.drawShaderEvents(context, entries, channel, width, height);
         context.fillStyle = '#303030'; context.fillRect(horizontal, 0, channelWidth, 23);
-        context.fillStyle = '#f5f5f5'; context.font = '12px RPE, sans-serif'; context.fillText('着色器', horizontal + 6, 16);
+        context.fillStyle = '#f5f5f5'; context.font = '12px RPE, sans-serif'; context.fillText(t('timeline.s14f807e'), horizontal + 6, 16);
         return;
       }
       const ranges = this.chainRanges[channel];
@@ -940,7 +942,7 @@ export class Timeline {
          }
        }
       context.fillStyle = '#303030'; context.fillRect(horizontal, 0, channelWidth, 23);
-      context.fillStyle = '#f5f5f5'; context.fillText(this.eventLabels?.[channel] ?? (this.extended ? extendedLabels : labels)[channel], horizontal + 6, 16, Math.max(1, channelWidth - 12));
+      context.fillStyle = '#f5f5f5'; context.fillText(this.eventLabels?.[channel] ?? (this.extended ? extendedLabels() : labels())[channel], horizontal + 6, 16, Math.max(1, channelWidth - 12));
     });
     const drag = this.eventInteraction.drag;
     if (drag?.kind === 'rectangle') {
@@ -973,7 +975,7 @@ export class Timeline {
     const startY = verticalAt(beatValue(event.startTime)); const endY = verticalAt(beatValue(event.endTime));
     context.save(); context.beginPath(); context.rect(rectangle.x, rectangle.y, rectangle.width, rectangle.height); context.clip();
     context.strokeStyle = '#83edca'; context.globalAlpha = 0.95; context.lineWidth = 2; context.strokeRect(rectangle.x, rectangle.y, rectangle.width, rectangle.height);
-    context.fillStyle = '#a0ffdb'; context.font = '12px RPE, sans-serif'; context.textAlign = 'center'; context.fillText('轨迹 X / Y', rectangle.x + rectangle.width / 2, rectangle.y + 30, Math.max(1, rectangle.width - 4));
+    context.fillStyle = '#a0ffdb'; context.font = '12px RPE, sans-serif'; context.textAlign = 'center'; context.fillText(t('timeline.s9cbb5c3'), rectangle.x + rectangle.width / 2, rectangle.y + 30, Math.max(1, rectangle.width - 4));
     if (this.drawEventCurves !== false && rectangle.width > 20 && rectangle.height > 42) {
       for (const [axis, color] of [['x', '#86efbf'], ['y', '#baacff']]) {
         const samples = Array.from({ length: 65 }, (unused, index) => trajectoryEventValue(event, index / 64, axis));

@@ -1,5 +1,6 @@
 import { noiseRuntime } from './noise-areas.mjs';
 import { previewViewport } from './editor-display.mjs';
+import { t } from '../i18n.mjs';
 
 const sampleNumber = value => Math.round(value * 10000) / 10000;
 
@@ -49,7 +50,7 @@ export function applyNoiseSample(area, tempo, seconds, target, point) {
     const sampleAxis = axis => { const changed = structuredClone(area); changed[target.field][axis] += 1; const handle = noiseSampleHandle(changed, tempo, seconds, target); return { x: handle.x - original.x, y: handle.y - original.y }; };
     const horizontal = sampleAxis('x'); const vertical = sampleAxis('y');
     const determinant = horizontal.x * vertical.y - horizontal.y * vertical.x;
-    if (Math.abs(determinant) < 1e-8) throw new Error('当前缩放为零或变换退化，无法反算角点；请改用文本输入或其他时间点');
+    if (Math.abs(determinant) < 1e-8) throw new Error(t('noise-sampling.s778af80'));
     result[target.field].x += (delta.x * vertical.y - delta.y * vertical.x) / determinant;
     result[target.field].y += (horizontal.x * delta.y - horizontal.y * delta.x) / determinant;
   } else if (target.type === 'rotateEvents') {
@@ -61,7 +62,7 @@ export function applyNoiseSample(area, tempo, seconds, target, point) {
       const derivative = noiseSampleHandle(probe, tempo, seconds, target);
       const dx = derivative.x - current.x; const dy = derivative.y - current.y;
       const length = dx * dx + dy * dy;
-      if (length < 1e-10) throw new Error('当前变换无法反算旋转值；请改用文本输入或调整锚点');
+      if (length < 1e-10) throw new Error(t('noise-sampling.s40e6478'));
       const errorX = point.x - current.x; const errorY = point.y - current.y;
       const delta = (errorX * dx + errorY * dy) / length;
       value += delta * 0.01;
@@ -72,7 +73,7 @@ export function applyNoiseSample(area, tempo, seconds, target, point) {
     const changed = structuredClone(area); setValue(changed, target, area[target.type][target.index][target.field] + 1);
     const handle = noiseSampleHandle(changed, tempo, seconds, target); const axis = { x: handle.x - original.x, y: handle.y - original.y };
     const length = axis.x * axis.x + axis.y * axis.y;
-    if (length < 1e-8) throw new Error('当前变换无法反算该缩放值；请改用文本输入或调整锚点');
+    if (length < 1e-8) throw new Error(t('noise-sampling.s898e322'));
     setValue(result, target, area[target.type][target.index][target.field] + (delta.x * axis.x + delta.y * axis.y) / length);
   }
   if (['bottomLeft', 'topRight'].includes(target.field)) for (const axis of ['x', 'y']) result[target.field][axis] = sampleNumber(result[target.field][axis]);

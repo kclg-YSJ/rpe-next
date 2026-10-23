@@ -1,4 +1,5 @@
 import { stringifyPreservingNumbers } from '../core/chart.mjs';
+import { t } from '../i18n.mjs';
 
 const modal = document.querySelector('#modal');
 const content = document.querySelector('#modal-content');
@@ -14,7 +15,7 @@ export function showDialog(title, description) {
   content.replaceChildren();
   apply.hidden = true;
   apply.disabled = false;
-  apply.textContent = '应用';
+  apply.textContent = t('dialog.s4562024');
   remove.hidden = true;
   apply.onclick = null;
   remove.onclick = null;
@@ -38,7 +39,7 @@ export function editJson(title, description, value, onApply, onDelete) {
     remove.hidden = false;
     remove.onclick = () => {
       try { onDelete(); modal.close(); }
-      catch (failure) { showDialog('操作未完成', failure.message); }
+      catch (failure) { showDialog(t('dialog.s223fb3c'), failure.message); }
     };
   }
 }
@@ -52,14 +53,14 @@ export function choose(title, description, entries, label, onChoose) {
     button.textContent = label(entry);
     button.onclick = async () => {
       try { modal.close(); await onChoose(entry); }
-      catch (failure) { showDialog('操作未完成', failure.message); }
+      catch (failure) { showDialog(t('dialog.s223fb3c'), failure.message); }
     };
     content.append(button);
   }
 }
 
 export function confirmAction(title, action) {
-  showDialog(title, '当前谱面有未保存修改。继续会放弃本次修改；可取消并保存到谱面库或导出 PEZ。自动备份仅在设定间隔到达后生成。');
+  showDialog(title, t('dialog.s47a52ce'));
   apply.hidden = false;
   apply.onclick = () => { modal.close(); action(); };
 }

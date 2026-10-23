@@ -24,9 +24,25 @@
       }
     },
     "name": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 80
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "propertyNames": {
+            "pattern": "^[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{2,8})*$"
+          }
+        }
+      ]
     },
     "author": {
       "type": "string",
@@ -34,9 +50,25 @@
       "maxLength": 100
     },
     "description": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 2000
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "propertyNames": {
+            "pattern": "^[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{2,8})*$"
+          }
+        }
+      ]
     },
     "colorScheme": {
       "enum": [
@@ -306,9 +338,25 @@
             "default": "row"
           },
           "label": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 60
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 60
+              },
+              {
+                "type": "object",
+                "minProperties": 1,
+                "additionalProperties": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 60
+                },
+                "propertyNames": {
+                  "pattern": "^[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{2,8})*$"
+                }
+              }
+            ]
           },
           "collapsible": {
             "type": "boolean",
@@ -378,20 +426,88 @@
             "description": "CSS selector, optionally using @component aliases. Must pass editorSkinSelector and browser selector validation."
           },
           "text": {
-            "type": "string",
-            "maxLength": 1000
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              },
+              {
+                "type": "object",
+                "minProperties": 1,
+                "additionalProperties": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1000
+                },
+                "propertyNames": {
+                  "pattern": "^[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{2,8})*$"
+                }
+              }
+            ]
           },
           "title": {
-            "type": "string",
-            "maxLength": 1000
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              },
+              {
+                "type": "object",
+                "minProperties": 1,
+                "additionalProperties": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1000
+                },
+                "propertyNames": {
+                  "pattern": "^[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{2,8})*$"
+                }
+              }
+            ]
           },
           "ariaLabel": {
-            "type": "string",
-            "maxLength": 1000
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              },
+              {
+                "type": "object",
+                "minProperties": 1,
+                "additionalProperties": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1000
+                },
+                "propertyNames": {
+                  "pattern": "^[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{2,8})*$"
+                }
+              }
+            ]
           },
           "placeholder": {
-            "type": "string",
-            "maxLength": 1000
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1000
+              },
+              {
+                "type": "object",
+                "minProperties": 1,
+                "additionalProperties": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1000
+                },
+                "propertyNames": {
+                  "pattern": "^[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{2,8})*$"
+                }
+              }
+            ]
           }
         }
       }
@@ -870,8 +986,25 @@
       "maxLength": 40
     },
     "license": {
-      "type": "string",
-      "maxLength": 4000
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          },
+          "propertyNames": {
+            "pattern": "^[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{2,8})*$"
+          }
+        }
+      ]
     },
     "preview": {
       "type": "string",
@@ -927,8 +1060,25 @@
             ]
           },
           "label": {
-            "type": "string",
-            "maxLength": 80
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 80
+              },
+              {
+                "type": "object",
+                "minProperties": 1,
+                "additionalProperties": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                },
+                "propertyNames": {
+                  "pattern": "^[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{2,8})*$"
+                }
+              }
+            ]
           },
           "default": {},
           "min": {
@@ -956,7 +1106,25 @@
           "options": {
             "type": "object",
             "additionalProperties": {
-              "type": "string"
+              "oneOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                },
+                {
+                  "type": "object",
+                  "minProperties": 1,
+                  "additionalProperties": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "propertyNames": {
+                    "pattern": "^[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{2,8})*$"
+                  }
+                }
+              ]
             },
             "maxProperties": 30
           }

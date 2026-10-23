@@ -1,4 +1,5 @@
 import { shaderLine } from './shader.mjs';
+import { t } from '../i18n.mjs';
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -100,18 +101,18 @@ export function base64ToBytes(text) {
 
 export function validateRefName(name) {
   const value = String(name ?? '').trim();
-  if (!value) return '名称不能为空';
-  if (value.length > 120) return '名称不能超过 120 个字符';
-  if (/[\s~^:?*[\\]/.test(value)) return '名称不能包含空格或 ~ ^ : ? * [ \\';
-  if (value.startsWith('/') || value.endsWith('/') || value.includes('//') || value.includes('..')) return '名称格式无效';
-  if (value.includes('@{')) return '名称不能包含 @{';
-  if (value.endsWith('.') || value.endsWith('.lock')) return '名称不能以点或 .lock 结尾';
+  if (!value) return t('chart-vcs.sca89845');
+  if (value.length > 120) return t('chart-vcs.sf293aa3');
+  if (/[\s~^:?*[\\]/.test(value)) return t('chart-vcs.s34a9276');
+  if (value.startsWith('/') || value.endsWith('/') || value.includes('//') || value.includes('..')) return t('chart-vcs.sa9837b8');
+  if (value.includes('@{')) return t('chart-vcs.sb469089');
+  if (value.endsWith('.') || value.endsWith('.lock')) return t('chart-vcs.s993696d');
   return null;
 }
 
-export function assertRefName(name, label = '引用') {
+export function assertRefName(name, label = t('chart-vcs.s23c0e10')) {
   const message = validateRefName(name);
-  if (message) throw new Error(`${label}名称无效：${message}`);
+  if (message) throw new Error(t('chart-vcs.s4086fc6', { p0: label, p1: message }));
   return String(name).trim();
 }
 
@@ -123,11 +124,11 @@ function formatBeat(beat) {
 
 function noteLabel(note) {
   const types = { 1: 'Tap', 2: 'Hold', 3: 'Flick', 4: 'Drag' };
-  return `${types[note?.type] ?? 'Note'} @ ${formatBeat(note?.startTime)} 拍 · X ${Number(note?.positionX ?? 0)}`;
+  return t('chart-vcs.s62076d8', { p0: types[note?.type] ?? 'Note', p1: formatBeat(note?.startTime), p2: Number(note?.positionX ?? 0) });
 }
 
 function eventLabel(type, event) {
-  return `${type} @ ${formatBeat(event?.startTime)} 拍`;
+  return t('chart-vcs.secc3078', { p0: type, p1: formatBeat(event?.startTime) });
 }
 
 function groupItems(items, keyOf) {
@@ -185,31 +186,31 @@ function eventTypeKeys(beforeLayer, afterLayer) {
 }
 
 const META_LABELS = {
-  name: '曲名', composer: '曲师', charter: '谱师', illustration: '画师',
-  level: '难度', song: '歌曲', background: '背景', offset: '偏移'
+  name: t('chart-vcs.scaeac8b'), composer: t('chart-vcs.sc36f907'), charter: t('chart-vcs.sf6379dd'), illustration: t('chart-vcs.s687c35c'),
+  level: t('chart-vcs.s205aff9'), song: t('chart-vcs.sbf52cf7'), background: t('chart-vcs.sb13d33a'), offset: t('chart-vcs.sde4c142')
 };
 const NOTE_FIELD_LABELS = {
-  type: '类型', startTime: '开始拍', endTime: '结束拍', positionX: '横坐标', above: '方向',
-  speed: '速度', size: '大小', yOffset: 'Y 偏移', visibleTime: '可见时间', alpha: '透明度', isFake: '假音符'
+  type: t('chart-vcs.se4e46c7'), startTime: t('chart-vcs.s087c451'), endTime: t('chart-vcs.sc4d3fa4'), positionX: t('chart-vcs.sc389e2f'), above: t('chart-vcs.sa88d531'),
+  speed: t('chart-vcs.sf2fdffb'), size: t('chart-vcs.sfd20702'), yOffset: t('chart-vcs.s9d63ee8'), visibleTime: t('chart-vcs.s9717d88'), alpha: t('chart-vcs.s61b101b'), isFake: t('chart-vcs.sc4c77c4')
 };
 const EVENT_FIELD_LABELS = {
-  startTime: '开始拍', endTime: '结束拍', start: '起始值', end: '结束值',
-  easingType: '缓动', easingLeft: '缓动左端', easingRight: '缓动右端',
-  bezier: 'Bezier', bezierPoints: 'Bezier 控制点', linkgroup: '绑定组'
+  startTime: t('chart-vcs.s087c451'), endTime: t('chart-vcs.sc4d3fa4'), start: t('chart-vcs.s532cd47'), end: t('chart-vcs.s00005a6'),
+  easingType: t('chart-vcs.s727b7cd'), easingLeft: t('chart-vcs.s47c47ad'), easingRight: t('chart-vcs.se91875b'),
+  bezier: 'Bezier', bezierPoints: t('chart-vcs.sb1f6d6a'), linkgroup: t('chart-vcs.s7941eab')
 };
 const OTHER_LABELS = {
-  markers: '标记点', globalEvents: '全局事件', noiseAreaLayers: '噪域层',
-  effects: '效果', blockAreaList: '噪域列表', noiseAreaOptions: '噪域选项'
+  markers: t('chart-vcs.sbff4860'), globalEvents: t('chart-vcs.s895a20e'), noiseAreaLayers: t('chart-vcs.s7d95025'),
+  effects: t('chart-vcs.s151ddd4'), blockAreaList: t('chart-vcs.s61d33c8'), noiseAreaOptions: t('chart-vcs.s324f893')
 };
 
 function formatDiffValue(value) {
-  if (value === undefined) return '（无）';
+  if (value === undefined) return t('chart-vcs.s6238bf9');
   if (value === null) return 'null';
   if (Array.isArray(value)) {
     if (value.length && value.every(item => item && typeof item === 'object' && 'time' in item)) {
-      return value.map(item => `${item.name ?? '标记'} @ ${formatDiffValue(item.time)}`).join('；');
+      return value.map(item => t('chart-vcs.sfb88580', { p0: item.name ?? t('chart-vcs.sc515246'), p1: formatDiffValue(item.time) })).join('；');
     }
-    if (value.length === 3 && value.every(Number.isFinite)) return `${formatBeat(value)} 拍`;
+    if (value.length === 3 && value.every(Number.isFinite)) return t('chart-vcs.s79ab764', { p0: formatBeat(value) });
     return value.map(formatDiffValue).join(' / ');
   }
   if (typeof value === 'object') {
@@ -262,12 +263,12 @@ export function diffCharts(before, after) {
   }
 
   const bpm = diffItems(beforeChart.BPMList ?? [], afterChart.BPMList ?? [],
-    entry => canonicalJson(entry?.startTime), entry => `${Number(entry?.bpm ?? 0)} BPM @ ${formatBeat(entry?.startTime)} 拍`);
+    entry => canonicalJson(entry?.startTime), entry => t('chart-vcs.s2f24647', { p0: Number(entry?.bpm ?? 0), p1: formatBeat(entry?.startTime) }));
   const bpmChanges = matchItems(beforeChart.BPMList ?? [], afterChart.BPMList ?? [], entry => canonicalJson(entry?.startTime));
-  for (const entry of bpmChanges.added) details.push({ kind: 'bpm', text: `新增 BPM：${Number(entry?.bpm ?? 0)} @ ${formatBeat(entry?.startTime)} 拍` });
-  for (const entry of bpmChanges.removed) details.push({ kind: 'bpm', text: `删除 BPM：${Number(entry?.bpm ?? 0)} @ ${formatBeat(entry?.startTime)} 拍` });
+  for (const entry of bpmChanges.added) details.push({ kind: 'bpm', text: t('chart-vcs.s6a98778', { p0: Number(entry?.bpm ?? 0), p1: formatBeat(entry?.startTime) }) });
+  for (const entry of bpmChanges.removed) details.push({ kind: 'bpm', text: t('chart-vcs.s23c1828', { p0: Number(entry?.bpm ?? 0), p1: formatBeat(entry?.startTime) }) });
   for (const change of bpmChanges.modified) {
-    details.push({ kind: 'bpm', text: `BPM @ ${formatBeat(change.after?.startTime ?? change.before?.startTime)} 拍：${Number(change.before?.bpm ?? 0)} → ${Number(change.after?.bpm ?? 0)}` });
+    details.push({ kind: 'bpm', text: t('chart-vcs.s8c655f2', { p0: formatBeat(change.after?.startTime ?? change.before?.startTime), p1: Number(change.before?.bpm ?? 0), p2: Number(change.after?.bpm ?? 0) }) });
   }
 
   const beforeLines = beforeChart.judgeLineList ?? [];
@@ -278,16 +279,16 @@ export function diffCharts(before, after) {
   for (let index = 0; index < lineCount; index++) {
     if (!deepEqual(beforeLines[index], afterLines[index])) {
       lineModified++;
-      const lineName = afterLines[index]?.Name ?? beforeLines[index]?.Name ?? `第 ${index + 1} 条线`;
+      const lineName = afterLines[index]?.Name ?? beforeLines[index]?.Name ?? t('chart-vcs.s8c77106', { p0: index + 1 });
       if (lineSamples.length < 5) lineSamples.push(lineName);
-      details.push({ kind: 'line', text: `判定线「${lineName}」内容已修改` });
+      details.push({ kind: 'line', text: t('chart-vcs.s927c1a8', { p0: lineName }) });
     }
   }
   for (let index = lineCount; index < afterLines.length; index++) {
-    details.push({ kind: 'line', text: `新增判定线「${afterLines[index]?.Name ?? `第 ${index + 1} 条线`}」` });
+    details.push({ kind: 'line', text: t('chart-vcs.s3c6c215', { p0: afterLines[index]?.Name ?? t('chart-vcs.s8c77106', { p0: index + 1 }) }) });
   }
   for (let index = lineCount; index < beforeLines.length; index++) {
-    details.push({ kind: 'line', text: `删除判定线「${beforeLines[index]?.Name ?? `第 ${index + 1} 条线`}」` });
+    details.push({ kind: 'line', text: t('chart-vcs.s7f984d1', { p0: beforeLines[index]?.Name ?? t('chart-vcs.s8c77106', { p0: index + 1 }) }) });
   }
   const lines = {
     before: beforeLines.length, after: afterLines.length,
@@ -313,15 +314,15 @@ export function diffCharts(before, after) {
   for (let index = 0; index < lineCount; index++) {
     const beforeLine = beforeLines[index] ?? {};
     const afterLine = afterLines[index] ?? {};
-    const lineName = afterLine.Name ?? beforeLine.Name ?? `第 ${index + 1} 条线`;
+    const lineName = afterLine.Name ?? beforeLine.Name ?? t('chart-vcs.s8c77106', { p0: index + 1 });
     const noteKey = note => `${note?.type}|${canonicalJson(note?.startTime)}|${note?.positionX}|${note?.above ?? 1}`;
     mergeCounts(notes, diffItems(beforeLine.notes ?? [], afterLine.notes ?? [], noteKey, noteLabel));
     const noteChanges = matchItems(beforeLine.notes ?? [], afterLine.notes ?? [], noteKey);
-    for (const note of noteChanges.added) details.push({ kind: 'note', text: `第 ${index + 1} 条线「${lineName}」：新增 ${noteLabel(note)}` });
-    for (const note of noteChanges.removed) details.push({ kind: 'note', text: `第 ${index + 1} 条线「${lineName}」：删除 ${noteLabel(note)}` });
+    for (const note of noteChanges.added) details.push({ kind: 'note', text: t('chart-vcs.s3f15fb6', { p0: index + 1, p1: lineName, p2: noteLabel(note) }) });
+    for (const note of noteChanges.removed) details.push({ kind: 'note', text: t('chart-vcs.s1e664bd', { p0: index + 1, p1: lineName, p2: noteLabel(note) }) });
     for (const change of noteChanges.modified) {
       const fields = describeFieldChanges(change.before, change.after, NOTE_FIELD_LABELS);
-      details.push({ kind: 'note', text: `第 ${index + 1} 条线「${lineName}」：修改 ${noteLabel(change.after)}${fields ? `（${fields}）` : ''}` });
+      details.push({ kind: 'note', text: t('chart-vcs.sceec6e2', { p0: index + 1, p1: lineName, p2: noteLabel(change.after), p3: fields ? `（${fields}）` : '' }) });
     }
     const beforeLayers = [...(beforeLine.eventLayers ?? []), beforeLine.extended ?? {}];
     const afterLayers = [...(afterLine.eventLayers ?? []), afterLine.extended ?? {}];
@@ -333,11 +334,11 @@ export function diffCharts(before, after) {
         const eventKey = event => canonicalJson(event?.startTime);
         mergeCounts(events, diffItems(beforeLayer[type] ?? [], afterLayer[type] ?? [], eventKey, event => eventLabel(type, event)));
         const eventChanges = matchItems(beforeLayer[type] ?? [], afterLayer[type] ?? [], eventKey);
-        for (const event of eventChanges.added) details.push({ kind: 'event', text: `第 ${index + 1} 条线「${lineName}」：新增 ${eventLabel(type, event)}` });
-        for (const event of eventChanges.removed) details.push({ kind: 'event', text: `第 ${index + 1} 条线「${lineName}」：删除 ${eventLabel(type, event)}` });
+        for (const event of eventChanges.added) details.push({ kind: 'event', text: t('chart-vcs.sc95b336', { p0: index + 1, p1: lineName, p2: eventLabel(type, event) }) });
+        for (const event of eventChanges.removed) details.push({ kind: 'event', text: t('chart-vcs.s2a1f6ef', { p0: index + 1, p1: lineName, p2: eventLabel(type, event) }) });
         for (const change of eventChanges.modified) {
           const fields = describeFieldChanges(change.before, change.after, EVENT_FIELD_LABELS);
-          details.push({ kind: 'event', text: `第 ${index + 1} 条线「${lineName}」：修改 ${eventLabel(type, change.after)}${fields ? `（${fields}）` : ''}` });
+          details.push({ kind: 'event', text: t('chart-vcs.s0f9390f', { p0: index + 1, p1: lineName, p2: eventLabel(type, change.after), p3: fields ? `（${fields}）` : '' }) });
         }
       }
     }
@@ -366,12 +367,12 @@ export function diffCharts(before, after) {
     details.length = 200;
     detailsTruncated = true;
   }
-  if (meta.length) summary.push(`谱面信息 ${meta.length} 项`);
+  if (meta.length) summary.push(t('chart-vcs.s73d8719', { p0: meta.length }));
   if (bpm.added || bpm.removed || bpm.modified) summary.push(`BPM +${bpm.added} -${bpm.removed} ~${bpm.modified}`);
-  if (lines.added || lines.removed || lines.modified) summary.push(`判定线 +${lines.added} -${lines.removed} ~${lines.modified}`);
-  if (notes.added || notes.removed || notes.modified) summary.push(`音符 +${notes.added} -${notes.removed} ~${notes.modified}`);
-  if (events.added || events.removed || events.modified) summary.push(`事件 +${events.added} -${events.removed} ~${events.modified}`);
-  if (other.length) summary.push(`其他谱面数据 ${other.length} 项`);
+  if (lines.added || lines.removed || lines.modified) summary.push(t('chart-vcs.s0dabef6', { p0: lines.added, p1: lines.removed, p2: lines.modified }));
+  if (notes.added || notes.removed || notes.modified) summary.push(t('chart-vcs.s071d67e', { p0: notes.added, p1: notes.removed, p2: notes.modified }));
+  if (events.added || events.removed || events.modified) summary.push(t('chart-vcs.sb3afc70', { p0: events.added, p1: events.removed, p2: events.modified }));
+  if (other.length) summary.push(t('chart-vcs.s0afb0bf', { p0: other.length }));
   const total = meta.length + bpm.added + bpm.removed + bpm.modified + lines.added + lines.removed + lines.modified + notes.added + notes.removed + notes.modified + events.added + events.removed + events.modified + other.length;
   return { meta, bpm, lines, notes, events, other, details, detailsTruncated, summary, total };
 }
@@ -673,7 +674,7 @@ function chartMergeConflict(conflict, merged, indices) {
   const result = cloneValue(conflict), path = conflict.pathArray;
   if (path[0] === 'judgeLineList') {
     if (path[1] === '$order') {
-      result.path = 'judgeLineList（排列顺序）'; result.pathArray = ['judgeLineList'];
+      result.path = t('chart-vcs.s3fb39f9'); result.pathArray = ['judgeLineList'];
       for (const side of ['base', 'ours', 'theirs']) {
         const graph = { ...merged.judgeLineList, $order: conflict[side] };
         result[side] = restoreLineGraph({ ...merged, judgeLineList: graph }).chart.judgeLineList;
@@ -719,10 +720,10 @@ export function assertMergedLineParents(chart) {
     const chain = [];
     let current = index;
     while (current !== -1 && state[current] !== 2) {
-      if (state[current] === 1) throw new Error('合并后的父线关系形成循环，请修改分支中的父线设置后重试');
+      if (state[current] === 1) throw new Error(t('chart-vcs.s49405e4'));
       state[current] = 1; chain.push(current);
       const parent = lines[current]?.father ?? -1;
-      if (!Number.isInteger(parent) || parent < -1 || parent >= lines.length) throw new Error('合并后的父线索引无效，请检查分支中的判定线引用');
+      if (!Number.isInteger(parent) || parent < -1 || parent >= lines.length) throw new Error(t('chart-vcs.sb10b60e'));
       current = parent;
     }
     for (const entry of chain) state[entry] = 2;

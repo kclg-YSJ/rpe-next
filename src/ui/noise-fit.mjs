@@ -7,6 +7,7 @@ import { beatInputControl } from './beat-input.mjs';
 import { createEasingPicker, EASING_NAMES } from './easing-picker.mjs';
 import { prepareCanvas } from './timeline.mjs';
 import { editorSkinContext } from './editor-skin-canvas.mjs';
+import { t } from '../i18n.mjs';
 
 const button = (text, run) => { const element = document.createElement('button'); element.type = 'button'; element.textContent = text; element.onclick = run; return element; };
 const limited = (value, low, high) => Math.max(low, Math.min(high, value));
@@ -20,7 +21,7 @@ export class NoiseFitPanel {
     this.fonts = new Map(['sans-serif', 'Microsoft YaHei', 'Arial', 'Times New Roman', 'Segoe UI Emoji', 'RPEGame'].map(name => [name, name]));
     this.generation = 0; this.imageGeneration = 0; this.progress = 0.5; this.lastLinked = true; this.activeLinked = true; this.easingState = { open: false };
     this.overlay = document.createElement('canvas'); this.overlay.className = 'noise-fit-overlay'; this.overlay.hidden = true;
-    this.overlay.setAttribute('aria-label', '噪域图案布局：拖动中心移动、右下角缩放、上方圆点旋转'); stage.append(this.overlay);
+    this.overlay.setAttribute('aria-label', t('noise-fit.s1358840')); stage.append(this.overlay);
     this.overlay.onpointerdown = event => this.down(event);
     this.overlay.onpointermove = event => this.move(event);
     this.overlay.onpointerup = event => this.endDrag(event);
@@ -80,89 +81,89 @@ export class NoiseFitPanel {
   render() {
     this.host.replaceChildren(); this.controls = new Map();
     this.scroll = document.createElement('div'); this.scroll.className = 'noise-fit-scroll'; this.host.append(this.scroll);
-    const title = document.createElement('div'); title.className = 'panel-title'; title.textContent = '噪域图案'; this.scroll.append(title);
+    const title = document.createElement('div'); title.className = 'panel-title'; title.textContent = t('noise-fit.s9835372'); this.scroll.append(title);
     const modes = document.createElement('div'); modes.className = 'noise-fit-modes'; this.scroll.append(modes);
-    for (const [mode, text] of [['text', '文字'], ['image', '图片']]) {
+    for (const [mode, text] of [['text', t('noise-fit.sf4d3dab')], ['image', t('noise-fit.sbe8da62')]]) {
       const choice = button(text, () => { this.options.mode = mode; this.render(); this.refresh(); }); choice.classList.toggle('active', this.options.mode === mode); choice.setAttribute('aria-pressed', String(this.options.mode === mode)); modes.append(choice);
     }
     this.sourceCanvas = document.createElement('canvas'); this.sourceCanvas.width = 480; this.sourceCanvas.height = 180; this.sourceCanvas.className = 'noise-fit-source';
-    this.sourceCanvas.setAttribute('aria-label', '二值化图案和矩形分布预览'); this.scroll.append(this.sourceCanvas);
+    this.sourceCanvas.setAttribute('aria-label', t('noise-fit.s3624824')); this.scroll.append(this.sourceCanvas);
     const source = document.createElement('div'); this.scroll.append(source);
     if (this.options.mode === 'text') {
-      const text = document.createElement('textarea'); text.rows = 3; text.maxLength = 1000; text.value = this.options.text; text.setAttribute('aria-label', '噪域拟合文字');
+      const text = document.createElement('textarea'); text.rows = 3; text.maxLength = 1000; text.value = this.options.text; text.setAttribute('aria-label', t('noise-fit.s09118cd'));
       text.oninput = () => { this.options.text = text.value; this.refresh(); }; source.append(text);
-      this.field(source, 'font', '字体', { choices: [...this.fonts], refit: true });
+      this.field(source, 'font', t('noise-fit.sb50d4d8'), { choices: [...this.fonts], refit: true });
       const customFont = document.createElement('input'); customFont.type = 'file'; customFont.accept = '.ttf,.otf,.woff,.woff2'; customFont.hidden = true;
-      customFont.setAttribute('aria-label', '噪域图案字体文件');
-      customFont.onchange = () => this.loadFont(customFont.files[0]); source.append(button('导入本地字体', () => customFont.click()), customFont);
-      this.field(source, 'spacing', '行距', { min: 0.5, max: 4, step: 0.05, refit: true });
+      customFont.setAttribute('aria-label', t('noise-fit.saa55f43'));
+      customFont.onchange = () => this.loadFont(customFont.files[0]); source.append(button(t('noise-fit.s5b8a1ce'), () => customFont.click()), customFont);
+      this.field(source, 'spacing', t('noise-fit.s514b541'), { min: 0.5, max: 4, step: 0.05, refit: true });
     } else {
       const file = document.createElement('input'); file.type = 'file'; file.accept = 'image/png,image/jpeg,image/webp,image/bmp,image/gif,image/avif'; file.hidden = true;
-      file.setAttribute('aria-label', '噪域拟合图片'); file.onchange = () => this.loadImage(file.files[0]); source.append(button('选择本地图片', () => file.click()), file);
-      const name = document.createElement('p'); name.className = 'hint'; name.textContent = this.imageName || '支持 PNG、JPEG、WebP、BMP、GIF、AVIF；透明像素保留为空白。'; source.append(name);
-      this.field(source, 'polarity', '图案前景', { choices: [['dark', '深色部分'], ['light', '浅色部分'], ['alpha', '不透明部分']], refit: true });
-      this.field(source, 'invertImage', '反选二值图案', { type: 'checkbox', refit: true });
+      file.setAttribute('aria-label', t('noise-fit.s08280ad')); file.onchange = () => this.loadImage(file.files[0]); source.append(button(t('noise-fit.sf40986d'), () => file.click()), file);
+      const name = document.createElement('p'); name.className = 'hint'; name.textContent = this.imageName || t('noise-fit.s25e40e2'); source.append(name);
+      this.field(source, 'polarity', t('noise-fit.s0e0a151'), { choices: [['dark', t('noise-fit.s0f7f96b')], ['light', t('noise-fit.sb84b26b')], ['alpha', t('noise-fit.s020899b')]], refit: true });
+      this.field(source, 'invertImage', t('noise-fit.s8e0c890'), { type: 'checkbox', refit: true });
     }
-    this.field(this.scroll, 'precision', '精细程度（长边格数）', { type: 'range', min: 16, max: 512, step: 1, refit: true });
+    this.field(this.scroll, 'precision', t('noise-fit.s8844342'), { type: 'range', min: 16, max: 512, step: 1, refit: true });
     this.precisionValue = document.createElement('p'); this.precisionValue.className = 'hint'; this.scroll.append(this.precisionValue);
-    this.field(this.scroll, 'threshold', '二值化阈值', { type: 'range', min: 1, max: 254, step: 1, refit: true });
-    this.field(this.scroll, 'merge', '合并相邻矩形', { type: 'checkbox', refit: true });
-    this.field(this.scroll, 'maxSpan', '矩形最大边长（格）', { min: 1, max: 512, step: 1, refit: true });
-    this.field(this.scroll, 'trim', '裁掉外围空白', { type: 'checkbox', refit: true });
-    this.heading('布局');
-    this.field(this.scroll, 'width', '图案宽度', { min: 1, max: 20000 });
-    this.field(this.scroll, 'x', '中心 X'); this.field(this.scroll, 'y', '中心 Y'); this.field(this.scroll, 'rotation', '整体旋转（顺时针）');
-    this.scroll.append(button('居中并适配画面', () => {
+    this.field(this.scroll, 'threshold', t('noise-fit.s32c0bdc'), { type: 'range', min: 1, max: 254, step: 1, refit: true });
+    this.field(this.scroll, 'merge', t('noise-fit.s9cce970'), { type: 'checkbox', refit: true });
+    this.field(this.scroll, 'maxSpan', t('noise-fit.sb7bfaeb'), { min: 1, max: 512, step: 1, refit: true });
+    this.field(this.scroll, 'trim', t('noise-fit.s31fb756'), { type: 'checkbox', refit: true });
+    this.heading(t('noise-fit.sb0961e1'));
+    this.field(this.scroll, 'width', t('noise-fit.s3071ee0'), { min: 1, max: 20000 });
+    this.field(this.scroll, 'x', t('noise-fit.s902ce65')); this.field(this.scroll, 'y', t('noise-fit.s97b96fe')); this.field(this.scroll, 'rotation', t('noise-fit.sd555d09'));
+    this.scroll.append(button(t('noise-fit.s30ee1a6'), () => {
       this.options.x = this.options.y = this.options.rotation = 0;
       this.options.width = this.fit ? Math.min(1100, 700 * this.fit.width / this.fit.height) : 900;
       this.syncControls(['x', 'y', 'width', 'rotation']); this.rebuild();
     }));
-    this.field(this.scroll, 'layerId', '目标噪域层', { choices: noiseLayers(this.getContext().session.chart).map(layer => [layer.id, layer.name]) });
-    this.field(this.scroll, 'name', '名称前缀', { type: 'text' }); this.field(this.scroll, 'invert', '生成反转噪域', { type: 'checkbox' });
-    this.heading('出现与生命周期');
-    this.field(this.scroll, 'first', '第一个出现拍', { beat: true });
-    this.field(this.scroll, 'last', '最后一个出现拍', { beat: true });
-    this.scroll.append(button('末拍跟随首拍', () => { this.lastLinked = true; this.options.last = this.options.first; this.syncControls(['last']); this.rebuild(); }));
-    this.field(this.scroll, 'duration', '每块存在时间（拍）', { beat: true });
-    this.field(this.scroll, 'reveal', '浮现方式', { choices: NOISE_REVEALS });
-    this.field(this.scroll, 'easingType', '出现缓动', { choices: EASING_NAMES.map((name, index) => [index + 1, `${index + 1} · ${name}`]) });
+    this.field(this.scroll, 'layerId', t('noise-fit.s660dfdf'), { choices: noiseLayers(this.getContext().session.chart).map(layer => [layer.id, layer.name]) });
+    this.field(this.scroll, 'name', t('noise-fit.sdd4f174'), { type: 'text' }); this.field(this.scroll, 'invert', t('noise-fit.s1bd19ee'), { type: 'checkbox' });
+    this.heading(t('noise-fit.s58df1a9'));
+    this.field(this.scroll, 'first', t('noise-fit.sa3c43dd'), { beat: true });
+    this.field(this.scroll, 'last', t('noise-fit.s173b4c0'), { beat: true });
+    this.scroll.append(button(t('noise-fit.s7539ce7'), () => { this.lastLinked = true; this.options.last = this.options.first; this.syncControls(['last']); this.rebuild(); }));
+    this.field(this.scroll, 'duration', t('noise-fit.sc4f8d6f'), { beat: true });
+    this.field(this.scroll, 'reveal', t('noise-fit.sac7b420'), { choices: NOISE_REVEALS });
+    this.field(this.scroll, 'easingType', t('noise-fit.sa629734'), { choices: EASING_NAMES.map((name, index) => [index + 1, `${index + 1} · ${name}`]) });
     const picker = createEasingPicker(Number(this.options.easingType), value => { this.options.easingType = value; this.syncControls(['easingType']); this.rebuild(); }, this.easingState); this.scroll.append(picker.element);
-    this.field(this.scroll, 'seed', '随机种子', { min: 0, max: 4294967295, step: 1 });
-    this.scroll.append(button('随机种子', () => { this.options.seed = crypto.getRandomValues(new Uint32Array(1))[0]; this.syncControls(['seed']); this.rebuild(); }));
-    this.heading('激活');
-    this.field(this.scroll, 'active', '生成激活时间段', { type: 'checkbox' });
-    this.field(this.scroll, 'activeStart', '相对出现后的激活起拍', { beat: true }); this.field(this.scroll, 'activeEnd', '相对出现后的激活止拍', { beat: true });
-    this.field(this.scroll, 'readyFlash', '预备闪烁（秒）', { min: 0, max: 600, step: 0.001 });
-    this.scroll.append(button('激活覆盖整个存在时间', () => { this.fullActivation(); this.rebuild(); }));
-    this.heading('实时预览');
-    this.field(this.scroll, 'show', '左侧显示实时预览', { type: 'checkbox' });
-    this.playButton = button(this.options.animate ? 'Ⅱ 暂停演示' : '▶ 播放演示', () => { this.fullPreview = false; this.options.animate = !this.options.animate; this.animationEpoch = null; this.updatePlay(); this.invalidate(); });
+    this.field(this.scroll, 'seed', t('noise-fit.sed73926'), { min: 0, max: 4294967295, step: 1 });
+    this.scroll.append(button(t('noise-fit.sed73926'), () => { this.options.seed = crypto.getRandomValues(new Uint32Array(1))[0]; this.syncControls(['seed']); this.rebuild(); }));
+    this.heading(t('noise-fit.s4c25820'));
+    this.field(this.scroll, 'active', t('noise-fit.sbc5a4e1'), { type: 'checkbox' });
+    this.field(this.scroll, 'activeStart', t('noise-fit.s5c123f9'), { beat: true }); this.field(this.scroll, 'activeEnd', t('noise-fit.s0e93a7f'), { beat: true });
+    this.field(this.scroll, 'readyFlash', t('noise-fit.s0c9f597'), { min: 0, max: 600, step: 0.001 });
+    this.scroll.append(button(t('noise-fit.s5cfdf1e'), () => { this.fullActivation(); this.rebuild(); }));
+    this.heading(t('noise-fit.sf95aacf'));
+    this.field(this.scroll, 'show', t('noise-fit.s658d908'), { type: 'checkbox' });
+    this.playButton = button(this.options.animate ? t('noise-fit.s41852e3') : t('noise-fit.s1d50e9d'), () => { this.fullPreview = false; this.options.animate = !this.options.animate; this.animationEpoch = null; this.updatePlay(); this.invalidate(); });
     this.progressInput = document.createElement('input'); this.progressInput.type = 'range'; this.progressInput.min = 0; this.progressInput.max = 1; this.progressInput.step = 0.001;
-    this.progressInput.value = this.progress; this.progressInput.setAttribute('aria-label', '噪域图案预览进度');
+    this.progressInput.value = this.progress; this.progressInput.setAttribute('aria-label', t('noise-fit.s87e8387'));
     this.progressInput.oninput = () => { this.fullPreview = false; this.options.animate = false; this.progress = Number(this.progressInput.value); this.animationEpoch = null; this.updatePlay(); this.invalidate(); };
     this.previewTime = document.createElement('output'); this.previewTime.className = 'hint';
     const playback = document.createElement('div'); playback.className = 'noise-fit-playback'; playback.append(this.playButton, this.progressInput, this.previewTime); this.scroll.append(playback);
-    this.scroll.append(button('查看完整形状', () => { this.options.animate = false; this.progress = 0.5; this.fullPreview = true; this.updatePlay(); this.invalidate(); }));
-    const help = document.createElement('details'); const summary = document.createElement('summary'); summary.textContent = '拟合与时间说明';
+    this.scroll.append(button(t('noise-fit.sc0ccad2'), () => { this.options.animate = false; this.progress = 0.5; this.fullPreview = true; this.updatePlay(); this.invalidate(); }));
+    const help = document.createElement('details'); const summary = document.createElement('summary'); summary.textContent = t('noise-fit.s0e0472c');
     const description = document.createElement('p'); description.className = 'hint';
-    description.textContent = '提高精细程度可保留细节，也会增加噪域。矩形完整覆盖二值图案，不填充孔洞；相邻格可合并，减小矩形最大边长可让浮现更细腻。首尾出现拍控制每块的出生时间，各块分别存活指定拍数；若存在时间短于整个浮现过程，早出现的块可能先消失。缓动图的横轴是已过去的时间比例，纵轴是已出现的数量比例：Out 型先快后慢，In 型先慢后快。回弹、弹性按第一次达到对应比例的时刻安排，已经出现的块不因曲线回落而撤回；首块和末块保留指定的首尾出现拍。未编辑的末拍跟随首拍；激活范围相对每一块的出生时刻。左侧拖动图案移动、方块缩放、圆点旋转；滚轮缩放图案。预览不写入谱面，图片和字体仅在本机使用，生成结果是可独立编辑的普通噪域。';
+    description.textContent = t('noise-fit.sd39782e');
     help.append(summary, description); this.scroll.append(help);
     const footer = document.createElement('div'); footer.className = 'noise-fit-footer';
     this.message = document.createElement('p'); this.message.className = 'hint'; this.message.setAttribute('role', 'status');
     this.count = document.createElement('strong'); this.count.setAttribute('aria-live', 'polite');
-    this.applyButton = button('生成噪域', () => this.apply()); this.applyButton.className = 'primary'; this.applyButton.disabled = true;
-    footer.append(this.count, this.message, button('返回谱面工具', () => this.activate('chart')), this.applyButton); this.host.append(footer); this.updateVisibility();
+    this.applyButton = button(t('noise-fit.s6cbec60'), () => this.apply()); this.applyButton.className = 'primary'; this.applyButton.disabled = true;
+    footer.append(this.count, this.message, button(t('noise-fit.sb3669b2'), () => this.activate('chart')), this.applyButton); this.host.append(footer); this.updateVisibility();
   }
 
   heading(text) { const heading = document.createElement('h3'); heading.textContent = text; this.scroll.append(heading); }
   syncControls(keys) { for (const key of keys) { const control = this.controls.get(key); if (control) control.value = this.options[key]; } }
   fullActivation() { this.activeLinked = true; this.options.activeStart = '0:0/1'; this.options.activeEnd = this.options.duration; this.syncControls(['activeStart', 'activeEnd']); }
-  updatePlay() { if (this.playButton) this.playButton.textContent = this.options.animate ? 'Ⅱ 暂停演示' : '▶ 播放演示'; }
+  updatePlay() { if (this.playButton) this.playButton.textContent = this.options.animate ? t('noise-fit.s41852e3') : t('noise-fit.s1d50e9d'); }
   updateVisibility() {
     for (const key of ['activeStart', 'activeEnd', 'readyFlash']) if (this.controls.get(key)) this.controls.get(key).disabled = !this.options.active;
     if (this.controls.get('maxSpan')) this.controls.get('maxSpan').disabled = !this.options.merge;
     if (this.controls.get('seed')) this.controls.get('seed').closest('.field').hidden = this.options.reveal !== 'random';
-    if (this.precisionValue) this.precisionValue.textContent = `长边 ${this.options.precision} 格 · 阈值 ${this.options.threshold} / 255`;
+    if (this.precisionValue) this.precisionValue.textContent = t('noise-fit.sc9514ab', { p0: this.options.precision, p1: this.options.threshold });
   }
 
   async loadFont(file) {
@@ -171,7 +172,7 @@ export class NoiseFitPanel {
       const name = 'NoiseFitFont' + this.fonts.size; const font = new FontFace(name, await file.arrayBuffer()); await font.load(); document.fonts.add(font);
       this.fonts.set(name, file.name); this.options.font = name;
       if (this.active) { this.render(); this.refresh(); }
-    } catch (error) { this.fail('字体载入失败：' + error.message); }
+    } catch (error) { this.fail(t('noise-fit.s0823434') + error.message); }
   }
 
   async loadImage(file) {
@@ -179,32 +180,32 @@ export class NoiseFitPanel {
     try {
       const bitmap = await createImageBitmap(file);
       if (generation !== this.imageGeneration) { bitmap.close(); return; }
-      if (bitmap.width * bitmap.height > 64000000) { bitmap.close(); throw new Error('图片超过 6400 万像素，请先缩小图片'); }
+      if (bitmap.width * bitmap.height > 64000000) { bitmap.close(); throw new Error(t('noise-fit.s51a96aa')); }
       this.bitmap?.close(); this.bitmap = bitmap; this.imageName = file.name;
       if (this.active) { this.render(); this.refresh(); }
-    } catch (error) { if (generation === this.imageGeneration) this.fail('图片载入失败：' + error.message); }
+    } catch (error) { if (generation === this.imageGeneration) this.fail(t('noise-fit.s0d557ab') + error.message); }
   }
 
   fail(message) { this.previewChart = null; this.areas = null; this.applyButton.disabled = true; this.message.textContent = message; this.message.classList.add('error'); this.overlay.hidden = true; this.invalidate(); }
   refresh() {
-    this.cancel(); this.fit = null; this.previewChart = null; this.areas = null; this.applyButton.disabled = true; this.count.textContent = '计算中…'; this.message.textContent = '正在拟合图案…'; this.message.classList.remove('error'); this.overlay.hidden = true; this.invalidate();
+    this.cancel(); this.fit = null; this.previewChart = null; this.areas = null; this.applyButton.disabled = true; this.count.textContent = t('noise-fit.s7011734'); this.message.textContent = t('noise-fit.s98445c4'); this.message.classList.remove('error'); this.overlay.hidden = true; this.invalidate();
     if (!this.active) return; const generation = this.generation;
     this.timer = setTimeout(() => this.calculate(generation).catch(error => { if (generation === this.generation) this.fail(error.message); }), 130);
   }
 
   async rasterize() {
     const { precision, mode, text, font, spacing } = this.options;
-    if (!Number.isInteger(precision) || precision < 16 || precision > 512) throw new Error('精细程度须为 16–512 格');
+    if (!Number.isInteger(precision) || precision < 16 || precision > 512) throw new Error(t('noise-fit.s0436b66'));
     const raster = document.createElement('canvas'); const context = raster.getContext('2d', { willReadFrequently: true });
     if (mode === 'image') {
-      if (!this.bitmap) throw new Error('请先选择本地图片');
+      if (!this.bitmap) throw new Error(t('noise-fit.s29a36bd'));
       const scale = precision / Math.max(this.bitmap.width, this.bitmap.height);
       raster.width = Math.max(1, Math.round(this.bitmap.width * scale)); raster.height = Math.max(1, Math.round(this.bitmap.height * scale));
       context.drawImage(this.bitmap, 0, 0, raster.width, raster.height);
     } else {
-      if (!text.trim()) throw new Error('请输入可见文字');
-      const lines = text.split(/\r?\n/); if (lines.length > 16 || text.length > 1000) throw new Error('一次最多拟合 16 行、1000 个字符');
-      if (!Number.isFinite(spacing) || spacing < 0.5 || spacing > 4) throw new Error('行距须在 0.5–4 之间');
+      if (!text.trim()) throw new Error(t('noise-fit.s95e693e'));
+      const lines = text.split(/\r?\n/); if (lines.length > 16 || text.length > 1000) throw new Error(t('noise-fit.s6c053ff'));
+      if (!Number.isFinite(spacing) || spacing < 0.5 || spacing > 4) throw new Error(t('noise-fit.s9624a79'));
       await document.fonts.load(`96px "${font}"`, text);
       context.font = `96px "${font}", sans-serif`; const metrics = lines.map(line => context.measureText(line));
       const ascent = Math.max(1, ...metrics.map(metric => metric.actualBoundingBoxAscent || 72)); const descent = Math.max(1, ...metrics.map(metric => metric.actualBoundingBoxDescent || 18));
@@ -221,7 +222,7 @@ export class NoiseFitPanel {
   async calculate(generation) {
     const raster = await this.rasterize(); if (generation !== this.generation || !this.active) return;
     const worker = new Worker(new URL('../core/noise-fit-worker.mjs', import.meta.url), { type: 'module' }); this.worker = worker;
-    worker.onerror = () => { if (generation === this.generation) { this.cancel(); this.fail('后台拟合失败，请重新调整参数'); } };
+    worker.onerror = () => { if (generation === this.generation) { this.cancel(); this.fail(t('noise-fit.s3b85eed')); } };
     worker.onmessage = ({ data }) => {
       worker.terminate(); if (this.worker === worker) this.worker = null;
       if (generation !== this.generation || !this.active) return;
@@ -240,7 +241,7 @@ export class NoiseFitPanel {
     }
     values.easingType = Number(values.easingType);
     if (!values.active) values.readyFlash = 0;
-    if (!Number.isInteger(values.seed) || values.seed < 0 || values.seed > 4294967295) throw new Error('随机种子须为 0–4294967295 的整数');
+    if (!Number.isInteger(values.seed) || values.seed < 0 || values.seed > 4294967295) throw new Error(t('noise-fit.s55e4d0c'));
     return values;
   }
 
@@ -253,10 +254,10 @@ export class NoiseFitPanel {
       const values = this.values(); this.areas = fittedNoiseAreas(this.fit, values);
       this.previewChart = noiseFitChart(session.chart, this.areas);
       this.fullChart = null;
-      this.timing = values; this.animationEpoch = null; this.count.textContent = `${this.areas.length} 个噪域`;
-      this.message.textContent = `二值图案 ${this.fit.width} × ${this.fit.height} 格 · ${this.fit.pixels} 个前景格 · 修改参数实时更新，生成前不写入谱面。`;
-      this.message.classList.remove('error'); this.applyButton.disabled = false; this.applyButton.textContent = `生成 ${this.areas.length} 个噪域`; this.invalidate();
-    } catch (error) { this.count.textContent = `${this.fit.rectangles.length} 个噪域`; this.fail(error.message); }
+      this.timing = values; this.animationEpoch = null; this.count.textContent = t('noise-fit.s8256364', { p0: this.areas.length });
+      this.message.textContent = t('noise-fit.s6350d4f', { p0: this.fit.width, p1: this.fit.height, p2: this.fit.pixels });
+      this.message.classList.remove('error'); this.applyButton.disabled = false; this.applyButton.textContent = t('noise-fit.sbda110c', { p0: this.areas.length }); this.invalidate();
+    } catch (error) { this.count.textContent = t('noise-fit.se7ee071', { p0: this.fit.rectangles.length }); this.fail(error.message); }
   }
 
   sync() {
@@ -286,7 +287,7 @@ export class NoiseFitPanel {
     if (this.options.animate && !playing && !this.fullPreview) this.progress = ((timestamp - this.animationEpoch) / 1000 % (end - begin + 0.5)) / (end - begin);
     let viewSeconds = playing ? seconds : this.fullPreview ? tempo.seconds(this.timing.last) : begin + Math.min(1, this.progress) * (end - begin);
     if (this.fullPreview && this.timing.first === this.timing.last) viewSeconds += Math.min(0.001, (end - begin) / 2);
-    this.progressInput.value = Math.min(1, this.progress); this.previewTime.textContent = this.fullPreview ? '完整形状（仅检查布局，不代表同一时刻全部存活）' : `预览拍数 ${formatBeat(fromNumber(tempo.beat(viewSeconds)))}`;
+    this.progressInput.value = Math.min(1, this.progress); this.previewTime.textContent = this.fullPreview ? t('noise-fit.se3a491e') : t('noise-fit.s8468a30', { p0: formatBeat(fromNumber(tempo.beat(viewSeconds))) });
     this.drawLayout(renderer);
     if (this.fullPreview) {
       this.fullChart ??= noiseFitChart(this.baseChart, this.areas.map(area => ({ ...area, appearTime: fromNumber(this.timing.first), disappearTime: fromNumber(this.timing.last + this.timing.duration),
@@ -347,10 +348,10 @@ export class NoiseFitPanel {
   apply() {
     try {
       if (!this.active || !this.areas || this.applyButton.disabled) return;
-      const { session } = this.getContext(); if (session !== this.owner) throw new Error('谱面已切换，请重新打开工具');
+      const { session } = this.getContext(); if (session !== this.owner) throw new Error(t('noise-fit.s6b2e64b'));
       const areas = this.areas; const next = noiseFitChart(session.chart, areas);
       this.pause(); this.active = false; this.cancel(); this.previewChart = null; this.overlay.hidden = true; this.stage.closest('.editor').classList.remove('noise-fit-mode');
-      session.commit('噪域图案生成', next); this.activate('chart'); this.notify(`已生成 ${areas.length} 个噪域，可一次撤销`, 'success'); this.invalidate();
+      session.commit(t('noise-fit.sd15c8bd'), next); this.activate('chart'); this.notify(t('noise-fit.sa576945', { p0: areas.length }), 'success'); this.invalidate();
     } catch (error) { this.fail(error.message); this.notify(error.message, 'error'); }
   }
 }

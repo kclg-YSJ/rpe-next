@@ -15,7 +15,7 @@ await mkdir(output, { recursive: true });
 await cp(runtime, output, { recursive: true, filter: path => !path.endsWith('default_app.asar') });
 await rename(join(output, 'electron.exe'), join(output, 'RePhiEdit-Next.exe'));
 const application = join(output, 'resources', 'app');
-for (const name of ['desktop', 'src/core', 'src/application', 'src/platform', 'src/ui', 'assets', 'index.html', 'styles.css', 'LICENSE', 'NOTICE', 'protocols', 'schemas', 'tools/smoke-mods.mjs', 'tools/smoke-native.mjs', 'tools/smoke-asset-library.mjs', 'tools/smoke-settings-renderer.js', 'tools/smoke-saving.mjs']) {
+for (const name of ['desktop', 'src/core', 'src/application', 'src/platform', 'src/ui', 'src/locales', 'src/i18n.mjs', 'assets', 'index.html', 'styles.css', 'LICENSE', 'NOTICE', 'protocols', 'schemas', 'tools/smoke-mods.mjs', 'tools/smoke-native.mjs', 'tools/smoke-asset-library.mjs', 'tools/smoke-settings-renderer.js', 'tools/smoke-saving.mjs']) {
   await mkdir(dirname(join(application, name)), { recursive: true });
   await cp(join(root, name), join(application, name), { recursive: true });
 }

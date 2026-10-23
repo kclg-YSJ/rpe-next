@@ -1,6 +1,7 @@
+import { t } from '../i18n.mjs';
 export const UI_BINDINGS = [
-  ['pause', '暂停'], ['combonumber', '连击数'], ['combo', 'combo 文字'], ['score', '分数'],
-  ['bar', '进度条'], ['name', '曲名'], ['level', '难度'],
+  ['pause', t('game-ui.s130448b')], ['combonumber', t('game-ui.s3c215d3')], ['combo', t('game-ui.s4d9dba2')], ['score', t('game-ui.sda335e2')],
+  ['bar', t('game-ui.s6eb113e')], ['name', t('game-ui.scaeac8b')], ['level', t('game-ui.s205aff9')],
 ];
 
 const layout = {

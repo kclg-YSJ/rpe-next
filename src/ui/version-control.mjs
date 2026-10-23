@@ -4,6 +4,7 @@ import { serializeChart } from '../core/chart.mjs';
 import { createMemoryVersionStore, openVersionStore } from '../platform/version-store.mjs';
 import { download } from '../platform/files.mjs';
 import { showDialog } from './dialog.mjs';
+import { t } from '../i18n.mjs';
 
 const SVG = 'http://www.w3.org/2000/svg';
 const COLORS = ['#FFB000', '#DC267F', '#994F00', '#40B0A6', '#B66DFF', '#72D6A8', '#8CB4FF', '#FF9A8A'];
@@ -45,20 +46,20 @@ function button(label, onClick, options = {}) {
 }
 
 function formatDate(timestamp) {
-  if (!Number.isFinite(timestamp)) return '未知时间';
+  if (!Number.isFinite(timestamp)) return t('version-control.s53695a8');
   return new Date(timestamp).toLocaleString();
 }
 
 function jsonPreview(value, limit = 120) {
-  if (value === undefined) return '（未定义）';
+  if (value === undefined) return t('version-control.s258f5f3');
   let text;
   try { text = JSON.stringify(value); } catch { text = String(value); }
-  if (text === undefined) return '（未定义）';
+  if (text === undefined) return t('version-control.s258f5f3');
   return text.length > limit ? `${text.slice(0, limit - 1)}…` : text;
 }
 
 function assetLabel(entry) {
-  if (!entry) return '（已删除）';
+  if (!entry) return t('version-control.sbecd43c');
   return `${entry.path} · ${shortId(entry.blob)} · ${entry.size} B`;
 }
 
@@ -104,15 +105,15 @@ export class VersionControlPanel {
   build() {
     this.host.replaceChildren();
     this.host.classList.add('vcs-panel');
-    this.branchLabel = el('strong', { className: 'vcs-branch-name', text: '未初始化' });
+    this.branchLabel = el('strong', { className: 'vcs-branch-name', text: t('version-control.se15f364') });
     this.headState = el('span', { className: 'vcs-state' });
     const header = el('div', { className: 'vcs-head' },
       el('div', { className: 'vcs-head-main' }, this.branchLabel, this.headState),
-      button('刷新', () => this.refresh().catch(error => this.report(error)), { title: '重新读取仓库状态' })
+      button(t('version-control.s38108ea'), () => this.refresh().catch(error => this.report(error)), { title: t('version-control.s9c64f72') })
     );
     this.tabs = new Map();
     const tabs = el('div', { className: 'vcs-tabs', attrs: { role: 'tablist' } });
-    for (const [name, label] of [['graph', '图表'], ['changes', '更改'], ['branches', '分支'], ['stash', '储藏'], ['reflog', '日志']]) {
+    for (const [name, label] of [['graph', t('version-control.sa66b71e')], ['changes', t('version-control.s9d83d54')], ['branches', t('version-control.s2f6f9d5')], ['stash', t('version-control.s9df47fb')], ['reflog', t('version-control.s4de5089')]]) {
       const tab = button(label, () => {
         this.tab = name;
         this.error = null;
@@ -150,7 +151,7 @@ export class VersionControlPanel {
     this.stashDraft = '';
     this.mergeTarget = '';
     this.error = null;
-    this.branchLabel.textContent = '未初始化';
+    this.branchLabel.textContent = t('version-control.se15f364');
     this.headState.textContent = '';
     this.banner.hidden = true;
     this.body.replaceChildren();
@@ -191,30 +192,30 @@ export class VersionControlPanel {
       this.store = createMemoryVersionStore();
       this.repo = new ChartRepository(this.store, repoId);
       await this.repo.init();
-      this.notify('版本数据库不可用，已切换到临时内存仓库；关闭页面后会丢失版本记录。', 'warning', 8000);
+      this.notify(t('version-control.s2688b69'), 'warning', 8000);
       this.error = error.message;
     }
     const repo = await this.repo.read();
     const hasCommit = Object.values(repo.branches ?? {}).some(Boolean) || Boolean(repo.head?.commit);
     if (!hasCommit) {
       await this.repo.stage(this.snapshot());
-      await this.repo.commit({ message: '初始版本', author: repo.config?.author });
-      this.notify('已创建版本库初始提交', 'success');
+      await this.repo.commit({ message: t('version-control.s24eddf1'), author: repo.config?.author });
+      this.notify(t('version-control.s1849d97'), 'success');
     }
   }
 
   async open() {
     if (!this.context.hasDocument()) {
-      this.branchLabel.textContent = '未打开谱面';
+      this.branchLabel.textContent = t('version-control.s9ee9916');
       this.headState.textContent = '';
-      this.body.replaceChildren(el('p', { className: 'vcs-empty', text: '请先打开或新建一个谱面。' }));
+      this.body.replaceChildren(el('p', { className: 'vcs-empty', text: t('version-control.sac0a9cd') }));
       return;
     }
     await this.run(async () => {
       await this.ensure();
       if (!this.store?.ephemeral) {
         try { await this.actions.persistRepoId?.(); }
-        catch (error) { this.notify(`版本库标识未能写入项目：${error.message}`, 'warning', 7000); }
+        catch (error) { this.notify(t('version-control.sf9d0085', { p0: error.message }), 'warning', 7000); }
       }
       await this.refresh();
     });
@@ -232,7 +233,7 @@ export class VersionControlPanel {
     this.workingDiff = this.tab === 'changes' ? await this.repo.workingDiff(this.snapshot()).catch(() => null) : null;
     if (!this.selectedCommit || !this.commits.some(commit => commit.id === this.selectedCommit)) this.selectedCommit = this.state.headId ?? this.commits[0]?.id ?? null;
     this.detail = this.selectedCommit ? await this.repo.diffCommit(this.selectedCommit).catch(() => null) : null;
-    if (this.authorDraft === null) this.authorDraft = { ...(repo.config?.author ?? { name: '本地用户', email: 'local@rpe-next' }) };
+    if (this.authorDraft === null) this.authorDraft = { ...(repo.config?.author ?? { name: t('version-control.sea431f3'), email: 'local@rpe-next' }) };
     this.mergeChoices.clear();
     this.render();
   }
@@ -240,20 +241,20 @@ export class VersionControlPanel {
   render() {
     if (!this.repoState) return;
     const state = this.state;
-    const branch = state?.branch ?? (state?.headId ? `游离 HEAD @ ${shortId(state.headId)}` : '未出生分支');
+    const branch = state?.branch ?? (state?.headId ? t('version-control.s5a0d1a9', { p0: shortId(state.headId) }) : t('version-control.s11b4db2'));
     this.branchLabel.textContent = branch;
-    this.branchLabel.title = state?.detached ? '当前处于游离 HEAD 状态；提交不会移动分支' : '当前分支';
+    this.branchLabel.title = state?.detached ? t('version-control.s95d239a') : t('version-control.s0eb05c8');
     const pending = (state?.staged.total ?? 0) + (state?.unstaged.total ?? 0);
-    this.headState.textContent = state?.clean ? '工作区干净' : `${pending} 项更改`;
+    this.headState.textContent = state?.clean ? t('version-control.sb7b0136') : t('version-control.s3d17c2b', { p0: pending });
     this.headState.className = `vcs-state ${state?.clean ? 'clean' : 'dirty'}`;
     for (const [name, tab] of this.tabs) {
       tab.classList.toggle('active', name === this.tab);
       tab.setAttribute('aria-selected', String(name === this.tab));
     }
     const messages = [];
-    if (this.store?.ephemeral) messages.push('当前使用临时内存版本库，刷新或关闭页面会丢失版本记录。');
-    if (this.context.isPersisted && !this.context.isPersisted()) messages.push('谱面尚未保存到谱面库：版本库当前使用临时标识，保存项目后会固定。');
-    if (this.repoState.merge) messages.push(`正在${this.repoState.merge.kind === 'merge' ? '合并' : this.repoState.merge.kind === 'cherry-pick' ? '拣选' : this.repoState.merge.kind === 'revert' ? '回退' : '操作'}：${this.repoState.merge.conflicts.length} 处冲突待解决。`);
+    if (this.store?.ephemeral) messages.push(t('version-control.s2274c6a'));
+    if (this.context.isPersisted && !this.context.isPersisted()) messages.push(t('version-control.s1dd03fe'));
+    if (this.repoState.merge) messages.push(t('version-control.s02f0023', { p0: this.repoState.merge.kind === 'merge' ? t('version-control.se5badf9') : this.repoState.merge.kind === 'cherry-pick' ? t('version-control.sdb82ac7') : this.repoState.merge.kind === 'revert' ? t('version-control.sdedece7') : t('version-control.sf3ea6d3'), p1: this.repoState.merge.conflicts.length }));
     if (this.error) messages.push(this.error);
     this.banner.textContent = messages.join(' ');
     this.banner.hidden = !messages.length;
@@ -281,7 +282,7 @@ export class VersionControlPanel {
     if (!this.state) return;
     const pending = (this.state.staged.total ?? 0) + (this.state.unstaged.total ?? 0);
     const dirty = this.context.isDirty?.();
-    this.headState.textContent = `${this.state.clean ? '工作区干净' : `${pending} 项更改`}${dirty ? ' · 编辑器未保存' : ''}`;
+    this.headState.textContent = t('version-control.s46212d2', { p0: this.state.clean ? t('version-control.sb7b0136') : t('version-control.s3d17c2b', { p0: pending }), p1: dirty ? t('version-control.s8de9a82') : '' });
     this.headState.className = `vcs-state ${this.state.clean ? 'clean' : 'dirty'}`;
   }
 
@@ -296,22 +297,22 @@ export class VersionControlPanel {
 
   renderGraphTab() {
     const pane = el('div', { className: 'vcs-pane' });
-    const scope = el('select', { value: this.scope, attrs: { 'aria-label': '历史范围' }, on: { change: event => { this.scope = event.target.value; this.refresh().catch(error => this.report(error)); } } },
-      new Option('所有引用', 'refs'), new Option('当前分支', 'current'), new Option('全部提交（含游离）', 'all'));
+    const scope = el('select', { value: this.scope, attrs: { 'aria-label': t('version-control.s98dbf1f') }, on: { change: event => { this.scope = event.target.value; this.refresh().catch(error => this.report(error)); } } },
+      new Option(t('version-control.sf473204'), 'refs'), new Option(t('version-control.s0eb05c8'), 'current'), new Option(t('version-control.s9a68427'), 'all'));
     scope.value = this.scope;
     const toolbar = el('div', { className: 'vcs-toolbar' }, scope,
-      button('刷新', () => this.refresh().catch(error => this.report(error))),
-      button('新建提交', () => { this.tab = 'changes'; this.render(); }, { className: 'primary' }));
+      button(t('version-control.s38108ea'), () => this.refresh().catch(error => this.report(error))),
+      button(t('version-control.s4c5aae4'), () => { this.tab = 'changes'; this.render(); }, { className: 'primary' }));
     const scroll = el('div', { className: 'vcs-graph-scroll' }, this.buildGraph());
     pane.append(toolbar, scroll);
     if (this.detail) pane.append(this.buildCommitDetail());
-    else if (!this.commits.length) pane.append(el('p', { className: 'vcs-empty', text: '尚无提交。切换到“更改”创建第一个版本。' }));
+    else if (!this.commits.length) pane.append(el('p', { className: 'vcs-empty', text: t('version-control.sa10743a') }));
     return pane;
   }
 
   buildGraph() {
     const layout = this.layout;
-    if (!layout?.rows.length) return el('p', { className: 'vcs-empty', text: '尚无提交。' });
+    if (!layout?.rows.length) return el('p', { className: 'vcs-empty', text: t('version-control.sdffd878') });
     const laneX = lane => LANE_WIDTH * (lane + 1);
     const colorOf = index => COLORS[index % COLORS.length];
     const labelX = LANE_WIDTH * (Math.max(1, layout.laneCount) + 1) + 8;
@@ -319,7 +320,7 @@ export class VersionControlPanel {
     const messageWidth = messageChars * 12;
     const width = labelX + 170 + messageWidth + 12;
     const height = layout.rows.length * ROW_HEIGHT + 4;
-    const svg = svgEl('svg', { class: 'vcs-graph', viewBox: `0 0 ${width} ${height}`, width, height, role: 'tree', 'aria-label': '提交图谱' });
+    const svg = svgEl('svg', { class: 'vcs-graph', viewBox: `0 0 ${width} ${height}`, width, height, role: 'tree', 'aria-label': t('version-control.s716ac28') });
     const defs = svgEl('defs');
     for (const row of layout.rows) {
       const clip = svgEl('clipPath', { id: `vcs-row-clip-${row.index}` });
@@ -448,29 +449,29 @@ export class VersionControlPanel {
     const { commit, parent, chartDiff, treeDiff } = this.detail;
     const host = el('div', { className: 'vcs-detail' });
     const refs = [];
-    for (const [name, id] of Object.entries(this.repoState.branches ?? {})) if (id === commit.id) refs.push(`分支 ${name}`);
-    for (const [name, tag] of Object.entries(this.repoState.tags ?? {})) if ((typeof tag === 'string' ? tag : tag?.commit) === commit.id) refs.push(`标签 #${name}`);
+    for (const [name, id] of Object.entries(this.repoState.branches ?? {})) if (id === commit.id) refs.push(t('version-control.s6b29789', { p0: name }));
+    for (const [name, tag] of Object.entries(this.repoState.tags ?? {})) if ((typeof tag === 'string' ? tag : tag?.commit) === commit.id) refs.push(t('version-control.scd013ed', { p0: name }));
     if (this.state?.headId === commit.id) refs.push('HEAD');
-    host.append(el('h3', { text: commit.message || '（无提交说明）' }));
+    host.append(el('h3', { text: commit.message || t('version-control.s7890f1e') }));
     host.append(el('p', { className: 'vcs-meta', text: `${shortId(commit.id)} · ${commit.author?.name ?? ''} <${commit.author?.email ?? ''}> · ${formatDate(commit.timestamp)}` }));
     if (refs.length) host.append(el('p', { className: 'vcs-refs', text: refs.join(' · ') }));
     if (commit.parents?.length) {
-      const parents = el('p', { className: 'vcs-parents' }, '父提交：');
+      const parents = el('p', { className: 'vcs-parents' }, t('version-control.scd3fadb'));
       for (const id of commit.parents) parents.append(button(shortId(id), () => this.selectCommit(id), { className: 'vcs-link' }));
       host.append(parents);
     }
     const actions = el('div', { className: 'vcs-action-grid' });
     actions.append(
-      button('检出此提交', () => this.checkoutCommit(commit.id)),
-      button('新建分支', () => this.createBranchAt(commit.id)),
-      button('新建标签', () => this.createTagAt(commit.id)),
-      button('拣选到当前分支', () => this.cherryPick(commit.id)),
-      button('反向提交（回退）', () => this.revert(commit.id)),
-      button('重置当前分支', () => this.resetTo(commit.id)),
-      button('导出此版本谱面', () => this.exportCommitChart(commit.id))
+      button(t('version-control.sa2b92b8'), () => this.checkoutCommit(commit.id)),
+      button(t('version-control.s65a957f'), () => this.createBranchAt(commit.id)),
+      button(t('version-control.s616054b'), () => this.createTagAt(commit.id)),
+      button(t('version-control.s885a9ea'), () => this.cherryPick(commit.id)),
+      button(t('version-control.s54c0e2d'), () => this.revert(commit.id)),
+      button(t('version-control.sf212b14'), () => this.resetTo(commit.id)),
+      button(t('version-control.s6968d90'), () => this.exportCommitChart(commit.id))
     );
     host.append(actions);
-    host.append(el('h4', { text: parent ? `与父提交 ${shortId(parent.id)} 的差异` : '初始提交' }));
+    host.append(el('h4', { text: parent ? t('version-control.s6a1f22b', { p0: shortId(parent.id) }) : t('version-control.s7b3ab8e') }));
     host.append(this.renderTreeDiff(treeDiff, { initial: !parent }));
     host.append(this.renderChartDiff(chartDiff));
     return host;
@@ -478,23 +479,23 @@ export class VersionControlPanel {
 
   renderTreeDiff(diff, { initial = false } = {}) {
     const host = el('div', { className: 'vcs-tree-diff' });
-    if (!diff || changeCount(diff) === 0) { host.append(el('p', { className: 'vcs-muted', text: '文件无变化。' })); return host; }
-    if (diff.chartChanged) host.append(el('div', { className: 'vcs-file-row' }, el('span', { text: '谱面 JSON' }), el('span', { className: `vcs-badge ${initial ? 'added' : 'modified'}`, text: initial ? '新增' : '已修改' })));
-    if (diff.chartNameChanged) host.append(el('div', { className: 'vcs-file-row' }, el('span', { text: '谱面文件名' }), el('span', { className: `vcs-badge ${initial ? 'added' : 'modified'}`, text: initial ? '新增' : '已修改' })));
-    if (diff.foldersChanged) host.append(el('div', { className: 'vcs-file-row' }, el('span', { text: '素材文件夹' }), el('span', { className: `vcs-badge ${initial ? 'added' : 'modified'}`, text: initial ? '新增' : '已修改' })));
-    for (const entry of diff.added ?? []) host.append(el('div', { className: 'vcs-file-row' }, el('span', { text: entry.path }), el('span', { className: 'vcs-badge added', text: '新增' })));
-    for (const entry of diff.modified ?? []) host.append(el('div', { className: 'vcs-file-row' }, el('span', { text: entry.path }), el('span', { className: 'vcs-badge modified', text: '修改' })));
-    for (const entry of diff.deleted ?? []) host.append(el('div', { className: 'vcs-file-row' }, el('span', { text: entry.path }), el('span', { className: 'vcs-badge deleted', text: '删除' })));
+    if (!diff || changeCount(diff) === 0) { host.append(el('p', { className: 'vcs-muted', text: t('version-control.sc654953') })); return host; }
+    if (diff.chartChanged) host.append(el('div', { className: 'vcs-file-row' }, el('span', { text: t('version-control.sc874113') }), el('span', { className: `vcs-badge ${initial ? 'added' : 'modified'}`, text: initial ? t('version-control.s2cd9e6c') : t('version-control.sc920e42') })));
+    if (diff.chartNameChanged) host.append(el('div', { className: 'vcs-file-row' }, el('span', { text: t('version-control.sf4769c1') }), el('span', { className: `vcs-badge ${initial ? 'added' : 'modified'}`, text: initial ? t('version-control.s2cd9e6c') : t('version-control.sc920e42') })));
+    if (diff.foldersChanged) host.append(el('div', { className: 'vcs-file-row' }, el('span', { text: t('version-control.sae2b82e') }), el('span', { className: `vcs-badge ${initial ? 'added' : 'modified'}`, text: initial ? t('version-control.s2cd9e6c') : t('version-control.sc920e42') })));
+    for (const entry of diff.added ?? []) host.append(el('div', { className: 'vcs-file-row' }, el('span', { text: entry.path }), el('span', { className: 'vcs-badge added', text: t('version-control.s2cd9e6c') })));
+    for (const entry of diff.modified ?? []) host.append(el('div', { className: 'vcs-file-row' }, el('span', { text: entry.path }), el('span', { className: 'vcs-badge modified', text: t('version-control.sc9c7751') })));
+    for (const entry of diff.deleted ?? []) host.append(el('div', { className: 'vcs-file-row' }, el('span', { text: entry.path }), el('span', { className: 'vcs-badge deleted', text: t('version-control.s3755f56') })));
     return host;
   }
 
   renderChartDiff(diff) {
     const host = el('div', { className: 'vcs-chart-diff' });
-    if (!diff || diff.total === 0) { host.append(el('p', { className: 'vcs-muted', text: '谱面语义无变化。' })); return host; }
+    if (!diff || diff.total === 0) { host.append(el('p', { className: 'vcs-muted', text: t('version-control.saf84743') })); return host; }
     const rows = [
       ['判定线', diff.lines.added, diff.lines.removed, diff.lines.modified],
-      ['音符', diff.notes.added, diff.notes.removed, diff.notes.modified],
-      ['事件', diff.events.added, diff.events.removed, diff.events.modified],
+      [t('version-control.s7ac3289'), diff.notes.added, diff.notes.removed, diff.notes.modified],
+      [t('version-control.s550e328'), diff.events.added, diff.events.removed, diff.events.modified],
       ['BPM', diff.bpm.added, diff.bpm.removed, diff.bpm.modified]
     ];
     const maximum = Math.max(1, ...rows.flatMap(row => row.slice(1)));
@@ -504,7 +505,7 @@ export class VersionControlPanel {
       const row = el('div', { className: 'vcs-diff-bar-row' });
       row.append(el('span', { className: 'vcs-diff-label', text: label }));
       const bar = el('div', { className: 'vcs-diff-bar' });
-      for (const [value, kind, title] of [[added, 'added', `新增 ${added}`], [removed, 'deleted', `删除 ${removed}`], [modified, 'modified', `修改 ${modified}`]]) {
+      for (const [value, kind, title] of [[added, 'added', t('version-control.sfc5a085', { p0: added })], [removed, 'deleted', t('version-control.sa4e7877', { p0: removed })], [modified, 'modified', t('version-control.se66b35f', { p0: modified })]]) {
         if (!value) continue;
         bar.append(el('span', { className: `vcs-diff-segment ${kind}`, title, attrs: { style: `flex:${value / maximum}` } }));
       }
@@ -514,8 +515,8 @@ export class VersionControlPanel {
     }
     host.append(bars);
     const groups = [
-      ['meta', '谱面信息'], ['bpm', 'BPM'], ['line', '判定线'],
-      ['note', '音符'], ['event', '事件'], ['other', '其他数据']
+      ['meta', t('version-control.sd352b59')], ['bpm', 'BPM'], ['line', '判定线'],
+      ['note', t('version-control.s7ac3289')], ['event', t('version-control.s550e328')], ['other', t('version-control.s6dc5366')]
     ];
     for (const [kind, label] of groups) {
       const items = (diff.details ?? []).filter(item => item.kind === kind);
@@ -524,16 +525,16 @@ export class VersionControlPanel {
         el('summary', { text: `${label}（${items.length}）` }));
       const list = el('div', { className: 'vcs-change-list' });
       for (const item of items.slice(0, 60)) list.append(el('div', { className: 'vcs-change-row', text: item.text }));
-      if (items.length > 60) list.append(el('p', { className: 'vcs-muted', text: `还有 ${items.length - 60} 项未显示。` }));
+      if (items.length > 60) list.append(el('p', { className: 'vcs-muted', text: t('version-control.s620e67d', { p0: items.length - 60 }) }));
       section.append(list);
       host.append(section);
     }
-    if (diff.detailsTruncated) host.append(el('p', { className: 'vcs-muted', text: '差异项过多，仅显示前 200 项。' }));
+    if (diff.detailsTruncated) host.append(el('p', { className: 'vcs-muted', text: t('version-control.s2cf9884') }));
     if (!diff.details?.length) {
       const samples = [
-        ['新增音符', diff.notes.samples.added], ['删除音符', diff.notes.samples.removed], ['修改音符', diff.notes.samples.modified],
-        ['新增事件', diff.events.samples.added], ['删除事件', diff.events.samples.removed], ['修改事件', diff.events.samples.modified],
-        ['修改判定线', diff.lines.samples]
+        [t('version-control.s2626236'), diff.notes.samples.added], [t('version-control.s4c896a7'), diff.notes.samples.removed], [t('version-control.sdd6a14d'), diff.notes.samples.modified],
+        [t('version-control.s377a603'), diff.events.samples.added], [t('version-control.sf10087a'), diff.events.samples.removed], [t('version-control.se841153'), diff.events.samples.modified],
+        [t('version-control.sf931048'), diff.lines.samples]
       ].filter(([, values]) => values?.length);
       if (samples.length) {
         const list = el('div', { className: 'vcs-samples' });
@@ -550,45 +551,45 @@ export class VersionControlPanel {
     const state = this.state;
     const pane = el('div', { className: 'vcs-pane' });
     const status = el('div', { className: 'vcs-status-card' });
-    status.append(el('strong', { text: state.clean ? '工作区干净' : '存在未提交更改' }));
-    status.append(el('span', { text: `暂存 ${state.staged.total} 项 · 未暂存 ${state.unstaged.total} 项` }));
+    status.append(el('strong', { text: state.clean ? t('version-control.sb7b0136') : t('version-control.s96b99cc') }));
+    status.append(el('span', { text: t('version-control.sa0f6c4d', { p0: state.staged.total, p1: state.unstaged.total }) }));
     pane.append(status);
     const actions = el('div', { className: 'vcs-action-grid' });
     actions.append(
-      button('暂存全部', () => this.stageAll()),
-      button('取消暂存', () => this.unstageAll()),
-      button('放弃未暂存更改', () => this.discardUnstaged()),
-      button('刷新', () => this.refresh().catch(error => this.report(error)))
+      button(t('version-control.sa363b33'), () => this.stageAll()),
+      button(t('version-control.s807956f'), () => this.unstageAll()),
+      button(t('version-control.s731b057'), () => this.discardUnstaged()),
+      button(t('version-control.s38108ea'), () => this.refresh().catch(error => this.report(error)))
     );
     pane.append(actions);
-    const staged = el('details', { className: 'vcs-changes-group', attrs: { open: '' } }, el('summary', { text: `暂存区（${state.staged.total}）` }), this.renderTreeDiff(state.staged));
-    const unstaged = el('details', { className: 'vcs-changes-group', attrs: { open: '' } }, el('summary', { text: `工作区（${state.unstaged.total}）` }), this.renderTreeDiff(state.unstaged));
+    const staged = el('details', { className: 'vcs-changes-group', attrs: { open: '' } }, el('summary', { text: t('version-control.s15bbe71', { p0: state.staged.total }) }), this.renderTreeDiff(state.staged));
+    const unstaged = el('details', { className: 'vcs-changes-group', attrs: { open: '' } }, el('summary', { text: t('version-control.sa3a5a47', { p0: state.unstaged.total }) }), this.renderTreeDiff(state.unstaged));
     pane.append(staged, unstaged);
     if (this.workingDiff) {
-      pane.append(el('h4', { text: '工作区与 HEAD 的谱面差异' }));
+      pane.append(el('h4', { text: t('version-control.s5ab703a') }));
       pane.append(this.renderChartDiff(this.workingDiff.chartDiff));
     }
     const form = el('div', { className: 'vcs-commit-form' });
-    form.append(el('h4', { text: '提交' }));
-    const message = el('textarea', { placeholder: '提交说明（必填）', value: this.messageDraft, attrs: { rows: '3', 'aria-label': '提交说明' } });
+    form.append(el('h4', { text: t('version-control.s09cbc97') }));
+    const message = el('textarea', { placeholder: t('version-control.scaac0a5'), value: this.messageDraft, attrs: { rows: '3', 'aria-label': t('version-control.sbb7aedd') } });
     message.value = this.messageDraft;
     message.addEventListener('input', () => { this.messageDraft = message.value; });
     form.append(message);
-    const author = this.authorDraft ?? { name: '本地用户', email: 'local@rpe-next' };
-    const name = el('input', { value: author.name, attrs: { 'aria-label': '提交者名称', placeholder: '提交者名称' } });
-    const email = el('input', { value: author.email, attrs: { 'aria-label': '提交者邮箱', placeholder: '提交者邮箱' } });
+    const author = this.authorDraft ?? { name: t('version-control.sea431f3'), email: 'local@rpe-next' };
+    const name = el('input', { value: author.name, attrs: { 'aria-label': t('version-control.sc6d5de9'), placeholder: t('version-control.sc6d5de9') } });
+    const email = el('input', { value: author.email, attrs: { 'aria-label': t('version-control.s0dec6cf'), placeholder: t('version-control.s0dec6cf') } });
     name.addEventListener('input', () => { this.authorDraft = { ...(this.authorDraft ?? author), name: name.value }; });
     email.addEventListener('input', () => { this.authorDraft = { ...(this.authorDraft ?? author), email: email.value }; });
-    form.append(el('div', { className: 'vcs-field' }, el('label', { text: '名称' }), name));
-    form.append(el('div', { className: 'vcs-field' }, el('label', { text: '邮箱' }), email));
+    form.append(el('div', { className: 'vcs-field' }, el('label', { text: t('version-control.s1be7ae4') }), name));
+    form.append(el('div', { className: 'vcs-field' }, el('label', { text: t('version-control.s9ed627b') }), email));
     const amend = el('input', { type: 'checkbox' });
     amend.checked = this.amendDraft;
     amend.addEventListener('change', () => { this.amendDraft = amend.checked; });
-    form.append(el('label', { className: 'vcs-check' }, amend, '修正上一次提交（amend）'));
-    const commitButton = button('提交已暂存内容', () => this.commitStaged(), { className: 'primary' });
+    form.append(el('label', { className: 'vcs-check' }, amend, t('version-control.sf8dd07e')));
+    const commitButton = button(t('version-control.s3738acc'), () => this.commitStaged(), { className: 'primary' });
     commitButton.disabled = state.staged.total === 0 && !this.amendDraft;
     form.append(commitButton);
-    form.append(el('p', { className: 'vcs-muted', text: '提示：先“暂存全部”，再填写说明提交；未暂存的修改不会进入提交。' }));
+    form.append(el('p', { className: 'vcs-muted', text: t('version-control.s36a1e5c') }));
     pane.append(form);
     return pane;
   }
@@ -596,55 +597,55 @@ export class VersionControlPanel {
   renderBranchesTab() {
     const repo = this.repoState;
     const pane = el('div', { className: 'vcs-pane' });
-    pane.append(el('h4', { text: '分支' }));
+    pane.append(el('h4', { text: t('version-control.s2f6f9d5') }));
     const list = el('div', { className: 'vcs-ref-list' });
     for (const [name, id] of Object.entries(repo.branches ?? {})) {
       const current = repo.head?.type === 'branch' && repo.head.name === name;
       const row = el('div', { className: `vcs-ref-row${current ? ' current' : ''}` });
-      row.append(el('div', { className: 'vcs-ref-name' }, el('strong', { text: name }), current ? el('span', { className: 'vcs-badge current', text: '当前' }) : null, el('small', { text: id ? shortId(id) : '未出生' })));
+      row.append(el('div', { className: 'vcs-ref-name' }, el('strong', { text: name }), current ? el('span', { className: 'vcs-badge current', text: t('version-control.s25e74dc') }) : null, el('small', { text: id ? shortId(id) : t('version-control.s6e30f53') })));
       const actions = el('div', { className: 'vcs-ref-actions' });
-      if (!current) actions.append(button('检出', () => this.checkoutBranch(name)));
-      actions.append(button('重命名', () => this.renameBranch(name)));
-      if (!current) actions.append(button('删除', () => this.deleteBranch(name)));
+      if (!current) actions.append(button(t('version-control.s94032a1'), () => this.checkoutBranch(name)));
+      actions.append(button(t('version-control.s1cd80fd'), () => this.renameBranch(name)));
+      if (!current) actions.append(button(t('version-control.s3755f56'), () => this.deleteBranch(name)));
       row.append(actions);
       list.append(row);
     }
     pane.append(list);
     const create = el('div', { className: 'vcs-inline-form' });
-    const branchName = el('input', { value: this.branchDraft, placeholder: '新分支名称', attrs: { 'aria-label': '新分支名称' } });
+    const branchName = el('input', { value: this.branchDraft, placeholder: t('version-control.s99f2353'), attrs: { 'aria-label': t('version-control.s99f2353') } });
     branchName.addEventListener('input', () => { this.branchDraft = branchName.value; });
-    create.append(branchName, button('从当前提交创建', () => this.createBranchFromDraft()));
+    create.append(branchName, button(t('version-control.sfed4b9f'), () => this.createBranchFromDraft()));
     pane.append(create);
 
-    pane.append(el('h4', { text: '合并' }));
+    pane.append(el('h4', { text: t('version-control.se5badf9') }));
     const targets = [
       ...Object.entries(repo.branches ?? {}).filter(([name, id]) => id && !(repo.head?.type === 'branch' && repo.head.name === name)).map(([name]) => name),
       ...Object.entries(repo.tags ?? {}).filter(([, tag]) => typeof tag === 'string' ? tag : tag?.commit).map(([name]) => name)
     ];
     if (targets.length) {
-      const select = el('select', { attrs: { 'aria-label': '合并目标' } });
+      const select = el('select', { attrs: { 'aria-label': t('version-control.s1872ab3') } });
       for (const name of targets) select.append(new Option(name, name));
       select.value = this.mergeTarget && targets.includes(this.mergeTarget) ? this.mergeTarget : targets[0];
       this.mergeTarget = select.value;
       select.addEventListener('change', () => { this.mergeTarget = select.value; });
-      pane.append(el('div', { className: 'vcs-inline-form' }, select, button('合并到当前分支', () => this.mergeRef(this.mergeTarget))));
-    } else pane.append(el('p', { className: 'vcs-muted', text: '没有可合并的其他分支或标签。' }));
+      pane.append(el('div', { className: 'vcs-inline-form' }, select, button(t('version-control.s2eaad5f'), () => this.mergeRef(this.mergeTarget))));
+    } else pane.append(el('p', { className: 'vcs-muted', text: t('version-control.sd11df0c') }));
 
-    pane.append(el('h4', { text: '标签' }));
+    pane.append(el('h4', { text: t('version-control.sae0a7af') }));
     const tags = el('div', { className: 'vcs-ref-list' });
     const entries = Object.entries(repo.tags ?? {});
-    if (!entries.length) tags.append(el('p', { className: 'vcs-muted', text: '尚无标签。' }));
+    if (!entries.length) tags.append(el('p', { className: 'vcs-muted', text: t('version-control.s7d0d251') }));
     for (const [name, tag] of entries) {
       const id = typeof tag === 'string' ? tag : tag?.commit;
       const row = el('div', { className: 'vcs-ref-row' }, el('div', { className: 'vcs-ref-name' }, el('strong', { text: `#${name}` }), el('small', { text: shortId(id) })));
-      row.append(el('div', { className: 'vcs-ref-actions' }, button('删除', () => this.deleteTag(name))));
+      row.append(el('div', { className: 'vcs-ref-actions' }, button(t('version-control.s3755f56'), () => this.deleteTag(name))));
       tags.append(row);
     }
     pane.append(tags);
     const tagForm = el('div', { className: 'vcs-inline-form' });
-    const tagName = el('input', { value: this.tagDraft, placeholder: '新标签名称', attrs: { 'aria-label': '新标签名称' } });
+    const tagName = el('input', { value: this.tagDraft, placeholder: t('version-control.sb4240a6'), attrs: { 'aria-label': t('version-control.sb4240a6') } });
     tagName.addEventListener('input', () => { this.tagDraft = tagName.value; });
-    tagForm.append(tagName, button('在当前提交创建标签', () => this.createTagFromDraft()));
+    tagForm.append(tagName, button(t('version-control.s15d2e4a'), () => this.createTagFromDraft()));
     pane.append(tagForm);
     return pane;
   }
@@ -652,20 +653,20 @@ export class VersionControlPanel {
   renderStashTab() {
     const repo = this.repoState;
     const pane = el('div', { className: 'vcs-pane' });
-    pane.append(el('h4', { text: '储藏' }));
-    pane.append(el('p', { className: 'vcs-muted', text: '储藏会把当前工作区保存起来，并把编辑器恢复到 HEAD；可稍后应用或弹出。' }));
+    pane.append(el('h4', { text: t('version-control.s9df47fb') }));
+    pane.append(el('p', { className: 'vcs-muted', text: t('version-control.s24b3959') }));
     const form = el('div', { className: 'vcs-inline-form' });
-    const message = el('input', { value: this.stashDraft, placeholder: '储藏说明（可选）', attrs: { 'aria-label': '储藏说明' } });
+    const message = el('input', { value: this.stashDraft, placeholder: t('version-control.se5238cb'), attrs: { 'aria-label': t('version-control.s4147093') } });
     message.addEventListener('input', () => { this.stashDraft = message.value; });
-    form.append(message, button('储藏当前更改', () => this.stashPush()));
+    form.append(message, button(t('version-control.s67eee2e'), () => this.stashPush()));
     pane.append(form);
     const list = el('div', { className: 'vcs-ref-list' });
-    if (!repo.stash?.length) list.append(el('p', { className: 'vcs-muted', text: '没有储藏记录。' }));
+    if (!repo.stash?.length) list.append(el('p', { className: 'vcs-muted', text: t('version-control.s68a0840') }));
     for (const [index, entry] of (repo.stash ?? []).entries()) {
       const row = el('div', { className: 'vcs-stash-row' });
       row.append(el('div', { className: 'vcs-stash-main' }, el('strong', { text: entry.message }), el('small', { text: `${formatDate(entry.timestamp)}${entry.branch ? ` · ${entry.branch}` : ''}` })));
       row.append(el('div', { className: 'vcs-ref-actions' },
-        button('应用', () => this.stashApply(index)), button('弹出', () => this.stashPop(index)), button('删除', () => this.stashDrop(index))));
+        button(t('version-control.s4562024'), () => this.stashApply(index)), button(t('version-control.seb98ee2'), () => this.stashPop(index)), button(t('version-control.s3755f56'), () => this.stashDrop(index))));
       list.append(row);
     }
     pane.append(list);
@@ -675,23 +676,23 @@ export class VersionControlPanel {
   renderReflogTab() {
     const repo = this.repoState;
     const pane = el('div', { className: 'vcs-pane' });
-    pane.append(el('h4', { text: '引用日志' }));
+    pane.append(el('h4', { text: t('version-control.s9c98280') }));
     const list = el('div', { className: 'vcs-ref-list' });
-    if (!repo.reflog?.length) list.append(el('p', { className: 'vcs-muted', text: '没有引用日志。' }));
+    if (!repo.reflog?.length) list.append(el('p', { className: 'vcs-muted', text: t('version-control.s2191e80') }));
     for (const entry of repo.reflog ?? []) {
       const row = el('div', { className: 'vcs-reflog-row' });
       row.append(el('div', { className: 'vcs-reflog-main' }, el('strong', { text: entry.message }), el('small', { text: `${formatDate(entry.timestamp)} · ${shortId(entry.from) || '∅'} → ${shortId(entry.to) || '∅'}` })));
-      if (entry.to) row.append(button('检出', () => this.checkoutCommit(entry.to)));
+      if (entry.to) row.append(button(t('version-control.s94032a1'), () => this.checkoutCommit(entry.to)));
       list.append(row);
     }
     pane.append(list);
-    pane.append(el('h4', { text: '仓库工具' }));
+    pane.append(el('h4', { text: t('version-control.s10622ec') }));
     const tools = el('div', { className: 'vcs-action-grid' });
     tools.append(
-      button('导出仓库包', () => this.exportBundle()),
-      button('导入仓库包', () => this.fileInput.click()),
-      button('清理不可达对象', () => this.gc()),
-      button('导出当前谱面 JSON', () => this.exportCurrentChart())
+      button(t('version-control.s8d80334'), () => this.exportBundle()),
+      button(t('version-control.sbe4437f'), () => this.fileInput.click()),
+      button(t('version-control.sf0088a5'), () => this.gc()),
+      button(t('version-control.sca2bd90'), () => this.exportCurrentChart())
     );
     pane.append(tools);
     return pane;
@@ -700,17 +701,17 @@ export class VersionControlPanel {
   renderMergeState() {
     const merge = this.repoState.merge;
     const pane = el('div', { className: 'vcs-pane' });
-    const label = merge.kind === 'cherry-pick' ? '拣选' : merge.kind === 'revert' ? '回退' : '合并';
-    pane.append(el('h4', { text: `解决${label}冲突` }));
-    if (merge.targetRef) pane.append(el('p', { className: 'vcs-muted', text: `目标：${merge.targetRef} · ${merge.message ?? ''}` }));
-    pane.append(el('p', { className: 'vcs-muted', text: `共 ${merge.conflicts.length} 处冲突。选择“当前”保留本分支内容，选择“对方”采用目标版本内容。` }));
+    const label = merge.kind === 'cherry-pick' ? t('version-control.sdb82ac7') : merge.kind === 'revert' ? t('version-control.sdedece7') : t('version-control.se5badf9');
+    pane.append(el('h4', { text: t('version-control.sedddb50', { p0: label }) }));
+    if (merge.targetRef) pane.append(el('p', { className: 'vcs-muted', text: t('version-control.se55fd1e', { p0: merge.targetRef, p1: merge.message ?? '' }) }));
+    pane.append(el('p', { className: 'vcs-muted', text: t('version-control.sc5ec9f2', { p0: merge.conflicts.length }) }));
     const list = el('div', { className: 'vcs-conflicts' });
     merge.conflicts.forEach((conflict, index) => {
       const choice = this.mergeChoices.get(index) ?? 'ours';
       const row = el('div', { className: 'vcs-conflict' });
       row.append(el('strong', { text: conflict.path }));
       const options = el('div', { className: 'vcs-conflict-options' });
-      for (const [value, label] of [['ours', '当前'], ['theirs', '对方']]) {
+      for (const [value, label] of [['ours', t('version-control.s25e74dc')], ['theirs', t('version-control.s51c29d6')]]) {
         const input = el('input', { type: 'radio', attrs: { name: `vcs-conflict-${index}`, value } });
         input.checked = choice === value;
         input.addEventListener('change', () => { if (input.checked) this.mergeChoices.set(index, value); });
@@ -718,21 +719,21 @@ export class VersionControlPanel {
       }
       row.append(options);
       row.append(el('div', { className: 'vcs-conflict-values' },
-        el('span', {}, el('strong', { text: '当前：' }), conflict.oursPresent === false ? '（已删除）' : conflict.kind === 'asset' ? assetLabel(conflict.ours) : jsonPreview(conflict.ours)),
-        el('span', {}, el('strong', { text: '对方：' }), conflict.theirsPresent === false ? '（已删除）' : conflict.kind === 'asset' ? assetLabel(conflict.theirs) : jsonPreview(conflict.theirs))));
+        el('span', {}, el('strong', { text: t('version-control.s23ef9f0') }), conflict.oursPresent === false ? t('version-control.sbecd43c') : conflict.kind === 'asset' ? assetLabel(conflict.ours) : jsonPreview(conflict.ours)),
+        el('span', {}, el('strong', { text: t('version-control.scf1a9fc') }), conflict.theirsPresent === false ? t('version-control.sbecd43c') : conflict.kind === 'asset' ? assetLabel(conflict.theirs) : jsonPreview(conflict.theirs))));
       list.append(row);
     });
     pane.append(list);
     pane.append(el('div', { className: 'vcs-action-grid' },
-      button('完成并提交', () => this.resolveMerge(), { className: 'primary' }),
-      button('放弃本次操作', () => this.abortMerge())));
+      button(t('version-control.s31244a0'), () => this.resolveMerge(), { className: 'primary' }),
+      button(t('version-control.sda6d8a5'), () => this.abortMerge())));
     return pane;
   }
 
   async stageAll() {
     await this.run(async () => {
       await this.repo.stage(this.snapshot());
-      this.notify('已暂存当前谱面与素材');
+      this.notify(t('version-control.s5ba9508'));
       await this.refresh();
     });
   }
@@ -740,7 +741,7 @@ export class VersionControlPanel {
   async unstageAll() {
     await this.run(async () => {
       await this.repo.unstage();
-      this.notify('已取消暂存');
+      this.notify(t('version-control.sc3b7971'));
       await this.refresh();
     });
   }
@@ -748,9 +749,9 @@ export class VersionControlPanel {
   async commitStaged() {
     await this.run(async () => {
       const message = this.messageDraft.trim();
-      if (!message) throw new Error('请输入提交说明');
+      if (!message) throw new Error(t('version-control.sd1c665f'));
       const author = {
-        name: this.authorDraft?.name?.trim() || '本地用户',
+        name: this.authorDraft?.name?.trim() || t('version-control.sea431f3'),
         email: this.authorDraft?.email?.trim() || 'local@rpe-next'
       };
       const repo = await this.repo.read();
@@ -761,19 +762,19 @@ export class VersionControlPanel {
       this.amendDraft = false;
       this.selectedCommit = result.commit.id;
       this.tab = 'graph';
-      this.notify(`已提交 ${shortId(result.commit.id)}`);
+      this.notify(t('version-control.saa15685', { p0: shortId(result.commit.id) }));
       await this.refresh();
     });
   }
 
   async discardUnstaged() {
-    if (!await this.confirm('放弃未暂存更改', '工作区将恢复到暂存区（若暂存区为空则恢复到 HEAD）的内容。此操作不可撤销。')) return;
+    if (!await this.confirm(t('version-control.s731b057'), t('version-control.sbac7e48'))) return;
     await this.run(async () => {
       const tree = this.state?.indexTree?.id ?? this.state?.headTree?.id;
-      if (!tree) throw new Error('没有可恢复的版本');
+      if (!tree) throw new Error(t('version-control.s2382e5e'));
       const result = await this.repo.restore(tree);
       await this.afterSnapshot(result, true);
-      this.notify('已放弃未暂存更改');
+      this.notify(t('version-control.s709b36a'));
     });
   }
 
@@ -783,13 +784,13 @@ export class VersionControlPanel {
       try {
         const result = await this.repo.checkoutCommit(id, { snapshot: this.snapshot() });
         await this.afterSnapshot(result, true);
-        this.notify(`已检出 ${shortId(id)}（游离 HEAD）`);
+        this.notify(t('version-control.s1d126e4', { p0: shortId(id) }));
       } catch (error) {
         if (error.code !== 'DIRTY_WORKING_TREE') throw error;
-        if (!await this.confirm('工作区有未提交更改', '检出会丢弃当前工作区更改。建议先提交或储藏。继续？')) return;
+        if (!await this.confirm(t('version-control.s87615b5'), t('version-control.s6a3de37'))) return;
         const result = await this.repo.checkoutCommit(id, { snapshot: this.snapshot(), force: true });
         await this.afterSnapshot(result, true);
-        this.notify(`已检出 ${shortId(id)}（游离 HEAD）`);
+        this.notify(t('version-control.s1d126e4', { p0: shortId(id) }));
       }
     });
   }
@@ -800,90 +801,90 @@ export class VersionControlPanel {
       try {
         const result = await this.repo.checkoutBranch(name, { snapshot: this.snapshot() });
         await this.afterSnapshot(result, true);
-        this.notify(`已切换到分支 ${name}`);
+        this.notify(t('version-control.s6a584d6', { p0: name }));
       } catch (error) {
         if (error.code !== 'DIRTY_WORKING_TREE') throw error;
-        if (!await this.confirm('工作区有未提交更改', '切换分支会丢弃当前工作区更改。建议先提交或储藏。继续？')) return;
+        if (!await this.confirm(t('version-control.s87615b5'), t('version-control.s113594b'))) return;
         const result = await this.repo.checkoutBranch(name, { snapshot: this.snapshot(), force: true });
         await this.afterSnapshot(result, true);
-        this.notify(`已切换到分支 ${name}`);
+        this.notify(t('version-control.s6a584d6', { p0: name }));
       }
     });
   }
 
   async confirmEditorDiscard() {
     if (!this.context.isDirty?.()) return true;
-    return this.confirm('编辑器有未保存修改', '该操作会替换编辑器中的谱面，尚未保存的修改会丢失。建议先保存到谱面库。继续？');
+    return this.confirm(t('version-control.sef027f6'), t('version-control.sc648395'));
   }
 
   async createBranchAt(commitId) {
-    const name = await this.askText('新建分支', `从 ${commitId ? shortId(commitId) : '当前提交'} 创建分支。`, '分支名称', this.branchDraft);
+    const name = await this.askText(t('version-control.s65a957f'), t('version-control.s525e122', { p0: commitId ? shortId(commitId) : t('version-control.s345fd87') }), t('version-control.s01571fe'), this.branchDraft);
     if (!name) return;
     await this.run(async () => {
       await this.repo.createBranch(name, commitId ?? null);
       this.branchDraft = '';
-      this.notify(`已创建分支 ${name}`);
+      this.notify(t('version-control.s98bf490', { p0: name }));
       await this.refresh();
     });
   }
 
   async createBranchFromDraft() {
     const name = this.branchDraft.trim();
-    if (!name) { this.notify('请输入分支名称', 'warning'); return; }
+    if (!name) { this.notify(t('version-control.se1907bc'), 'warning'); return; }
     await this.run(async () => {
       await this.repo.createBranch(name, this.state?.headId ?? null);
       this.branchDraft = '';
-      this.notify(`已创建分支 ${name}`);
+      this.notify(t('version-control.s98bf490', { p0: name }));
       await this.refresh();
     });
   }
 
   async renameBranch(name) {
-    const next = await this.askText('重命名分支', `将分支“${name}”重命名。`, '新名称', name);
+    const next = await this.askText(t('version-control.sd63a46e'), t('version-control.sadb6c02', { p0: name }), t('version-control.sb865985'), name);
     if (!next || next === name) return;
     await this.run(async () => {
       await this.repo.renameBranch(name, next);
-      this.notify(`分支已重命名为 ${next}`);
+      this.notify(t('version-control.sd9046b4', { p0: next }));
       await this.refresh();
     });
   }
 
   async deleteBranch(name) {
-    if (!await this.confirm('删除分支', `确定删除分支“${name}”？该分支上的提交仍可能通过其他引用或引用日志访问。`)) return;
+    if (!await this.confirm(t('version-control.s6203f59'), t('version-control.s077bad0', { p0: name }))) return;
     await this.run(async () => {
       await this.repo.deleteBranch(name);
-      this.notify(`已删除分支 ${name}`);
+      this.notify(t('version-control.sf750b43', { p0: name }));
       await this.refresh();
     });
   }
 
   async createTagAt(commitId) {
-    const name = await this.askText('新建标签', `在 ${commitId ? shortId(commitId) : '当前提交'} 创建标签。`, '标签名称', this.tagDraft);
+    const name = await this.askText(t('version-control.s616054b'), t('version-control.s944d278', { p0: commitId ? shortId(commitId) : t('version-control.s345fd87') }), t('version-control.s182295d'), this.tagDraft);
     if (!name) return;
     await this.run(async () => {
       await this.repo.createTag(name, commitId ?? null, '');
       this.tagDraft = '';
-      this.notify(`已创建标签 #${name}`);
+      this.notify(t('version-control.s87f0dd4', { p0: name }));
       await this.refresh();
     });
   }
 
   async createTagFromDraft() {
     const name = this.tagDraft.trim();
-    if (!name) { this.notify('请输入标签名称', 'warning'); return; }
+    if (!name) { this.notify(t('version-control.s8e1f344'), 'warning'); return; }
     await this.run(async () => {
       await this.repo.createTag(name, this.state?.headId ?? null, '');
       this.tagDraft = '';
-      this.notify(`已创建标签 #${name}`);
+      this.notify(t('version-control.s87f0dd4', { p0: name }));
       await this.refresh();
     });
   }
 
   async deleteTag(name) {
-    if (!await this.confirm('删除标签', `确定删除标签“#${name}”？`)) return;
+    if (!await this.confirm(t('version-control.sff6fe44'), t('version-control.s2bffa47', { p0: name }))) return;
     await this.run(async () => {
       await this.repo.deleteTag(name);
-      this.notify(`已删除标签 #${name}`);
+      this.notify(t('version-control.s549f984', { p0: name }));
       await this.refresh();
     });
   }
@@ -894,13 +895,13 @@ export class VersionControlPanel {
       const result = await this.repo.merge(ref, { snapshot: this.snapshot() });
       if (result.type === 'conflict') {
         this.tab = 'branches';
-        this.notify(`合并产生 ${result.conflicts.length} 处冲突`, 'warning', 5000);
+        this.notify(t('version-control.s42440eb', { p0: result.conflicts.length }), 'warning', 5000);
         await this.refresh();
         return;
       }
-      if (result.type === 'up-to-date') { this.notify('已经是最新，无需合并'); await this.refresh(); return; }
+      if (result.type === 'up-to-date') { this.notify(t('version-control.s9287b27')); await this.refresh(); return; }
       await this.afterSnapshot(result, true);
-      this.notify(result.type === 'fast-forward' ? '已快进合并' : `已创建合并提交 ${shortId(result.commit.id)}`);
+      this.notify(result.type === 'fast-forward' ? t('version-control.s0d5816f') : t('version-control.s0912993', { p0: shortId(result.commit.id) }));
     });
   }
 
@@ -908,9 +909,9 @@ export class VersionControlPanel {
     if (!await this.confirmEditorDiscard()) return;
     await this.run(async () => {
       const result = await this.repo.cherryPick(id, { snapshot: this.snapshot() });
-      if (result.type === 'conflict') { this.tab = 'branches'; this.notify(`拣选产生 ${result.conflicts.length} 处冲突`, 'warning', 5000); await this.refresh(); return; }
+      if (result.type === 'conflict') { this.tab = 'branches'; this.notify(t('version-control.s4b0f8f0', { p0: result.conflicts.length }), 'warning', 5000); await this.refresh(); return; }
       await this.afterSnapshot(result, true);
-      this.notify(`已拣选 ${shortId(id)}`);
+      this.notify(t('version-control.s5fb8b67', { p0: shortId(id) }));
     });
   }
 
@@ -918,21 +919,21 @@ export class VersionControlPanel {
     if (!await this.confirmEditorDiscard()) return;
     await this.run(async () => {
       const result = await this.repo.revert(id, { snapshot: this.snapshot() });
-      if (result.type === 'conflict') { this.tab = 'branches'; this.notify(`回退产生 ${result.conflicts.length} 处冲突`, 'warning', 5000); await this.refresh(); return; }
+      if (result.type === 'conflict') { this.tab = 'branches'; this.notify(t('version-control.s121dc56', { p0: result.conflicts.length }), 'warning', 5000); await this.refresh(); return; }
       await this.afterSnapshot(result, true);
-      this.notify(`已创建回退提交 ${shortId(result.commit.id)}`);
+      this.notify(t('version-control.sa3b88d8', { p0: shortId(result.commit.id) }));
     });
   }
 
   async resetTo(id) {
-    const mode = await this.askSelect('重置当前分支', `将当前分支重置到 ${shortId(id)}。`, [['soft', '软重置：只移动分支，保留暂存区与工作区'], ['mixed', '混合重置：移动分支并重置暂存区，保留工作区'], ['hard', '硬重置：移动分支并恢复工作区']], 'mixed');
+    const mode = await this.askSelect(t('version-control.sf212b14'), t('version-control.s5accac7', { p0: shortId(id) }), [['soft', t('version-control.se46e6fd')], ['mixed', t('version-control.s1dfc985')], ['hard', t('version-control.scee6e68')]], 'mixed');
     if (!mode) return;
     if (mode === 'hard' && !await this.confirmEditorDiscard()) return;
     await this.run(async () => {
       const result = await this.repo.reset(id, mode);
       if (result.snapshot) await this.afterSnapshot(result, true);
       else await this.refresh();
-      this.notify(`已${mode === 'hard' ? '硬' : mode === 'soft' ? '软' : '混合'}重置到 ${shortId(id)}`);
+      this.notify(t('version-control.sa1ab9ac', { p0: mode === 'hard' ? t('version-control.s32709a5') : mode === 'soft' ? t('version-control.s6a8a308') : t('version-control.sa4a06e0'), p1: shortId(id) }));
     });
   }
 
@@ -943,17 +944,17 @@ export class VersionControlPanel {
       const choices = merge.conflicts.map((_, index) => this.mergeChoices.get(index) ?? 'ours');
       const result = await this.repo.resolveMerge(choices);
       await this.afterSnapshot(result, true);
-      this.notify(`冲突已解决，提交 ${shortId(result.commit.id)}`);
+      this.notify(t('version-control.sdfff1e3', { p0: shortId(result.commit.id) }));
     });
   }
 
   async abortMerge() {
-    if (!await this.confirm('放弃本次操作', '将清除合并状态并恢复当前分支的版本。')) return;
+    if (!await this.confirm(t('version-control.sda6d8a5'), t('version-control.s479dbaf'))) return;
     if (!await this.confirmEditorDiscard()) return;
     await this.run(async () => {
       const result = await this.repo.abortMerge();
       await this.afterSnapshot(result, true);
-      this.notify('已放弃合并');
+      this.notify(t('version-control.s2637cd8'));
     });
   }
 
@@ -962,7 +963,7 @@ export class VersionControlPanel {
       const result = await this.repo.stashPush(this.snapshot(), this.stashDraft);
       this.stashDraft = '';
       await this.afterSnapshot(result, true);
-      this.notify('已储藏当前更改并恢复到 HEAD');
+      this.notify(t('version-control.seca2ea5'));
     });
   }
 
@@ -971,7 +972,7 @@ export class VersionControlPanel {
       try {
         const result = await this.repo.stashApply(index, this.snapshot());
         await this.afterSnapshot(result, true);
-        this.notify('已应用储藏');
+        this.notify(t('version-control.sf684e32'));
       } catch (error) {
         if (error.code !== 'STASH_CONFLICT') throw error;
         this.notify(error.message, 'error', 7000);
@@ -986,7 +987,7 @@ export class VersionControlPanel {
       try {
         const result = await this.repo.stashPop(index, this.snapshot());
         await this.afterSnapshot(result, true);
-        this.notify('已弹出储藏');
+        this.notify(t('version-control.se325c5a'));
       } catch (error) {
         if (error.code !== 'STASH_CONFLICT') throw error;
         this.notify(error.message, 'error', 7000);
@@ -997,10 +998,10 @@ export class VersionControlPanel {
   }
 
   async stashDrop(index) {
-    if (!await this.confirm('删除储藏', '删除后无法恢复；确定删除这条储藏？')) return;
+    if (!await this.confirm(t('version-control.s3b7ad48'), t('version-control.s133edec'))) return;
     await this.run(async () => {
       await this.repo.stashDrop(index);
-      this.notify('已删除储藏');
+      this.notify(t('version-control.sf87a968'));
       await this.refresh();
     });
   }
@@ -1011,14 +1012,14 @@ export class VersionControlPanel {
       const stem = String(snapshot.chartName || 'chart.json').replace(/\.json$/i, '');
       const name = `${stem}-${shortId(id)}.json`;
       download(new Blob([serializeChart(snapshot.chart)], { type: 'application/json' }), name);
-      this.notify(`已导出 ${name}`);
+      this.notify(t('version-control.se2a3b30', { p0: name }));
     });
   }
 
   async exportCurrentChart() {
     const name = String(this.context.getChartName() || 'chart.json').replace(/[\\/:*?"<>|]/g, '_');
     download(new Blob([serializeChart(this.context.getChart())], { type: 'application/json' }), name);
-    this.notify(`已导出 ${name}`);
+    this.notify(t('version-control.se2a3b30', { p0: name }));
   }
 
   async exportBundle() {
@@ -1026,7 +1027,7 @@ export class VersionControlPanel {
       const bundle = await this.repo.exportBundle();
       const name = `rpe-next-vcs-${new Date().toISOString().slice(0, 10)}.json`;
       download(new Blob([JSON.stringify(bundle)], { type: 'application/json' }), name);
-      this.notify(`已导出仓库包（${bundle.commits.length} 个提交）`);
+      this.notify(t('version-control.s7d9144d', { p0: bundle.commits.length }));
     });
   }
 
@@ -1037,16 +1038,16 @@ export class VersionControlPanel {
     await this.run(async () => {
       const bundle = JSON.parse(await file.text());
       const result = await this.repo.importBundle(bundle);
-      this.notify(`已导入 ${result.commits} 个提交、${result.branches.length} 个分支、${result.tags.length} 个标签`);
+      this.notify(t('version-control.s1f92537', { p0: result.commits, p1: result.branches.length, p2: result.tags.length }));
       await this.refresh();
     });
   }
 
   async gc() {
-    if (!await this.confirm('清理不可达对象', '将删除所有仓库中无法从分支、标签、储藏、合并状态或引用日志到达的提交、树和素材对象。此操作不可撤销。')) return;
+    if (!await this.confirm(t('version-control.sf0088a5'), t('version-control.s1cc8def'))) return;
     await this.run(async () => {
       const result = await this.repo.gc();
-      this.notify(`已清理 ${result.removedCommits} 个提交、${result.removedTrees} 个树、${result.removedBlobs} 个对象`);
+      this.notify(t('version-control.sd773e3c', { p0: result.removedCommits, p1: result.removedTrees, p2: result.removedBlobs }));
       await this.refresh();
     });
   }
@@ -1063,7 +1064,7 @@ export class VersionControlPanel {
       const apply = document.querySelector('#modal-apply');
       let done = false;
       apply.hidden = false;
-      apply.textContent = '确认';
+      apply.textContent = t('version-control.sb56d9ac');
       modal.addEventListener('close', () => { if (!done) { done = true; resolve(false); } }, { once: true });
       apply.onclick = () => { done = true; modal.close(); resolve(true); };
     });
@@ -1078,7 +1079,7 @@ export class VersionControlPanel {
       const apply = document.querySelector('#modal-apply');
       let done = false;
       apply.hidden = false;
-      apply.textContent = '确定';
+      apply.textContent = t('version-control.sf526c89');
       modal.addEventListener('close', () => { if (!done) { done = true; resolve(null); } }, { once: true });
       apply.onclick = () => { done = true; modal.close(); resolve(input.value.trim()); };
       input.focus();
@@ -1097,7 +1098,7 @@ export class VersionControlPanel {
       const apply = document.querySelector('#modal-apply');
       let done = false;
       apply.hidden = false;
-      apply.textContent = '确定';
+      apply.textContent = t('version-control.sf526c89');
       modal.addEventListener('close', () => { if (!done) { done = true; resolve(null); } }, { once: true });
       apply.onclick = () => { done = true; modal.close(); resolve(select.value); };
     });

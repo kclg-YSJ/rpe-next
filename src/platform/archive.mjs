@@ -1,3 +1,4 @@
+import { t } from '../i18n.mjs';
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 const ZIP64_MARKER = 0xffffffff;
@@ -15,7 +16,7 @@ export function crc32(bytes) {
 
 function checkPath(name) {
   if (!name || name.startsWith('/') || name.includes('\\') || name.includes('\0') || name.includes(':') || name.split('/').includes('..')) {
-    throw new Error(`ZIP 包含不安全路径：${name}`);
+    throw new Error(t('archive.sb60c19c', { p0: name }));
   }
 }
 
@@ -26,13 +27,13 @@ export function inspectZip(buffer) {
   for (let offset = bytes.length - 22; offset >= Math.max(0, bytes.length - 65557); offset--) {
     if (view.getUint32(offset, true) === 0x06054b50 && offset + 22 + view.getUint16(offset + 20, true) === bytes.length) { trailer = offset; break; }
   }
-  if (trailer < 0) throw new Error('无效 ZIP/PEZ 目录');
+  if (trailer < 0) throw new Error(t('archive.s80d8994'));
   const count = view.getUint16(trailer + 10, true);
-  if (view.getUint16(trailer + 4, true) || view.getUint16(trailer + 6, true) || count === 0xffff || view.getUint32(trailer + 12, true) === ZIP64_MARKER || view.getUint32(trailer + 16, true) === ZIP64_MARKER) throw new Error('不支持分卷或 ZIP64');
+  if (view.getUint16(trailer + 4, true) || view.getUint16(trailer + 6, true) || count === 0xffff || view.getUint32(trailer + 12, true) === ZIP64_MARKER || view.getUint32(trailer + 16, true) === ZIP64_MARKER) throw new Error(t('archive.sc601e2a'));
   const entries = [], names = new Set();
   let offset = view.getUint32(trailer + 16, true), declaredBytes = 0, largestFile = 0, largestRatio = 0;
   for (let index = 0; index < count; index++) {
-    if (offset + 46 > trailer || view.getUint32(offset, true) !== 0x02014b50) throw new Error('ZIP 目录损坏');
+    if (offset + 46 > trailer || view.getUint32(offset, true) !== 0x02014b50) throw new Error(t('archive.sd581b8f'));
     const flags = view.getUint16(offset + 8, true);
     const method = view.getUint16(offset + 10, true);
     const checksum = view.getUint32(offset + 16, true);
@@ -45,17 +46,17 @@ export function inspectZip(buffer) {
     const extraSize = view.getUint16(offset + 30, true);
     const commentSize = view.getUint16(offset + 32, true);
     const localOffset = view.getUint32(offset + 42, true);
-    if (flags & 1 || size === ZIP64_MARKER || compressedSize === ZIP64_MARKER || localOffset === ZIP64_MARKER) throw new Error('不支持加密 ZIP 或 ZIP64');
-    if (offset + 46 + nameSize + extraSize + commentSize > trailer) throw new Error('ZIP 文件名越界');
+    if (flags & 1 || size === ZIP64_MARKER || compressedSize === ZIP64_MARKER || localOffset === ZIP64_MARKER) throw new Error(t('archive.s0d62ed2'));
+    if (offset + 46 + nameSize + extraSize + commentSize > trailer) throw new Error(t('archive.s81d2c4b'));
     const nameBytes = bytes.subarray(offset + 46, offset + 46 + nameSize);
     const name = (flags & 0x800 ? decoder : new TextDecoder('gb18030')).decode(nameBytes);
     checkPath(name);
-    if (names.has(name)) throw new Error(`ZIP 重复文件名：${name}`);
+    if (names.has(name)) throw new Error(t('archive.sc9b6bff', { p0: name }));
     names.add(name);
-    if (localOffset + 30 > bytes.length || view.getUint32(localOffset, true) !== 0x04034b50) throw new Error('ZIP 文件头损坏');
+    if (localOffset + 30 > bytes.length || view.getUint32(localOffset, true) !== 0x04034b50) throw new Error(t('archive.s740ea3d'));
     const dataOffset = localOffset + 30 + view.getUint16(localOffset + 26, true) + view.getUint16(localOffset + 28, true);
-    if (dataOffset + compressedSize > offset) throw new Error('ZIP 文件内容越界');
-    if (method === 0 && size !== compressedSize) throw new Error('ZIP 解压大小与目录不一致');
+    if (dataOffset + compressedSize > offset) throw new Error(t('archive.sca71961'));
+    if (method === 0 && size !== compressedSize) throw new Error(t('archive.s772efff'));
     entries.push({ name, method, checksum, size, compressedSize, dataOffset });
     offset += 46 + nameSize + extraSize + commentSize;
   }
@@ -64,8 +65,8 @@ export function inspectZip(buffer) {
 
 export async function readZip(buffer, { maxFiles = Infinity, maxBytes = Infinity, maxFileBytes = Infinity, includeEntry = () => true } = {}) {
   const bytes = new Uint8Array(buffer), directory = inspectZip(buffer), files = new Map();
-  if (directory.count > maxFiles) throw new Error('ZIP 文件数量超限');
-  if (directory.declaredBytes > maxBytes || directory.largestFile > maxFileBytes) throw new Error('ZIP 解压后大小超限');
+  if (directory.count > maxFiles) throw new Error(t('archive.s211f44d'));
+  if (directory.declaredBytes > maxBytes || directory.largestFile > maxFileBytes) throw new Error(t('archive.s3af86c2'));
   for (const { name, method, checksum, size, compressedSize, dataOffset } of directory.entries) {
     if (!includeEntry(name)) continue;
     let contents = method === 0 ? bytes.slice(dataOffset, dataOffset + compressedSize) : bytes.subarray(dataOffset, dataOffset + compressedSize);
@@ -77,26 +78,26 @@ export async function readZip(buffer, { maxFiles = Infinity, maxBytes = Infinity
         const chunk = await reader.read();
         if (chunk.done) break;
         length += chunk.value.length;
-        if (length > size) { await reader.cancel(); throw new Error('ZIP 解压大小与目录不一致'); }
+        if (length > size) { await reader.cancel(); throw new Error(t('archive.s772efff')); }
         chunks.push(chunk.value);
       }
       contents = new Uint8Array(length);
       let cursor = 0;
       for (const chunk of chunks) { contents.set(chunk, cursor); cursor += chunk.length; }
-    } else if (method !== 0) throw new Error(`不支持 ZIP 压缩方式 ${method}`);
-    if (contents.length !== size || crc32(contents) !== checksum) throw new Error(`ZIP 校验失败：${name}`);
+    } else if (method !== 0) throw new Error(t('archive.scb60a92', { p0: method }));
+    if (contents.length !== size || crc32(contents) !== checksum) throw new Error(t('archive.s0b72d37', { p0: name }));
     files.set(name, contents);
   }
   return files;
 }
 
 export async function writeBlobZip(files) {
-  if (files.size >= 0xffff) throw new Error('此文件数量需要 ZIP64，暂不支持');
+  if (files.size >= 0xffff) throw new Error(t('archive.s882fdc1'));
   const records = [], directories = []; let offset = 0;
   for (const [name, source] of files) {
     checkPath(name); const blob = source instanceof Blob ? source : new Blob([source]);
     const nameBytes = encoder.encode(name);
-    if (nameBytes.length > 65535 || blob.size >= ZIP64_MARKER || offset + 30 + nameBytes.length + blob.size >= ZIP64_MARKER) throw new Error('此备份包需要 ZIP64，请分批导出项目');
+    if (nameBytes.length > 65535 || blob.size >= ZIP64_MARKER || offset + 30 + nameBytes.length + blob.size >= ZIP64_MARKER) throw new Error(t('archive.s7abd10a'));
     let crc = 0xffffffff, processed = 0; const reader = blob.stream().getReader();
     try { while (true) {
       const { value, done } = await reader.read(); if (done) break;
@@ -113,21 +114,21 @@ export async function writeBlobZip(files) {
     records.push(record, blob); directories.push(directory); offset += record.length + blob.size;
   }
   const trailer = new Uint8Array(22), view = new DataView(trailer.buffer), size = directories.reduce((sum, entry) => sum + entry.length, 0);
-  if (offset + size >= ZIP64_MARKER) throw new Error('此备份包需要 ZIP64，请分批导出项目');
+  if (offset + size >= ZIP64_MARKER) throw new Error(t('archive.s7abd10a'));
   view.setUint32(0, 0x06054b50, true); view.setUint16(8, files.size, true); view.setUint16(10, files.size, true); view.setUint32(12, size, true); view.setUint32(16, offset, true);
   return new Blob([...records, ...directories, trailer], { type: 'application/zip' });
 }
 
 export function writeZip(files) {
-  if (files.size >= 0xffff) throw new Error('此文件数量需要 ZIP64，暂不支持');
+  if (files.size >= 0xffff) throw new Error(t('archive.s882fdc1'));
   const records = [];
   const directories = [];
   let offset = 0;
   for (const [name, contents] of files) {
     checkPath(name);
     const nameBytes = encoder.encode(name);
-    if (nameBytes.length > 65535) throw new Error('ZIP 文件名过长');
-    if (contents.length >= ZIP64_MARKER || offset + 30 + nameBytes.length + contents.length >= ZIP64_MARKER) throw new Error('此包需要 ZIP64，暂不支持');
+    if (nameBytes.length > 65535) throw new Error(t('archive.se754674'));
+    if (contents.length >= ZIP64_MARKER || offset + 30 + nameBytes.length + contents.length >= ZIP64_MARKER) throw new Error(t('archive.s6e559a4'));
     const record = new Uint8Array(30 + nameBytes.length);
     const view = new DataView(record.buffer);
     view.setUint32(0, 0x04034b50, true);
@@ -155,7 +156,7 @@ export function writeZip(files) {
   view.setUint16(8, files.size, true);
   view.setUint16(10, files.size, true);
   const directorySize = directories.reduce((total, entry) => total + entry.length, 0);
-  if (directorySize >= ZIP64_MARKER) throw new Error('此目录需要 ZIP64，暂不支持');
+  if (directorySize >= ZIP64_MARKER) throw new Error(t('archive.s461e2ea'));
   view.setUint32(12, directorySize, true);
   view.setUint32(16, offset, true);
   return new Blob([...records, ...directories, trailer], { type: 'application/zip' });

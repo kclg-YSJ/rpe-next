@@ -1,6 +1,7 @@
 import { EditorSession } from './session.mjs';
 import { createChart } from '../core/chart.mjs';
 import { globalColumnKey, validateColumnEvent, validateGlobalEvents, GLOBAL_EVENT_VERSION } from '../core/global-events.mjs';
+import { t } from '../i18n.mjs';
 
 class GlobalEditingSession extends EditorSession {
   constructor(document) { super(); this.document = document; this.focus = 'events'; }
@@ -41,15 +42,15 @@ export class GlobalEventDocument {
     return fake;
   }
   notify() { this.state().selection = this.editor.eventSelection; this.changed(); }
-  apply(changes, label = '编辑全局事件', selection = [...this.editor.eventSelection], beforeSelection = [...this.editor.eventSelection]) {
+  apply(changes, label = t('global-events.s40758d3'), selection = [...this.editor.eventSelection], beforeSelection = [...this.editor.eventSelection]) {
     if (!changes.length) return false;
     const session = this.getSession(), original = session.chart, state = this.state(), beforeTransient = state.transient;
     const columns = this.columns; let nextTransient = beforeTransient, chart = original;
     for (const change of changes) {
       const entry = columns.find(entry => entry.type.id === change.type && entry.column.id === change.column);
-      if (!entry || entry.type.readonly) throw Error('全局事件：类型尚未加载或不存在');
-      if (!Array.isArray(change.events)) throw Error('全局事件列必须为数组');
-      const events = structuredClone(change.events); events.forEach(event => { validateColumnEvent(entry.column, event); const result = entry.type.validate?.(event, entry.column); if (result === false || typeof result === 'string') throw Error(typeof result === 'string' ? result : '全局事件校验失败'); });
+      if (!entry || entry.type.readonly) throw Error(t('global-events.s2be176a'));
+      if (!Array.isArray(change.events)) throw Error(t('global-events.sc5574f8'));
+      const events = structuredClone(change.events); events.forEach(event => { validateColumnEvent(entry.column, event); const result = entry.type.validate?.(event, entry.column); if (result === false || typeof result === 'string') throw Error(typeof result === 'string' ? result : t('global-events.s634a0c2')); });
       if (entry.type.persistent) {
         const data = chart.globalEvents ?? { version: 1, types: {} }, previous = data.types[entry.type.id];
         const type = { ...previous, name: entry.type.name, source: { ...entry.type.source }, ...(entry.type.width !== undefined ? { width: entry.type.width } : {}), columns: { ...previous?.columns,

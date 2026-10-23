@@ -1,5 +1,6 @@
 import { openDatabase, ensureStore } from './storage.mjs';
 import { nativeStorage, nativeReady, nativeWrite, nativeRead } from './native.mjs';
+import { t } from '../i18n.mjs';
 
 const DATABASE = 'rpe-next-chart-vcs';
 const VERSION = 1;
@@ -24,7 +25,7 @@ async function access(stores, mode, action) {
     transaction.oncomplete = () => { connection.close(); resolve(result?.result); };
     transaction.onerror = transaction.onabort = () => {
       connection.close();
-      reject(transaction.error ?? new Error('版本数据库事务已取消'));
+      reject(transaction.error ?? new Error(t('version-store.s34f8195')));
     };
   });
 }
@@ -85,7 +86,7 @@ function openLegacyVersionDatabase() {
       else resolve(request.result);
     };
     request.onerror = () => missing ? resolve(null) : reject(request.error);
-    request.onblocked = () => reject(new Error('版本数据库正在被其他窗口使用'));
+    request.onblocked = () => reject(new Error(t('version-store.sab69e75')));
   });
 }
 

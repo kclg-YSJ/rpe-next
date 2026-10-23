@@ -3,15 +3,16 @@ import { assetUrl } from '../core/asset-url.mjs';
 import { baseEditorSkinCss } from './editor-skin-base.mjs';
 import { setEditorCanvasSkin } from './editor-skin-canvas.mjs';
 import { emitModHook } from '../core/mod-hooks.mjs';
+import { isLocalizedMap, localizedValue, t } from '../i18n.mjs';
 
 function safeSvg(bytes) {
-  const source = new TextDecoder().decode(bytes); if (/<!DOCTYPE|<!ENTITY/i.test(source)) throw new Error('SVG 不能包含实体或文档类型');
+  const source = new TextDecoder().decode(bytes); if (/<!DOCTYPE|<!ENTITY/i.test(source)) throw new Error(t('editor-skin-runtime.s7933796'));
   const svg = new DOMParser().parseFromString(source, 'image/svg+xml');
-  if (svg.querySelector('parsererror') || svg.documentElement.localName !== 'svg') throw new Error('SVG 无效');
+  if (svg.querySelector('parsererror') || svg.documentElement.localName !== 'svg') throw new Error(t('editor-skin-runtime.sf54de02'));
   for (const node of svg.querySelectorAll('*')) {
-    if (['script', 'foreignobject', 'style', 'image', 'iframe', 'animate', 'animatetransform', 'animatemotion', 'set', 'a'].includes(node.localName.toLowerCase())) throw new Error('SVG 含不支持的活动元素');
+    if (['script', 'foreignobject', 'style', 'image', 'iframe', 'animate', 'animatetransform', 'animatemotion', 'set', 'a'].includes(node.localName.toLowerCase())) throw new Error(t('editor-skin-runtime.s6cf2d1b'));
     for (const attribute of node.attributes) {
-      if (/^on/i.test(attribute.name) || /href$/i.test(attribute.name) && !attribute.value.startsWith('#')) throw new Error('SVG 含活动内容或外部资源');
+      if (/^on/i.test(attribute.name) || /href$/i.test(attribute.name) && !attribute.value.startsWith('#')) throw new Error(t('editor-skin-runtime.s5b29d24'));
       if (!/^xmlns/.test(attribute.name) && /url\s*\(\s*["']?(?!#)|(?:https?|data|javascript|file|blob):|\\/i.test(attribute.value)) throw new Error('SVG 属性含外部资源');
     }
   }
@@ -31,7 +32,7 @@ export class EditorSkinRuntime {
       for (const [id, asset] of Object.entries(record.skin.assets ?? {})) {
         const path = asset.builtin ? EDITOR_SKIN_BUILTINS[asset.builtin] : asset.path;
         let bytes = record.files.get(path);
-        if (asset.builtin) { const response = await fetch(assetUrl(path)); if (!response.ok) throw new Error('内置图标缺失：' + asset.builtin); bytes = new Uint8Array(await response.arrayBuffer()); }
+        if (asset.builtin) { const response = await fetch(assetUrl(path)); if (!response.ok) throw new Error(t('editor-skin-runtime.sf43ee5e') + asset.builtin); bytes = new Uint8Array(await response.arrayBuffer()); }
         const extension = path.split('.').at(-1).toLowerCase();
         const mime = asset.type === 'font' ? 'font/' + extension : extension === 'svg' ? 'image/svg+xml' : 'image/' + extension.replace('jpg', 'jpeg');
         if (extension === 'svg') bytes = safeSvg(bytes);
@@ -40,13 +41,13 @@ export class EditorSkinRuntime {
           const family = `rpen-skin-${record.skin.id}-${id}`; const face = new FontFace(family, `url("${url}")`); await face.load(); faces.push(face); fonts.set(id, family);
         } else {
           const picture = new Image(); picture.src = url; await picture.decode();
-          if (picture.naturalWidth * picture.naturalHeight > 16000000) throw new Error('皮肤图片超过 1600 万像素：' + asset.path);
+          if (picture.naturalWidth * picture.naturalHeight > 16000000) throw new Error(t('editor-skin-runtime.sc544c16') + asset.path);
           images.set(id, url);
           const variants = [{ url, scale: 1 }];
           for (const source of asset.sources ?? []) {
             let content = record.files.get(source.path); const ext = source.path.split('.').at(-1).toLowerCase(); if (ext === 'svg') content = safeSvg(content);
             const variantUrl = URL.createObjectURL(new Blob([content], { type: ext === 'svg' ? 'image/svg+xml' : 'image/' + ext.replace('jpg', 'jpeg') })); urls.push(variantUrl);
-            const variant = new Image(); variant.src = variantUrl; await variant.decode(); if (variant.naturalWidth * variant.naturalHeight > 16000000) throw new Error('高 DPI 图片超过像素限制');
+            const variant = new Image(); variant.src = variantUrl; await variant.decode(); if (variant.naturalWidth * variant.naturalHeight > 16000000) throw new Error(t('editor-skin-runtime.s0771206'));
             variants.push({ url: variantUrl, scale: source.scale });
           }
           sources.set(id, variants);
@@ -97,7 +98,7 @@ export class EditorSkinRuntime {
         if (!destination) {
           destination = document.createElement(group.collapsible ? 'details' : 'div'); destination.className = 'skin-control-group'; destination.dataset.skinGroup = group.id;
           destination.dataset.direction = group.direction ?? 'row';
-          if (group.label) { const label = document.createElement(group.collapsible ? 'summary' : 'span'); label.className = 'skin-group-label'; label.textContent = group.label; destination.append(label); }
+          if (group.label) { const label = document.createElement(group.collapsible ? 'summary' : 'span'); label.className = 'skin-group-label'; label.textContent = localizedValue(group.label); destination.append(label); }
           if (group.collapsible) destination.open = true;
           slot.append(destination); this.groups.push(destination);
         }
@@ -115,8 +116,11 @@ export class EditorSkinRuntime {
       const selector = entry.selector.replace(/@([a-z][a-z0-9-]*)/g, (_, id) => EDITOR_SKIN_COMPONENTS[id]);
       for (const element of document.querySelectorAll(selector)) {
         let patches = this.patches.get(element); if (!patches) { patches = new Map(); this.patches.set(element, patches); }
-        for (const [key, value] of Object.entries(entry)) {
+        for (const [key, raw] of Object.entries(entry)) {
           if (key === 'selector') continue;
+          // Skin text may be a per-locale map; resolve it for the active language.
+          const value = isLocalizedMap(raw) ? localizedValue(raw) : raw;
+          if (value === undefined) continue;
           if (key === 'text') {
             if (element.matches('input,textarea,select,canvas') || element.closest('#editor-skin-settings')) continue;
             let node = [...element.childNodes].find(node => node.nodeType === 3 && node.textContent.trim());

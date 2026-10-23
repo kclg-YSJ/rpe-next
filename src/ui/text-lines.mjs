@@ -2,6 +2,7 @@ import { parseBeat, beatValue, formatBeat, fromNumber } from '../core/beat.mjs';
 import { parseLineExpression } from '../application/multi-line-edit.mjs';
 import { textLinesChart } from '../application/text-lines.mjs';
 import { editorSkinContext } from './editor-skin-canvas.mjs';
+import { t } from '../i18n.mjs';
 
 const action = (label, run) => { const button = document.createElement('button'); button.type = 'button'; button.textContent = label; button.onclick = run; return button; };
 
@@ -21,8 +22,8 @@ export class TextLinesPanel {
   hide() { this.active = false; this.cancel(); this.previewChart = null; }
   cancel() { this.generation++; clearTimeout(this.timer); this.worker?.terminate(); this.worker = null; }
   render() {
-    this.host.replaceChildren(); const title = document.createElement('div'); title.className = 'panel-title'; title.textContent = '文字拼合'; this.host.append(title);
-    const text = document.createElement('textarea'); text.rows = 3; text.maxLength = 1000; text.value = this.options.text; text.setAttribute('aria-label', '拼合文本'); this.host.append(text);
+    this.host.replaceChildren(); const title = document.createElement('div'); title.className = 'panel-title'; title.textContent = t('text-lines.s23acb5a'); this.host.append(title);
+    const text = document.createElement('textarea'); text.rows = 3; text.maxLength = 1000; text.value = this.options.text; text.setAttribute('aria-label', t('text-lines.s15c288c')); this.host.append(text);
     text.oninput = () => { this.options.text = text.value; this.refresh(); };
     this.controls = new Map();
     const field = (key, labelText, type = 'number', minimum, maximum, step = 'any') => {
@@ -36,51 +37,51 @@ export class TextLinesPanel {
       input.oninput = () => { this.options[key] = type === 'checkbox' ? input.checked : type === 'number' ? (input.value.trim() ? Number(input.value) : NaN) : input.value; this.refresh(); };
       label.append(input); this.host.append(label); this.controls.set(key, input); return input;
     };
-    field('font', '字体', 'text');
+    field('font', t('text-lines.sb50d4d8'), 'text');
     const fontFile = document.createElement('input'); fontFile.type = 'file'; fontFile.accept = '.ttf,.otf,.woff,.woff2'; fontFile.hidden = true;
     fontFile.onchange = async () => {
       try {
         const file = fontFile.files[0]; if (!file) return;
         const name = 'TextFont' + this.fonts.length; const font = new FontFace(name, await file.arrayBuffer()); await font.load(); document.fonts.add(font); this.fonts.push(name); this.fontNames.set(name, file.name); this.options.font = name; this.render(); this.refresh();
-      } catch (error) { this.fail('字体载入失败：' + error.message); }
+      } catch (error) { this.fail(t('text-lines.s0823434') + error.message); }
     };
-    this.host.append(action('导入字体文件', () => fontFile.click()), fontFile);
-    field('lines', '参与线号 / 组名', 'text');
-    this.host.append(action('使用全部判定线', () => { this.options.lines = `0:${this.getContext().session.chart.judgeLineList.length - 1}`; this.controls.get('lines').value = this.options.lines; this.refresh(); }));
-    field('beat', '生成拍数', 'text'); field('width', '文字总宽度', 'number', 10, 10000); field('x', '中心 X'); field('y', '中心 Y');
-    field('spacing', '行距倍率', 'number', 0.5, 4, 0.1); field('noteType', '音符种类'); field('size', '音符大小', 'number', 0.05, 4, 0.05); field('tolerance', '容忍度 / %', 'number', 0, 90, 1);
-    field('coverage', '骨架覆盖度下限 / %', 'number', 0, 100, 0.1);
-    field('replace', '替换生成时刻的位移 / 旋转', 'checkbox'); field('addNotes', '同时添加零速假音符', 'checkbox'); field('show', '左侧预览（固定在生成时刻）', 'checkbox');
-    const details = document.createElement('details'); const summary = document.createElement('summary'); summary.textContent = '规则、字体与误差说明'; const help = document.createElement('p'); help.className = 'hint';
-    help.textContent = '音符贴图为拟合结果，青色为原字形。可选择 Drag、Tap 或 Flick，按对应贴图比例重新拟合。先提取字形骨架并统一笔画宽度，减少为填满粗笔画而叠加音符；优先水平、竖直与 45° 斜向，曲线和其他斜笔画仍可使用其他角度。骨架误差 = 1 − 音符与统一宽度后的骨架交集面积 / 并集面积；每个独立连通部分的骨架覆盖度还须达到设定下限（默认 95%，可调 0–100%）。覆盖下限和误差容忍度独立，降低覆盖下限可减少用线，也可能遗漏小笔画；设为 0% 只检查误差。未达标不生成，不保证理论最少用线。线号支持 0 2:8 组名，最多使用指定数量。文字、字体仅在本机处理；系统字体缺失时浏览器可能回退，emoji 按单色剪影提取骨架。导入字体仅本次会话使用，结果事件不依赖字体。事件写入基础层 0，补偿父线和其他层；生成前的事件保留，生成后保持到该轴下一事件。穿过 Bezier 或整体轨迹时请先拆分。父线之后继续运动仍会影响结果。已有音符应与所选类型一致，并为零速、X=0、Y 偏移=0、相同大小；新增假音符在生成时刻后一秒判定，不发打击音。'; details.append(summary, help); this.host.append(details);
-    this.canvas = document.createElement('canvas'); this.canvas.width = 500; this.canvas.height = 260; this.canvas.className = 'trajectory-preview'; this.canvas.setAttribute('aria-label', '文字与音符拟合预览'); this.host.append(this.canvas);
+    this.host.append(action(t('text-lines.s476562a'), () => fontFile.click()), fontFile);
+    field('lines', t('text-lines.sebca9ba'), 'text');
+    this.host.append(action(t('text-lines.s0d6dd78'), () => { this.options.lines = `0:${this.getContext().session.chart.judgeLineList.length - 1}`; this.controls.get('lines').value = this.options.lines; this.refresh(); }));
+    field('beat', t('text-lines.sb13d340'), 'text'); field('width', t('text-lines.s7248129'), 'number', 10, 10000); field('x', t('text-lines.s902ce65')); field('y', t('text-lines.s97b96fe'));
+    field('spacing', t('text-lines.sde8f694'), 'number', 0.5, 4, 0.1); field('noteType', t('text-lines.s8642504')); field('size', t('text-lines.s2cb7be3'), 'number', 0.05, 4, 0.05); field('tolerance', t('text-lines.s2ecfd69'), 'number', 0, 90, 1);
+    field('coverage', t('text-lines.s5531183'), 'number', 0, 100, 0.1);
+    field('replace', t('text-lines.s8000e33'), 'checkbox'); field('addNotes', t('text-lines.s68069a2'), 'checkbox'); field('show', t('text-lines.se76260e'), 'checkbox');
+    const details = document.createElement('details'); const summary = document.createElement('summary'); summary.textContent = t('text-lines.s96de04e'); const help = document.createElement('p'); help.className = 'hint';
+    help.textContent = t('text-lines.s694e21b'); details.append(summary, help); this.host.append(details);
+    this.canvas = document.createElement('canvas'); this.canvas.width = 500; this.canvas.height = 260; this.canvas.className = 'trajectory-preview'; this.canvas.setAttribute('aria-label', t('text-lines.s877d7b7')); this.host.append(this.canvas);
     this.message = document.createElement('p'); this.message.className = 'hint'; this.message.setAttribute('role', 'status'); this.host.append(this.message);
-    const noteHelp = document.createElement('p'); noteHelp.className = 'hint'; noteHelp.textContent = '误差比较骨架结构，不要求填满青色原字形，也不计高亮光晕。若线本体遮挡文字，可先把参与线的透明度设为 0；负透明度会隐藏音符。非默认音符尺寸控制仍会影响实际效果。'; details.append(noteHelp);
+    const noteHelp = document.createElement('p'); noteHelp.className = 'hint'; noteHelp.textContent = t('text-lines.sf2eef4e'); details.append(noteHelp);
     const previewPosition = this.controls.get('font').parentElement;
     this.host.insertBefore(this.canvas, previewPosition); this.host.insertBefore(this.message, previewPosition);
-    const footer = document.createElement('div'); footer.className = 'text-lines-footer'; this.applyButton = action('生成判定线事件', () => this.apply()); this.applyButton.disabled = true;
-    footer.append(action('返回谱面工具', () => this.activate('chart')), this.applyButton); this.host.append(footer);
+    const footer = document.createElement('div'); footer.className = 'text-lines-footer'; this.applyButton = action(t('text-lines.s2cebcfb'), () => this.apply()); this.applyButton.disabled = true;
+    footer.append(action(t('text-lines.sb3669b2'), () => this.activate('chart')), this.applyButton); this.host.append(footer);
     const scroll = document.createElement('div'); scroll.className = 'text-lines-scroll';
     scroll.append(...[...this.host.children].filter(child => child !== footer)); this.host.insertBefore(scroll, footer);
   }
   fail(message) { this.previewChart = null; this.result = null; this.applyButton.disabled = true; this.message.textContent = message; this.invalidate(); }
   refresh() {
-    this.cancel(); this.result = null; this.previewChart = null; this.applyButton.disabled = true; this.message.textContent = '正在计算…'; this.invalidate();
+    this.cancel(); this.result = null; this.previewChart = null; this.applyButton.disabled = true; this.message.textContent = t('text-lines.s7419202'); this.invalidate();
     if (!this.active) return;
     const generation = this.generation;
     this.timer = setTimeout(() => this.calculate(generation).catch(error => { if (generation === this.generation) this.fail(error.message); }), 220);
   }
   async calculate(generation) {
     const options = { ...this.options }; const { session, skin, noteSize = 175 } = this.getContext(); const chart = session.chart;
-    if (!options.text.trim()) throw new Error('请输入可见文字');
-    if (![options.width, options.x, options.y, options.spacing, options.size, options.tolerance].every(Number.isFinite) || options.width < 10 || options.width > 10000 || options.spacing < 0.5 || options.spacing > 4 || options.size < 0.05 || options.size > 4 || options.tolerance < 0 || options.tolerance > 90) throw new Error('布局、音符大小或容忍度无效');
-    if (!Number.isFinite(options.coverage) || options.coverage < 0 || options.coverage > 100) throw new Error('骨架覆盖度下限须为 0–100%');
-    if (![4, 1, 3].includes(options.noteType)) throw new Error('请选择 Drag、Tap 或 Flick');
-    for (const token of options.lines.split(/\s+/)) if (/^[+-]?\d+(?::[+-]?\d+)?$/.test(token) && token.split(':').some(value => Number(value) < 0 || Number(value) >= chart.judgeLineList.length)) throw new Error('线号超出谱面范围');
-    const indices = parseLineExpression(options.lines, chart.judgeLineList.length, chart); if (!indices.length || indices.length > 5000) throw new Error('请选择 1–5000 条现有判定线');
+    if (!options.text.trim()) throw new Error(t('text-lines.s95e693e'));
+    if (![options.width, options.x, options.y, options.spacing, options.size, options.tolerance].every(Number.isFinite) || options.width < 10 || options.width > 10000 || options.spacing < 0.5 || options.spacing > 4 || options.size < 0.05 || options.size > 4 || options.tolerance < 0 || options.tolerance > 90) throw new Error(t('text-lines.s8f9061d'));
+    if (!Number.isFinite(options.coverage) || options.coverage < 0 || options.coverage > 100) throw new Error(t('text-lines.s7fcb20a'));
+    if (![4, 1, 3].includes(options.noteType)) throw new Error(t('text-lines.s1af0bca'));
+    for (const token of options.lines.split(/\s+/)) if (/^[+-]?\d+(?::[+-]?\d+)?$/.test(token) && token.split(':').some(value => Number(value) < 0 || Number(value) >= chart.judgeLineList.length)) throw new Error(t('text-lines.s1b385cf'));
+    const indices = parseLineExpression(options.lines, chart.judgeLineList.length, chart); if (!indices.length || indices.length > 5000) throw new Error(t('text-lines.sc0202d0'));
     const beatTime = parseBeat(options.beat); const beat = beatValue(beatTime);
     await document.fonts.load(`96px "${options.font}"`, options.text); if (generation !== this.generation) return;
-    const lines = options.text.split(/\r?\n/); if (lines.length > 16) throw new Error('一次最多拟合 16 行文字');
+    const lines = options.text.split(/\r?\n/); if (lines.length > 16) throw new Error(t('text-lines.s83bffc4'));
     const measure = document.createElement('canvas').getContext('2d'); const font = `96px "${options.font}", sans-serif`; measure.font = font;
     const metrics = lines.map(line => measure.measureText(line));
     const naturalWidth = Math.max(1, ...metrics.map(entry => Math.max(entry.width, entry.actualBoundingBoxLeft + entry.actualBoundingBoxRight)));
@@ -88,8 +89,8 @@ export class TextLinesPanel {
     const lineHeight = (ascent + descent) * options.spacing; const naturalHeight = ascent + descent + lineHeight * (lines.length - 1);
     const worldHeight = options.width * naturalHeight / naturalWidth; const scale = Math.min(384 / options.width, 384 / worldHeight);
     const texture = skin.noteImage?.(options.noteType) ?? skin.images.get({ 4: 'Drag2', 1: 'Tap2', 3: 'Flick2' }[options.noteType]); const length = noteSize * options.size * scale; const thickness = Math.max(5, noteSize * (texture ? texture.naturalHeight / texture.naturalWidth : 0.2)) * scale;
-    if (thickness < 1 || length < 1) throw new Error('笔画相对文字太细，请增大音符大小、减少文字或减小总宽度');
-    if (length * thickness > 2048) throw new Error('笔画相对文字太大，请减小音符大小或增大文字总宽度');
+    if (thickness < 1 || length < 1) throw new Error(t('text-lines.s17fad02'));
+    if (length * thickness > 2048) throw new Error(t('text-lines.sed7ea5f'));
     const padding = Math.ceil(Math.hypot(length, thickness) / 2) + 2;
     const width = Math.ceil(options.width * scale) + padding * 2; const height = Math.ceil(worldHeight * scale) + padding * 2;
     const raster = document.createElement('canvas'); raster.width = width; raster.height = height; const context = raster.getContext('2d');
@@ -97,7 +98,7 @@ export class TextLinesPanel {
     lines.forEach((line, index) => context.fillText(line, (width - metrics[index].width * fontScale) / 2, padding + (ascent + index * lineHeight) * fontScale));
     const pixels = context.getImageData(0, 0, width, height).data; const mask = Uint8Array.from({ length: width * height }, (unused, index) => pixels[index * 4 + 3] >= 100 ? 1 : 0);
     const worker = new Worker(new URL('../core/text-fit-worker.mjs', import.meta.url), { type: 'module' }); this.worker = worker;
-    worker.onerror = () => { if (generation === this.generation) { this.cancel(); this.fail('后台拟合启动失败，请重新打开工具'); } };
+    worker.onerror = () => { if (generation === this.generation) { this.cancel(); this.fail(t('text-lines.s76e27a1')); } };
     worker.onmessage = event => {
       worker.terminate(); if (this.worker === worker) this.worker = null;
       if (generation !== this.generation || !this.active) return;
@@ -106,10 +107,10 @@ export class TextLinesPanel {
       const fit = event.data.result; const strokes = fit.strokes.map(stroke => ({ x: options.x + (stroke.x - width / 2) / scale, y: options.y - (stroke.y - height / 2) / scale, angle: stroke.angle }));
       this.result = { ...fit, strokes, indices, beat, beatTime, size: options.size, noteType: options.noteType, addNotes: options.addNotes, replace: options.replace, chart, session };
       this.drawResult(raster, fit, length, thickness, texture);
-      const statistics = `使用 ${strokes.length} / ${indices.length} 条线 · 骨架误差 ${(fit.error * 100).toFixed(1)}% / 容忍度 ${options.tolerance}% · 最低骨架覆盖 ${(fit.skeletonCoverage * 100).toFixed(1)}%（要求 ${(fit.requiredCoverage * 100).toFixed(1)}%）`;
-      if (!fit.passed) { this.message.textContent = statistics + '。误差或覆盖未达标，不会生成；可增加线数或调整音符大小。'; this.invalidate(); return; }
+      const statistics = t('text-lines.s68c9eb8', { p0: strokes.length, p1: indices.length, p2: (fit.error * 100).toFixed(1), p3: options.tolerance, p4: (fit.skeletonCoverage * 100).toFixed(1), p5: (fit.requiredCoverage * 100).toFixed(1) });
+      if (!fit.passed) { this.message.textContent = statistics + t('text-lines.sa907f2c'); this.invalidate(); return; }
       try {
-        this.previewChart = textLinesChart(chart, { ...this.result, preview: true }); this.applyButton.disabled = false; this.message.textContent = statistics + ' · 已达标';
+        this.previewChart = textLinesChart(chart, { ...this.result, preview: true }); this.applyButton.disabled = false; this.message.textContent = statistics + t('text-lines.sbb4a8db');
       } catch (error) { this.previewChart = null; this.message.textContent = statistics + '。' + error.message; }
       this.invalidate();
     };
@@ -131,10 +132,10 @@ export class TextLinesPanel {
   apply() {
     try {
       const result = this.result; const { session } = this.getContext();
-      if (!result?.passed || !this.previewChart) throw new Error('拟合尚未达标，未生成');
-      if (result.session !== session || result.chart !== session.chart) { this.refresh(); throw new Error('谱面已改变，正在重新拟合，请等待预览'); }
+      if (!result?.passed || !this.previewChart) throw new Error(t('text-lines.s0452d28'));
+      if (result.session !== session || result.chart !== session.chart) { this.refresh(); throw new Error(t('text-lines.safb35f4')); }
       const next = textLinesChart(session.chart, result); this.previewChart = null; this.result = null; this.applyButton.disabled = true;
-      session.commit('文字拼合', next); this.message.textContent = `已生成 ${result.strokes.length} 条线的位移和旋转事件，可一次撤销。`; this.notify(this.message.textContent, 'success'); this.invalidate();
+      session.commit(t('text-lines.s23acb5a'), next); this.message.textContent = t('text-lines.se4dcd3f', { p0: result.strokes.length }); this.notify(this.message.textContent, 'success'); this.invalidate();
     } catch (error) { this.message.textContent = error.message; this.notify(error.message, 'error'); }
   }
 }

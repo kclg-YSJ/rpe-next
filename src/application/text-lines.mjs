@@ -3,6 +3,7 @@ import { beatValue } from '../core/beat.mjs';
 import { TempoMap } from '../core/tempo.mjs';
 import { SceneRuntime } from '../core/scene.mjs';
 import { EventTrack } from '../core/events.mjs';
+import { t } from '../i18n.mjs';
 
 const parentIndex = line => line.father === '' || line.father == null ? -1 : Number(line.father);
 
@@ -21,9 +22,9 @@ function insertStep(events, time, value, tempo, factor, replace, track = new Eve
   for (const event of events) {
     const start = beatValue(event.startTime); const end = beatValue(event.endTime);
     if (start <= beat && end > beat || start === beat) {
-      if (!replace) throw new Error('生成时刻已有位移或旋转事件，请勾选替换或选择空白时刻');
+      if (!replace) throw new Error(t('text-lines.s695b130'));
       if (start < beat) {
-        if (event.trajectory || event.bezier) throw new Error('生成时刻穿过整体轨迹或 Bezier 事件，请先拆分或另选时刻');
+        if (event.trajectory || event.bezier) throw new Error(t('text-lines.s88ab6d6'));
         const progress = (seconds - tempo.seconds(event.startTime, factor)) / (tempo.seconds(event.endTime, factor) - tempo.seconds(event.startTime, factor));
         output.push({ ...event, endTime: [...time], end: track.sample({ event, start: tempo.seconds(event.startTime, factor), end: tempo.seconds(event.endTime, factor) }, seconds), easingRight: (event.easingLeft ?? 0) + ((event.easingRight ?? 1) - (event.easingLeft ?? 0)) * progress });
       }
@@ -35,17 +36,17 @@ function insertStep(events, time, value, tempo, factor, replace, track = new Eve
 }
 
 export function textLinesChart(chart, { strokes, indices, beat, beatTime, size, noteType = 4, addNotes = false, replace = false, preview = false }) {
-  if (![4, 1, 3].includes(noteType)) throw new Error('拼字音符类型须为 Drag、Tap 或 Flick');
-  if (!strokes.length || strokes.length > indices.length || new Set(indices).size !== indices.length || !Number.isFinite(beat) || !Number.isFinite(size) || size <= 0) throw new Error('拼字参数或可用线数无效');
-  if (strokes.some(stroke => ![stroke.x, stroke.y, stroke.angle].every(Number.isFinite))) throw new Error('笔画坐标或角度无效');
-  if (beatTime && beatValue(beatTime) !== beat) throw new Error('目标拍数不一致');
-  if (indices.some(index => !Number.isInteger(index) || !chart.judgeLineList[index])) throw new Error('参与线号超出范围');
+  if (![4, 1, 3].includes(noteType)) throw new Error(t('text-lines.s36b0fd6'));
+  if (!strokes.length || strokes.length > indices.length || new Set(indices).size !== indices.length || !Number.isFinite(beat) || !Number.isFinite(size) || size <= 0) throw new Error(t('text-lines.s322cf4a'));
+  if (strokes.some(stroke => ![stroke.x, stroke.y, stroke.angle].every(Number.isFinite))) throw new Error(t('text-lines.s5c433dd'));
+  if (beatTime && beatValue(beatTime) !== beat) throw new Error(t('text-lines.sbfb580f'));
+  if (indices.some(index => !Number.isInteger(index) || !chart.judgeLineList[index])) throw new Error(t('text-lines.sd8fac08'));
   const tempo = new TempoMap(chart.BPMList); const seconds = tempo.seconds(beat);
   const scene = new SceneRuntime(); scene.compile(chart, tempo); const states = scene.sample(seconds);
   const desired = new Map(strokes.map((stroke, index) => [indices[index], { x: stroke.x, y: stroke.y, rotation: stroke.angle * 180 / Math.PI }]));
   for (const [index] of desired) {
     const seen = new Set([index]); let parent = parentIndex(chart.judgeLineList[index]);
-    while (parent !== -1) { if (!Number.isInteger(parent) || !chart.judgeLineList[parent] || seen.has(parent)) throw new Error('参与判定线存在无效父线或循环父线'); seen.add(parent); parent = parentIndex(chart.judgeLineList[parent]); }
+    while (parent !== -1) { if (!Number.isInteger(parent) || !chart.judgeLineList[parent] || seen.has(parent)) throw new Error(t('text-lines.s2f1e5d9')); seen.add(parent); parent = parentIndex(chart.judgeLineList[parent]); }
   }
   const resolved = new Map();
   const parentState = index => {
@@ -60,8 +61,8 @@ export function textLinesChart(chart, { strokes, indices, beat, beatTime, size, 
   };
   const lines = chart.judgeLineList.map((line, index) => {
     if (!desired.has(index)) return line;
-    if (line.attachUI) throw new Error(`线 ${index} 绑定了游戏 UI，不能用于音符拼字`);
-    if (line.eventLayers?.some(layer => layer?.moveXEvents?.some(event => event.trajectory && tempo.seconds(event.startTime, line.bpmfactor ?? 1) <= seconds && tempo.seconds(event.endTime, line.bpmfactor ?? 1) >= seconds))) throw new Error(`线 ${index} 正处于整体轨迹，请另选时刻或先拆分`);
+    if (line.attachUI) throw new Error(t('text-lines.sa01f6b6', { p0: index }));
+    if (line.eventLayers?.some(layer => layer?.moveXEvents?.some(event => event.trajectory && tempo.seconds(event.startTime, line.bpmfactor ?? 1) <= seconds && tempo.seconds(event.endTime, line.bpmfactor ?? 1) >= seconds))) throw new Error(t('text-lines.s51e7bf5', { p0: index }));
     let target = desired.get(index); const parent = parentIndex(line);
     if (parent >= 0) {
       const ancestor = parentState(parent); const angle = ancestor.rotation * Math.PI / 180; const horizontal = target.x - ancestor.x; const vertical = target.y - ancestor.y;

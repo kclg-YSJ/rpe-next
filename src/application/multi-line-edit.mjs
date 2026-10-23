@@ -1,4 +1,5 @@
 import { groupLineIndices, groupNames } from '../core/line-groups.mjs';
+import { t } from '../i18n.mjs';
 
 export function normalizeLineIndices(indices, lineCount) {
   return [...new Set((indices ?? []).filter(index => Number.isInteger(index) && index >= 0 && index < lineCount))].sort((a, b) => a - b);
@@ -13,9 +14,9 @@ export function parseLineExpression(text, lineCount, chart = null) {
     else if (range.length === 1 && /^[-+]?\d+$/.test(token)) values.push(Number(token));
     else if (range.length === 2 && /^[-+]?\d+$/.test(range[0]) && /^[-+]?\d+$/.test(range[1])) {
       const start = Number(range[0]); const end = Number(range[1]);
-      if (start > end) throw new Error(`线号范围无效：${token}`);
+      if (start > end) throw new Error(t('multi-line-edit.s144ae04', { p0: token }));
       for (let index = start; index <= end; index++) values.push(index);
-    } else throw new Error(`无法解析线号：${token}`);
+    } else throw new Error(t('multi-line-edit.s6aa7d11', { p0: token }));
   }
   return normalizeLineIndices(values, lineCount);
 }

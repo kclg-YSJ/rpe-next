@@ -1,4 +1,5 @@
 import { storageError } from './storage.mjs';
+import { t } from '../i18n.mjs';
 
 const ITEMS_PER_CHUNK = 128;
 const BYTES_PER_CHUNK = 1024 * 1024;
@@ -57,15 +58,15 @@ async function transferPayload(worker, metadata, chart, assets) {
   let reply, timer;
   const receive = () => new Promise((resolve, reject) => {
     reply = { resolve, reject };
-    timer = setTimeout(() => reject(new Error('后台存储长时间没有响应，请重试；当前编辑仍保留。')), 60000);
+    timer = setTimeout(() => reject(new Error(t('recovery-transfer.s4e43388'))), 60000);
   });
   worker.onmessage = ({ data }) => {
     clearTimeout(timer);
-    if (data.ok === false) reply?.reject(storageError(data, '后台存储失败，请重试'));
+    if (data.ok === false) reply?.reject(storageError(data, t('recovery-transfer.s57d1f4f')));
     else reply?.resolve(data.result);
   };
-  worker.onerror = event => reply?.reject(new Error(event.message || '后台备份失败，请重试'));
-  worker.onmessageerror = () => reply?.reject(new Error('后台备份数据无法读取'));
+  worker.onerror = event => reply?.reject(new Error(event.message || t('recovery-transfer.sab27299')));
+  worker.onmessageerror = () => reply?.reject(new Error(t('recovery-transfer.s668a321')));
   const send = (data, transfer = []) => { const response = receive(); worker.postMessage(data, transfer); return response; };
   try {
     await receive();

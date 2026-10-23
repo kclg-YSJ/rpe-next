@@ -4,6 +4,7 @@ import { beatValue, fromNumber } from '../core/beat.mjs';
 import { trajectoryHasRotation } from '../core/curve-trajectory.mjs';
 import { EventTrack } from '../core/events.mjs';
 import { shaderEvents, replaceShaderEvents, alignShaderParameters } from '../core/shader-events.mjs';
+import { t } from '../i18n.mjs';
 
 export const eventKey = (type, index) => `${type}:${index}`;
 export function eventListAt(session, lineIndex, type, layer = session.eventLayer) {
@@ -57,10 +58,10 @@ export function selectAllEvents(session, types) {
 
 export function chartWithEventLists(chart, lineIndex, eventLayer, updates) {
   const source = chart.judgeLineList[lineIndex];
-  if (!source) throw new Error('请先添加判定线');
+  if (!source) throw new Error(t('event-commands.sb9277d1'));
   const line = { ...source, extended: { ...source.extended }, eventLayers: [...(source.eventLayers ?? [])] };
   for (const [type, events] of updates) {
-    for (const event of events) if (beatValue(event.endTime) < beatValue(event.startTime)) throw new Error('事件结束拍不能早于开始拍');
+    for (const event of events) if (beatValue(event.endTime) < beatValue(event.startTime)) throw new Error(t('event-commands.s07ec712'));
     if (type === 'paintEvents') continue;
     if (EVENT_TYPES.includes(type)) {
       while (line.eventLayers.length <= eventLayer) line.eventLayers.push({});
@@ -127,7 +128,7 @@ export function toggleSingleEventLock(session) {
   const entries = selectedEventEntries(session);
   if (entries.length !== 1 || entries[0].type === 'paintEvents') return false;
   const locked = !Boolean(entries[0].event.inst);
-  transformEvents(session, '切换事件钩定', event => ({ ...event, inst: locked ? 1 : 0, ...(locked ? { end: structuredClone(event.start) } : {}) }));
+  transformEvents(session, t('event-commands.s015e4fc'), event => ({ ...event, inst: locked ? 1 : 0, ...(locked ? { end: structuredClone(event.start) } : {}) }));
   return true;
 }
 
@@ -141,7 +142,7 @@ export function insertEventAt(session, lineIndex, type, event) {
   assertChart(chart);
   const beforeSelection = session.selectionState();
   selectEvent(session, lineIndex, type, events.length, { replace: true });
-  session.commit('添加事件', chart, beforeSelection);
+  session.commit(t('event-commands.s2380a25'), chart, beforeSelection);
 }
 
 export function placedEvent(session, type, first, second, easingType, lineIndex = session.lineIndex, inst = false) {
@@ -150,7 +151,7 @@ export function placedEvent(session, type, first, second, easingType, lineIndex 
   const events = eventListAt(session, lineIndex, type);
   if (type === 'paintEvents') return { startTime: fromNumber(start), endTime: fromNumber(end), shader: 'chromatic', global: false, order: 0, vars: {} };
   const trajectories = ['moveYEvents', 'rotateEvents'].includes(type) ? eventListAt(session, lineIndex, 'moveXEvents').filter(event => event.trajectory && (type !== 'rotateEvents' || trajectoryHasRotation(event.trajectory.options))) : [];
-  if ([...events, ...trajectories].some(event => start < beatValue(event.endTime) && end > beatValue(event.startTime))) throw new Error('该时间范围与同轨道已有事件或整体轨迹重叠，请调整终点或按 Esc 取消');
+  if ([...events, ...trajectories].some(event => start < beatValue(event.endTime) && end > beatValue(event.startTime))) throw new Error(t('event-commands.s5c400ae'));
   const previous = events.filter(event => beatValue(event.endTime) <= start).sort((left, right) => beatValue(right.startTime) - beatValue(left.startTime))[0];
   const fallback = type === 'alphaEvents' ? 255 : type.startsWith('scale') ? 1 : type === 'speedEvents' ? 10 : type === 'textEvents' ? '' : type === 'colorEvents' ? [255, 255, 255] : 0;
   const value = structuredClone(previous?.end ?? fallback);
@@ -174,7 +175,7 @@ export function deleteEvents(session) {
   session.eventSelection.clear();
   if (session.multiLineActive && session.multiLineMode === 'events') session.multiEventSelection.clear();
   session.focus = 'events'; session.selection.clear();
-  session.commit('删除事件', chart, beforeSelection);
+  session.commit(t('event-commands.sf10087a'), chart, beforeSelection);
 }
 
 export function copyEvents(session) { session.eventClipboard = structuredClone(selectedEvents(session).map(({ type, event }) => ({ type, event }))); }
@@ -193,25 +194,25 @@ export function pasteEvents(session, beat, keepTime = false, mirror = false) {
     if (mirror && ['moveXEvents', 'rotateEvents'].includes(type)) { pasted.start = -pasted.start; pasted.end = -pasted.end; }
     events.push(pasted);
   }
-  commitEventLists(session, '粘贴事件', updates, selection);
+  commitEventLists(session, t('event-commands.s5cfeeb2'), updates, selection);
 }
 
 export function splitEvent(event, beat, tempo, factor = 1) {
   const start = tempo.seconds(event.startTime, factor); const end = tempo.seconds(event.endTime, factor); const at = tempo.seconds(beat, factor);
-  if (!(at > start && at < end)) throw new Error('拆分拍数必须在事件内部');
-  if (event.bezier) throw new Error('Bezier 事件暂不支持无损拆分，请先使用缓动事件');
-  if (typeof event.start !== 'number') throw new Error('当前拆分支持数值事件');
+  if (!(at > start && at < end)) throw new Error(t('event-commands.s93fe9d3'));
+  if (event.bezier) throw new Error(t('event-commands.sa2fb5ea'));
+  if (typeof event.start !== 'number') throw new Error(t('event-commands.s22db670'));
   const progress = (at - start) / (end - start);
   const middle = (event.easingLeft ?? 0) + ((event.easingRight ?? 1) - (event.easingLeft ?? 0)) * progress;
   const value = new EventTrack([event], tempo, factor).value(at);
-  if (Math.abs(value - event.start) < 1e-10 && event.start !== event.end || Math.abs(event.end - value) < 1e-10 && event.start !== event.end) throw new Error('此缓动切点无法无损拆分，请调整拆分拍数');
+  if (Math.abs(value - event.start) < 1e-10 && event.start !== event.end || Math.abs(event.end - value) < 1e-10 && event.start !== event.end) throw new Error(t('event-commands.s09d719f'));
   return [{ ...event, endTime: fromNumber(beat), end: value, easingRight: middle }, { ...event, startTime: fromNumber(beat), start: value, easingLeft: middle }];
 }
 
 function splitEventOriginal(event, beat, tempo, factor = 1) {
   const start = tempo.seconds(event.startTime, factor); const end = tempo.seconds(event.endTime, factor); const at = tempo.seconds(beat, factor);
-  if (!(at > start && at < end)) throw new Error('拆分拍数必须在事件内部');
-  if (event.bezier || typeof event.start !== 'number') throw new Error('当前拆分支持数值缓动事件');
+  if (!(at > start && at < end)) throw new Error(t('event-commands.s93fe9d3'));
+  if (event.bezier || typeof event.start !== 'number') throw new Error(t('event-commands.sbec4067'));
   const value = new EventTrack([event], tempo, factor).value(at);
   return [
     { ...event, endTime: fromNumber(beat), end: value, easingType: 1, easingLeft: 0, easingRight: 1, bezier: 0, bezierPoints: [0, 0, 1, 1] },
@@ -229,6 +230,6 @@ export function splitSelectedEvents(session, beat, tempo) {
     events.sort((left, right) => beatValue(left.startTime) - beatValue(right.startTime) || beatValue(left.endTime) - beatValue(right.endTime));
     for (let nextIndex = 0; nextIndex < events.length; nextIndex++) if (events[nextIndex] === first || events[nextIndex] === second) selection.push(eventKey(type, nextIndex));
   }
-  if (!updates.size) throw new Error('播放光标不在选中事件内部');
-  commitEventLists(session, '拆分事件', updates, selection);
+  if (!updates.size) throw new Error(t('event-commands.sbc12772'));
+  commitEventLists(session, t('event-commands.se11f352'), updates, selection);
 }

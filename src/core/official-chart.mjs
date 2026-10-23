@@ -1,9 +1,10 @@
 import { createChart, createLine, createNote, createEvent, assertChart } from './chart.mjs';
 import { convertOfficialNoiseAreas } from './official-noise.mjs';
 import { NOISE_VERSION } from './noise-areas.mjs';
+import { t } from '../i18n.mjs';
 
 export function parseOfficialChart(original) {
-  if (original.formatVersion !== 3 || !original.judgeLineList?.length) throw new Error('目前仅支持非空官方 formatVersion 3 谱面');
+  if (original.formatVersion !== 3 || !original.judgeLineList?.length) throw new Error(t('official-chart.s5c74786'));
   const chart = createChart();
   const baseBpm = original.judgeLineList[0].bpm;
   chart.BPMList = [{ bpm: baseBpm, startTime: [0, 0, 1] }];

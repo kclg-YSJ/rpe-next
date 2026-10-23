@@ -1,6 +1,7 @@
 import { transferSnapshot } from './recovery-transfer.mjs';
 import { openDatabase, ensureStore } from './storage.mjs';
 import { nativeStorage, nativeReady, nativeWrite, nativeRead, nativeAssetBytes } from './native.mjs';
+import { t } from '../i18n.mjs';
 
 function database() {
   return openDatabase('rpe-next-recovery', 2, (connection, transaction, oldVersion) => {
@@ -25,7 +26,7 @@ async function transaction(stores, mode, action) {
     try { request = action(operation); } catch (error) { operation.abort(); connection.close(); reject(error); return; }
     operation.oncomplete = () => { connection.close(); resolve(request.result); };
     operation.onerror = () => { connection.close(); reject(operation.error); };
-    operation.onabort = () => { connection.close(); reject(operation.error ?? new Error('恢复存储已中止')); };
+    operation.onabort = () => { connection.close(); reject(operation.error ?? new Error(t('recovery.s1f4b4f2'))); };
   });
 }
 
@@ -61,7 +62,7 @@ export async function saveSnapshotDirect(projectId, name, chart, assets, limit =
       store.put(draft); summaries.put(summary(draft));
     };
     operation.oncomplete = () => { connection.close(); resolve(); };
-    operation.onabort = operation.onerror = () => { connection.close(); reject(operation.error ?? new Error('恢复备份写入已中止')); };
+    operation.onabort = operation.onerror = () => { connection.close(); reject(operation.error ?? new Error(t('recovery.s4483306'))); };
   });
 }
 

@@ -11,6 +11,7 @@ import { integerChartAlpha } from '../core/alpha-values.mjs';
 import { chartExportStem, safeExportStem, DownloadNames } from '../core/export-filename.mjs';
 import { isBackupChartFile, isChartDocumentFile } from '../core/chart-backups.mjs';
 import { collectExportAssetPaths } from './export-assets.mjs';
+import { t } from '../i18n.mjs';
 
 export async function openFiles(fileList, { confirmLargeArchive, includeBackupCharts = false } = {}) {
   const files = [...fileList];
@@ -19,7 +20,7 @@ export async function openFiles(fileList, { confirmLargeArchive, includeBackupCh
   if (files.length === 1 && /\.(pez|zip)$/i.test(files[0].name)) {
     const buffer = await files[0].arrayBuffer(), info = inspectZip(buffer);
     const large = info.declaredBytes > 1024 ** 3 || info.largestFile > 512 * 1024 ** 2 || info.count > 20000 || info.largestRatio > 500;
-    if (large && !await confirmLargeArchive?.(info)) throw Object.assign(new Error('谱面包解压后的体积、文件数或压缩倍率过大，已停止导入；确认来源可信后可再次打开并确认。'), { name: 'ArchiveLimitError' });
+    if (large && !await confirmLargeArchive?.(info)) throw Object.assign(new Error(t('files.s1fe13d6')), { name: 'ArchiveLimitError' });
     assets = await readZip(buffer, { maxFiles: large ? info.count : 20000, maxBytes: large ? info.declaredBytes : 1024 ** 3, maxFileBytes: large ? info.largestFile : 512 * 1024 ** 2,
       includeEntry: name => includeBackupCharts || !isBackupChartFile(name) });
   }
@@ -31,7 +32,7 @@ export async function openFiles(fileList, { confirmLargeArchive, includeBackupCh
     try { candidates.push({ name, chart: parseDocument(decodeLegacy(bytes)) }); }
     catch (error) { errors.push(`${name}: ${error.message}`); }
   }
-  if (!candidates.length) throw new Error(errors.join('\n') || '找不到可导入的谱面；自动保存及备份谱面默认忽略，可在设置的“导入与导出”中开启包含这些文件');
+  if (!candidates.length) throw new Error(errors.join('\n') || t('files.s347b063'));
   attachExternalEffects(candidates, assets);
   for (const candidate of candidates) if (candidate.chart.rpeNextLegacySource?.format === 'phigros-v3') {
     const references = resourceReferences(candidate.chart, assets, candidate.name);
@@ -126,8 +127,8 @@ function orderedExportChart(chart) {
 }
 
 export function legacyChart(chart, splitSettings = {}) {
-  if (chart.blockAreaList?.length) throw new Error('原 RPE 不支持噪域，请在导出窗口明确选择移除噪域后导出');
-  if (Object.values(chart.globalEvents?.types ?? {}).some(type => Object.values(type.columns).some(column => column.events.length))) throw new Error('原 RPE 不支持全局事件，请在导出窗口明确选择移除全局事件后导出');
+  if (chart.blockAreaList?.length) throw new Error(t('files.s82aa779'));
+  if (Object.values(chart.globalEvents?.types ?? {}).some(type => Object.values(type.columns).some(column => column.events.length))) throw new Error(t('files.s91b752c'));
   const next = structuredClone(chart);
   delete next.blockAreaList;
   delete next.noiseAreaOptions;
@@ -277,12 +278,12 @@ export function exportPackage(chart, assets, chartName) {
 
 export function createChartExport(chart, assets, chartName, options = {}) {
   const { format = 'pez', compatibility = 'next', name, split = {} } = options;
-  if (!['json', 'pez'].includes(format) || !['next', 'rpe'].includes(compatibility)) throw new Error('导出格式无效');
+  if (!['json', 'pez'].includes(format) || !['next', 'rpe'].includes(compatibility)) throw new Error(t('files.sca076d2'));
   let source = compatibility === 'rpe' && options.removeNoiseAreas ? { ...chart, blockAreaList: [] } : chart;
   if (compatibility === 'rpe' && options.removeGlobalEvents) { source = { ...source }; delete source.globalEvents; }
   const snapshot = compatibility === 'rpe' ? legacyChart(source, split) : orderedExportChart(chart);
   delete snapshot.chartTime;
-  if (name !== undefined && !String(name).trim()) throw new Error('请输入导出文件名');
+  if (name !== undefined && !String(name).trim()) throw new Error(t('files.sc04226c'));
   const stem = name === undefined ? chartExportStem(chart, chartName) : safeExportStem(name);
   const blob = format === 'pez' ? writeZip(packageEntries(snapshot, assets, chartName, options)) : new Blob([serializeChart(snapshot, { compact: options.compact !== false })], { type: 'application/json' });
   return { blob, name: stem + '.' + format };

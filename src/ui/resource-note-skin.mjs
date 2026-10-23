@@ -1,5 +1,6 @@
 import { NOTE_SKIN_IMAGES, holdSkinLayout, noteSkinColor, noteSkinFrame } from '../core/note-skin.mjs';
 import { hitParticles } from '../core/editor-display.mjs';
+import { t } from '../i18n.mjs';
 
 const names = {1:'click',2:'hold',3:'flick',4:'drag'};
 const dimensions = image => ({width:image.naturalWidth??image.width,height:image.naturalHeight??image.height});
@@ -19,7 +20,7 @@ export class ResourceNoteSkin {
     const images=new Map(await Promise.all(NOTE_SKIN_IMAGES.map(async name=>{
       const url=URL.createObjectURL(new Blob([record.files.get(name)],{type:'image/png'}));const picture=new Image();
       try {picture.src=url;await picture.decode();return [name,picture];}
-      catch {throw new Error('无法解码音符皮肤图片：'+name);}
+      catch {throw new Error(t('resource-note-skin.s79f19c3')+name);}
       finally {URL.revokeObjectURL(url);}
     })));
     return new ResourceNoteSkin(record,images,tintSource);

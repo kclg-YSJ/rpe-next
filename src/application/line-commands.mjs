@@ -1,11 +1,12 @@
 import { remapShaderLines } from '../core/shader-events.mjs';
 import { createLine } from '../core/chart.mjs';
+import { t } from '../i18n.mjs';
 
 export const MAX_BATCH_LINE_COUNT = 10000;
 
 export function validateLineCount(count, current = 0) {
-  if (!Number.isSafeInteger(count) || count <= 0) throw new Error('判定线总数必须为正整数');
-  if (count > current && count > MAX_BATCH_LINE_COUNT) throw new Error(`批量增加的目标总数不能超过 ${MAX_BATCH_LINE_COUNT} 条`);
+  if (!Number.isSafeInteger(count) || count <= 0) throw new Error(t('line-commands.sd6efa64'));
+  if (count > current && count > MAX_BATCH_LINE_COUNT) throw new Error(t('line-commands.s90c27c6', { p0: MAX_BATCH_LINE_COUNT }));
 }
 
 export function ensureLineCount(chart, count) {
@@ -16,7 +17,7 @@ export function ensureLineCount(chart, count) {
 }
 
 function requireLine(chart, index) {
-  if (!Number.isInteger(index) || !chart.judgeLineList?.[index]) throw new Error('判定线索引无效');
+  if (!Number.isInteger(index) || !chart.judgeLineList?.[index]) throw new Error(t('line-commands.s16ff585'));
 }
 
 export function reorderLine(chart, from, to) {
@@ -45,7 +46,7 @@ export function deleteLine(chart, index) {
 export function duplicateLine(chart, index) {
   requireLine(chart, index);
   const line = structuredClone(chart.judgeLineList[index]);
-  line.Name = `${line.Name || '判定线'} 副本`;
+  line.Name = t('line-commands.s0fba311', { p0: line.Name || '判定线' });
   return remapShaderLines(chart, { ...chart, judgeLineList: [...chart.judgeLineList, line] }, new Map(chart.judgeLineList.map((line, index) => [index, index])), index);
 }
 
@@ -55,7 +56,7 @@ export function setLineParent(chart, index, parent) {
   const visited = new Set([index]);
   let ancestor = parent;
   while (ancestor !== -1) {
-    if (visited.has(ancestor)) throw new Error('父线关系会形成循环');
+    if (visited.has(ancestor)) throw new Error(t('line-commands.s2cc5c48'));
     requireLine(chart, ancestor);
     visited.add(ancestor);
     ancestor = chart.judgeLineList[ancestor].father ?? -1;

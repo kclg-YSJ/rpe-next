@@ -87,9 +87,9 @@ my-skin/
 | `protocol` | 必填字符串 | 固定 `rpen-editor-skin` |
 | `version` | 必填整数 | 固定 `1`，不是应用版本 |
 | `id` | 必填字符串 | 稳定标识，见下文；同 id 导入会询问是否替换 |
-| `name` | 必填，1–80 字符 | 显示名称 |
+| `name` | 必填，1–80 字符 | 显示名称；也可写成 `{ "zh-CN": "…", "en-US": "…" }` |
 | `author` | 可选，1–100 字符 | 在名称后以括号显示 |
-| `description` | 可选，1–2000 字符 | 设置中显示的说明 |
+| `description` | 可选，1–2000 字符 | 设置中显示的说明；同样支持多语言映射 |
 | `colorScheme` | `dark` | `light` 或 `dark`，影响浏览器原生控件 |
 | `assets` | `{}` | 图片和字体注册表 |
 | `tokens` | `{}` | 基础设计变量，未填写时使用下表缺省值 |
@@ -411,7 +411,7 @@ hide 为选择器字符串数组，最多 300 项，默认空。支持与 styles
 }
 ```
 
-最多 300 项。每项需要 selector，其他字段可选，内容为最多 1000 字符的纯文本，允许空字符串。text 替换第一个非空的**直接文本节点**，保留 img、kbd、input 等子节点；不会用 innerHTML，不解释标签。没有直接文字节点时不制造整段内容，可改为针对内部 span 的选择器。input、textarea、select、canvas 及皮肤管理内的 text 不被替换，避免改变输入值或破坏恢复入口。
+最多 300 项。每项需要 selector，其他字段可选，内容为最多 1000 字符的纯文本，允许空字符串。每个字段也可写成语言映射（`{ "zh-CN": "…", "en-US": "…" }`），运行时按当前界面语言取值，缺失的语言回退到 `zh-CN`。text 替换第一个非空的**直接文本节点**，保留 img、kbd、input 等子节点；不会用 innerHTML，不解释标签。没有直接文字节点时不制造整段内容，可改为针对内部 span 的选择器。input、textarea、select、canvas 及皮肤管理内的 text 不被替换，避免改变输入值或破坏恢复入口。
 
 title、ariaLabel、placeholder 分别修改同名 HTML 提示、aria-label、占位属性，不修改表单值。页面动态生成和状态改变后会重新匹配；同一元素同一字段的后续匹配项覆盖前项。状态不再匹配或卸载皮肤时复原应用原来的内容。应用主动更新的状态文字仍作为复原来源，不永久回写。
 
@@ -578,7 +578,7 @@ node tools/pack-editor-skin.mjs path/to/my-skin release/editor-skins/my-skin.rpe
 }
 ```
 
-参数 type 为 number/color/boolean/select，需要 label 和 default。数值必须提供有限的 min/max/default，可提供正 step（默认 1）和 unit：空、px、em、rem、%、ms、s、deg。应用时钳制范围；颜色为 #rrggbb，开关编译为 0/1，选择参数的键是安全 CSS 值、值为界面标签，default 必须是已有键。`parameter(id)` 编译为 `var(--rpen-param-id)`；可在 calc 等表达式中使用，定义参数本身不会自动引入编辑器行为。颜色参数还可以直接作为 canvas palette 的值（API 3，见第 9 节），让时间轴等画布与界面配色一起调整；画布值只接受完整的 `parameter(id)`，不支持 color-mix 等表达式，需要派生色时请另设参数。
+参数 type 为 number/color/boolean/select，需要 label 和 default；label 与 select 的选项文本同样可以写成语言映射。数值必须提供有限的 min/max/default，可提供正 step（默认 1）和 unit：空、px、em、rem、%、ms、s、deg。应用时钳制范围；颜色为 #rrggbb，开关编译为 0/1，选择参数的键是安全 CSS 值、值为界面标签，default 必须是已有键。`parameter(id)` 编译为 `var(--rpen-param-id)`；可在 calc 等表达式中使用，定义参数本身不会自动引入编辑器行为。颜色参数还可以直接作为 canvas palette 的值（API 3，见第 9 节），让时间轴等画布与界面配色一起调整；画布值只接受完整的 `parameter(id)`，不支持 color-mix 等表达式，需要派生色时请另设参数。
 
 variants 的每个条目需要 name，可覆盖 colorScheme、tokens、styles、canvas。基础规则与变体规则依次叠加，变量按键覆盖，画布全局 palette 按键合并，targets 按角色替换后由绘制器与全局配置合并；不会重建另一套功能结构。最多 12 个变体，id 不可为 base/auto；base 为基础外观，auto 为跟随系统。systemVariants 必须指向已有的 light/dark 两个变体，可指向同一变体。
 

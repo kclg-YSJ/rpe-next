@@ -1,4 +1,5 @@
 import { beatValue, formatBeat, fromNumber, parseBeat } from '../core/beat.mjs';
+import { t } from '../i18n.mjs';
 
 export function beatInputControl(input, division, reportError) {
   input.dataset.numericExpression = 'beat';
@@ -13,7 +14,7 @@ export function beatInputControl(input, division, reportError) {
   };
   for (const [direction, symbol] of [[1, '▴'], [-1, '▾']]) {
     const button = document.createElement('button'); button.type = 'button'; button.textContent = symbol;
-    button.title = direction < 0 ? '减少一格' : '增加一格'; button.dataset.beatNudge = String(direction);
+    button.title = direction < 0 ? t('beat-input.sc97bc82') : t('beat-input.sbd85928'); button.dataset.beatNudge = String(direction);
     button.onpointerdown = event => event.preventDefault(); button.onclick = () => nudge(direction); buttons.append(button);
   }
   input.addEventListener('wheel', event => {

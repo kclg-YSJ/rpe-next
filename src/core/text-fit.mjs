@@ -1,3 +1,4 @@
+import { t } from '../i18n.mjs';
 export function rectanglePixels(width, height, horizontal, vertical, length, thickness, angle) {
   const cosine = Math.cos(angle); const sine = Math.sin(angle);
   const radiusX = (Math.abs(cosine) * length + Math.abs(sine) * thickness) / 2;
@@ -92,13 +93,13 @@ function skeletonComponents(skeleton, width, height) {
 }
 
 export function fitTextMask({ mask, width, height, length, thickness, limit, tolerance, requiredCoverage = 0.95 }) {
-  if (!(mask instanceof Uint8Array) || mask.length !== width * height || width * height > 300000 || !Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1) throw new Error('文字栅格无效或过大');
-  if (![length, thickness, tolerance].every(Number.isFinite) || length < 1 || thickness < 1 || length > 1024 || thickness > 1024 || length * thickness > 2048 || tolerance < 0 || tolerance >= 1 || !Number.isInteger(limit) || limit < 1 || limit > 5000) throw new Error('笔画尺寸、容忍度或可用线数无效');
-  if (!Number.isFinite(requiredCoverage) || requiredCoverage < 0 || requiredCoverage > 1) throw new Error('骨架覆盖度下限须为 0–100%');
+  if (!(mask instanceof Uint8Array) || mask.length !== width * height || width * height > 300000 || !Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1) throw new Error(t('text-fit.s33f8f86'));
+  if (![length, thickness, tolerance].every(Number.isFinite) || length < 1 || thickness < 1 || length > 1024 || thickness > 1024 || length * thickness > 2048 || tolerance < 0 || tolerance >= 1 || !Number.isInteger(limit) || limit < 1 || limit > 5000) throw new Error(t('text-fit.se11af72'));
+  if (!Number.isFinite(requiredCoverage) || requiredCoverage < 0 || requiredCoverage > 1) throw new Error(t('text-fit.s7fcb20a'));
   const skeleton = textSkeleton(mask, width, height);
   mask = skeletonTarget(skeleton, width, height, thickness);
   const target = mask.reduce((sum, value) => sum + Boolean(value), 0);
-  if (!target) throw new Error('文本没有可见字形');
+  if (!target) throw new Error(t('text-fit.s1cb2e95'));
   const covered = new Uint8Array(mask.length); const heap = [];
   const push = candidate => {
     let index = heap.length; heap.push(candidate);

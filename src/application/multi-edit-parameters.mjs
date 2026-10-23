@@ -1,4 +1,5 @@
 import { localPreferences } from '../platform/local-preferences.mjs';
+import { t } from '../i18n.mjs';
 const storageKey = 'rpe-next-multi-edit-v1';
 const kinds = ['notes', 'events'];
 
@@ -39,7 +40,7 @@ export class MultiEditParameters {
 
   persist() {
     try { this.storage?.setItem(storageKey, JSON.stringify({ drafts: this.drafts, history: this.history, saved: this.saved })); }
-    catch { this.onError('批量参数无法写入本机存储，请检查可用空间；当前参数仍保留在本次会话。'); }
+    catch { this.onError(t('multi-edit-parameters.s2303fd5')); }
   }
   read(kind) { return structuredClone(this.drafts[kind]); }
   update(kind, value) { this.drafts[kind] = parameters(kind, value); this.persist(); }
@@ -51,7 +52,7 @@ export class MultiEditParameters {
     return this.history[kind].length - 1;
   }
   save(kind, name, value) {
-    name = name.trim().slice(0, 80); if (!name) throw new Error('请填写参数名称');
+    name = name.trim().slice(0, 80); if (!name) throw new Error(t('multi-edit-parameters.s47937ce'));
     const entry = { name, value: parameters(kind, value) }; const index = this.saved[kind].findIndex(candidate => candidate.name === name);
     if (index < 0) this.saved[kind].push(entry); else this.saved[kind][index] = entry;
     this.persist(); return entry;

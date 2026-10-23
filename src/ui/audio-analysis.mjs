@@ -1,4 +1,5 @@
 import { editorSkinContext } from './editor-skin-canvas.mjs';
+import { t } from '../i18n.mjs';
 
 const clamp = (value, minimum = 0, maximum = 1) => Math.max(minimum, Math.min(maximum, value));
 
@@ -109,23 +110,23 @@ export class AudioAnalysis {
   render(host) {
     host.replaceChildren();
     const title = document.createElement('p'); title.className = 'hint';
-    title.textContent = '分析图只显示在单线编辑区域，按当前时间视区滚动；延迟会参与对齐。'; host.append(title);
-    const enabled = document.createElement('label'); enabled.className = 'field'; enabled.append('显示分析图');
+    title.textContent = t('audio-analysis.s799c07a'); host.append(title);
+    const enabled = document.createElement('label'); enabled.className = 'field'; enabled.append(t('audio-analysis.s1ca3ef1'));
     const enabledInput = document.createElement('input'); enabledInput.type = 'checkbox'; enabledInput.checked = this.enabled;
     enabledInput.oninput = () => { this.enabled = enabledInput.checked; this.onChange(); this.draw(); }; enabled.append(enabledInput); host.append(enabled);
-    const alpha = document.createElement('label'); alpha.className = 'field'; alpha.append('透明度');
+    const alpha = document.createElement('label'); alpha.className = 'field'; alpha.append(t('audio-analysis.s61b101b'));
     const alphaInput = document.createElement('input'); alphaInput.type = 'range'; alphaInput.min = '0.02'; alphaInput.max = '1'; alphaInput.step = '0.01'; alphaInput.value = this.alpha;
     alphaInput.oninput = () => { this.alpha = Number(alphaInput.value); this.onChange(); this.draw(); }; alpha.append(alphaInput); host.append(alpha);
-    const width = document.createElement('label'); width.className = 'field'; width.append('横向宽度');
+    const width = document.createElement('label'); width.className = 'field'; width.append(t('audio-analysis.sa875081'));
     const widthInput = document.createElement('input'); widthInput.type = 'range'; widthInput.min = '0.2'; widthInput.max = '1'; widthInput.step = '0.01'; widthInput.value = this.width;
     widthInput.oninput = () => { this.width = Number(widthInput.value); this.onChange(); this.draw(); }; width.append(widthInput); host.append(width);
     const mode = document.createElement('div'); mode.className = 'analysis-mode-buttons';
-    for (const [value, label] of [['waveform', '波形图'], ['spectrum', '频谱']]) {
+    for (const [value, label] of [['waveform', t('audio-analysis.s1b686e5')], ['spectrum', t('audio-analysis.s75c6d62')]]) {
       const button = document.createElement('button'); button.type = 'button'; button.textContent = label; button.classList.toggle('active', this.mode === value);
       button.onclick = () => { this.mode = value; this.enabled = true; this.render(host); this.onChange(); this.draw(); }; mode.append(button);
     }
     host.append(mode);
-    if (!this.data) { const empty = document.createElement('p'); empty.className = 'hint'; empty.textContent = '当前没有可分析的已解码音乐。'; host.append(empty); }
+    if (!this.data) { const empty = document.createElement('p'); empty.className = 'hint'; empty.textContent = t('audio-analysis.s9463632'); host.append(empty); }
   }
 
   draw(offsetSeconds = 0) {

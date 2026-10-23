@@ -13,7 +13,7 @@ for(const protocol of ['EDITOR-SKIN','MOD','GLOBAL-EVENTS'])assert.ok(names.has(
 assert.ok(names.has('protocols/CHART-VERSION-CONTROL.zh-CN.md'));
 const mods=JSON.parse(await readFile(new URL('assets/mods/index.json',root),'utf8'));
 assert.deepEqual(mods.map(mod=>mod.directory),['sky-dodge','pixel-miner','spatial-camera']);
-for (const name of names) assert.match(name, /^(?:index\.html|styles\.css|LICENSE|NOTICE|protocols\/(?:(?:EDITOR-SKIN|MOD|GLOBAL-EVENTS)-PROTOCOL|CHART-VERSION-CONTROL)\.zh-CN\.md|schemas\/(?:mod-(?:v1\.schema\.json|api-v1\.d\.ts)|editor-skin-(?:v1\.schema|components\.v1)\.json)|\.nojekyll|assets\/.+|src\/(?:core|application|platform|ui)\/.+)$/);
+for (const name of names) assert.match(name, /^(?:index\.html|styles\.css|LICENSE|NOTICE|protocols\/(?:(?:EDITOR-SKIN|MOD|GLOBAL-EVENTS)-PROTOCOL|CHART-VERSION-CONTROL)\.zh-CN\.md|schemas\/(?:mod-(?:v1\.schema\.json|api-v1\.d\.ts)|editor-skin-(?:v1\.schema|components\.v1)\.json)|\.nojekyll|assets\/.+|src\/(?:core|application|platform|ui|locales)\/.+|src\/i18n\.mjs)$/);
 function checkReference(reference, file) {
   const resolved = new URL(reference, new URL(file, site));
   assert.ok(resolved.href.startsWith(site.href), `${file}: reference escapes site: ${reference}`);

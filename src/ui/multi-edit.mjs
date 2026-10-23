@@ -8,6 +8,7 @@ import { NOTE_COLORS } from './timeline.mjs';
 import { MultiEditParameters } from '../application/multi-edit-parameters.mjs';
 import { runEventTool } from './event-tools.mjs';
 import { editorSkinContext } from './editor-skin-canvas.mjs';
+import { t } from '../i18n.mjs';
 
 function control(root, title, value, options) {
   const label = document.createElement('label'); label.className = 'field'; label.append(title);
@@ -17,9 +18,9 @@ function control(root, title, value, options) {
 }
 
 function distributionFields(root, prefix = '') {
-  const lower = control(root, `${prefix}数值下界`, '0'); const upper = control(root, `${prefix}数值上界`, '0');
-  const easingType = control(root, `${prefix}缓动类型`, '1', EASING_NAMES.map((name, index) => [index + 1, `${index + 1} · ${name}`]));
-  const cycle = control(root, `${prefix}周期数列`, '1'); const disturbance = control(root, `${prefix}扰动`, '0');
+  const lower = control(root, t('multi-edit.s09ddb64', { p0: prefix }), '0'); const upper = control(root, t('multi-edit.sda34019', { p0: prefix }), '0');
+  const easingType = control(root, t('multi-edit.s5ee79a3', { p0: prefix }), '1', EASING_NAMES.map((name, index) => [index + 1, `${index + 1} · ${name}`]));
+  const cycle = control(root, t('multi-edit.s635e391', { p0: prefix }), '1'); const disturbance = control(root, t('multi-edit.s31b13fc', { p0: prefix }), '0');
   const picker = createEasingPicker(1, value => { easingType.value = value; easingType.dispatchEvent(new Event('input', { bubbles: true })); });
   easingType.addEventListener('input', () => picker.select(Number(easingType.value))); root.append(picker.element);
   const read = () => ({ lower: lower.value, upper: upper.value, easingType: Number(easingType.value), cycle: cycle.value, disturbance: disturbance.value });
@@ -45,22 +46,22 @@ export class MultiEditPanel {
     if (this.active && this.kind === kind) { this.sync(); return; }
     this.active = true; this.kind = kind; this.seed = 1; this.result = null; this.signature = null;
     const root = this.root; root.replaceChildren();
-    const title = document.createElement('div'); title.className = 'panel-title'; title.textContent = kind === 'notes' ? '多音符编辑' : '多事件编辑'; root.append(title);
+    const title = document.createElement('div'); title.className = 'panel-title'; title.textContent = kind === 'notes' ? t('multi-edit.sb6efc8e') : t('multi-edit.s5eadfea'); root.append(title);
     const parametersBox = document.createElement('details'); parametersBox.className = 'batch-parameters'; root.append(parametersBox);
-    const parametersHeading = document.createElement('summary'); parametersHeading.textContent = '参数历史与收藏'; parametersBox.append(parametersHeading);
-    const history = control(parametersBox, '应用历史', '', []);
+    const parametersHeading = document.createElement('summary'); parametersHeading.textContent = t('multi-edit.s3f5d14d'); parametersBox.append(parametersHeading);
+    const history = control(parametersBox, t('multi-edit.s0b6d227'), '', []);
     const historyActions = document.createElement('div'); historyActions.className = 'action-grid'; parametersBox.append(historyActions);
-    const previous = document.createElement('button'); previous.textContent = '← 上一组';
-    const next = document.createElement('button'); next.textContent = '下一组 →'; historyActions.append(previous, next);
-    const saved = control(parametersBox, '已保存参数', '', []);
-    const name = control(parametersBox, '参数名称', ''); name.maxLength = 80;
+    const previous = document.createElement('button'); previous.textContent = t('multi-edit.see21cf8');
+    const next = document.createElement('button'); next.textContent = t('multi-edit.s3ec3c8a'); historyActions.append(previous, next);
+    const saved = control(parametersBox, t('multi-edit.s5cfcddd'), '', []);
+    const name = control(parametersBox, t('multi-edit.s480d10d'), ''); name.maxLength = 80;
     const savedActions = document.createElement('div'); savedActions.className = 'action-grid'; parametersBox.append(savedActions);
-    const save = document.createElement('button'); save.textContent = '保存当前参数';
-    const remove = document.createElement('button'); remove.textContent = '删除收藏'; savedActions.append(save, remove);
-    hint(parametersBox, '历史保留最近 50 组已应用参数。命名收藏与草稿保存在本机，可跨谱面使用；同名保存会更新。');
+    const save = document.createElement('button'); save.textContent = t('multi-edit.sd8dad8b');
+    const remove = document.createElement('button'); remove.textContent = t('multi-edit.se1b4c1f'); savedActions.append(save, remove);
+    hint(parametersBox, t('multi-edit.s10f230d'));
     this.updateHistory = () => {
-      history.replaceChildren(new Option('选择已应用参数', ''), ...this.parameters.history[kind].map((value, index) => new Option(`${index + 1} · ${value.mode === 'script' ? '脚本' : value.mode === 'clone' ? '克隆' : `${value.field} ${value.operation} ${value.lower}…${value.upper}`}`, index)));
-      saved.replaceChildren(new Option('选择收藏', ''), ...this.parameters.saved[kind].map(entry => new Option(entry.name, entry.name)));
+      history.replaceChildren(new Option(t('multi-edit.s1900e17'), ''), ...this.parameters.history[kind].map((value, index) => new Option(t('multi-edit.s3091692', { p0: index + 1, p1: value.mode === 'script' ? t('multi-edit.s7fbccbe') : value.mode === 'clone' ? t('multi-edit.s6e60458') : `${value.field} ${value.operation} ${value.lower}…${value.upper}` }), index)));
+      saved.replaceChildren(new Option(t('multi-edit.se3c12de'), ''), ...this.parameters.saved[kind].map(entry => new Option(entry.name, entry.name)));
       previous.disabled = next.disabled = !this.parameters.history[kind].length;
     };
     const loadHistory = index => {
@@ -71,60 +72,60 @@ export class MultiEditPanel {
     previous.onclick = () => loadHistory(history.value === '' ? this.parameters.history[kind].length - 1 : Number(history.value) - 1);
     next.onclick = () => loadHistory(history.value === '' ? 0 : Number(history.value) + 1);
     saved.onchange = () => { const entry = this.parameters.saved[kind].find(entry => entry.name === saved.value); if (entry) { name.value = entry.name; this.load(entry.value); } };
-    save.onclick = () => { try { this.parameters.save(kind, name.value, this.read()); this.updateHistory(); saved.value = name.value.trim(); this.notify('批量参数已保存到本机', 'success'); } catch (error) { this.notify(error.message, 'warning'); } };
+    save.onclick = () => { try { this.parameters.save(kind, name.value, this.read()); this.updateHistory(); saved.value = name.value.trim(); this.notify(t('multi-edit.s9c985fc'), 'success'); } catch (error) { this.notify(error.message, 'warning'); } };
     remove.onclick = () => { if (saved.value) { this.parameters.remove(kind, saved.value); this.updateHistory(); } };
     this.updateHistory();
-    hint(root, '在左侧选择物件，调整后先看预览，再应用。虚线为结果，原物件保持不变。');
-    const mode = control(root, '编辑模式', 'form', [['form', '原版批量编辑'], ['script', '脚本编辑'], ...(kind === 'events' ? [['clone', '克隆（批量复制）']] : [])]);
+    hint(root, t('multi-edit.s19996f8'));
+    const mode = control(root, t('multi-edit.s1640f9b'), 'form', [['form', t('multi-edit.s9537636')], ['script', t('multi-edit.s5fce32d')], ...(kind === 'events' ? [['clone', t('multi-edit.s1ead29e')]] : [])]);
     const isMultiEventEdit = kind === 'events' && this.getSession().multiLineActive && this.getSession().multiLineMode === 'events';
-    const applicationMode = isMultiEventEdit ? control(root, '多线应用', 'per-line', [['per-line', '每条线分别应用'], ['global', '总体按时间顺序应用']]) : null;
+    const applicationMode = isMultiEventEdit ? control(root, t('multi-edit.sd0e300b'), 'per-line', [['per-line', t('multi-edit.s81122be')], ['global', t('multi-edit.s62563b0')]]) : null;
     const common = document.createElement('div'); root.append(common);
-    const filter = control(common, kind === 'notes' ? '音符种类' : '事件种类', kind === 'notes' ? '0' : 'all', kind === 'notes' ? [[0, '全部'], [1, 'Tap'], [2, 'Hold'], [3, 'Flick'], [4, 'Drag']] : EVENT_BATCH_TYPES);
-    const condition = control(common, '筛选条件', ''); condition.placeholder = kind === 'notes' ? '例如 x < 0 && t1 >= 4' : '例如 start != end';
+    const filter = control(common, kind === 'notes' ? t('multi-edit.s8642504') : t('multi-edit.s1eefde9'), kind === 'notes' ? '0' : 'all', kind === 'notes' ? [[0, t('multi-edit.s778fc8f')], [1, 'Tap'], [2, 'Hold'], [3, 'Flick'], [4, 'Drag']] : EVENT_BATCH_TYPES);
+    const condition = control(common, t('multi-edit.se9d5ab4'), ''); condition.placeholder = kind === 'notes' ? t('multi-edit.s97d6041') : t('multi-edit.sf092c32');
     const form = document.createElement('div'); root.append(form);
-    const field = control(form, '数值种类', kind === 'notes' ? 'x' : 'both', kind === 'notes' ? NOTE_BATCH_FIELDS : EVENT_BATCH_FIELDS);
-    const operation = control(form, '修改方式', 'By', BATCH_OPERATIONS);
+    const field = control(form, t('multi-edit.s575aeda'), kind === 'notes' ? 'x' : 'both', kind === 'notes' ? NOTE_BATCH_FIELDS : EVENT_BATCH_FIELDS);
+    const operation = control(form, t('multi-edit.s1645ef4'), 'By', BATCH_OPERATIONS);
     const readDistribution = distributionFields(form);
     if (kind === 'events') {
       const tools = document.createElement('div'); tools.className = 'action-grid'; form.append(tools);
-      for (const [action, title] of [['cut', '批量切割'], ['stick', '批量粘合']]) {
+      for (const [action, title] of [['cut', t('multi-edit.sa18ddc2')], ['stick', t('multi-edit.s086e390')]]) {
         const button = document.createElement('button'); button.type = 'button'; button.textContent = title;
         button.onclick = () => runEventTool(this.getSession(), action, this.notify, this.timeline.origin); tools.append(button);
       }
-      hint(form, '粘合：首值接前一事件尾值。切割：按“横线细分 × 设置中的切割密度”采样为线性段，跳过文字、着色器和零长度事件。');
+      hint(form, t('multi-edit.sa3225c6'));
     }
-    hint(form, '周期：空格分隔，_ 跳过该项。扰动：一个数为 ±范围，两个数为区间，更多数为随机选值。HitSound 使用 To，下界填项目内文件名。');
-    if (kind === 'events') hint(form, '原版普通属性按 1/N…1 分配；Duration、Order、Line 按 0…1 分配。Duration 会首尾相接；Order 只重排内容；Line 保留源事件并复制到目标线。');
+    hint(form, t('multi-edit.sd51950e'));
+    if (kind === 'events') hint(form, t('multi-edit.s0456d0a'));
     const scriptBox = document.createElement('div'); scriptBox.hidden = true; root.append(scriptBox);
-    const script = document.createElement('textarea'); script.rows = 7; script.className = 'batch-script'; script.setAttribute('aria-label', '批量编辑脚本');
+    const script = document.createElement('textarea'); script.rows = 7; script.className = 'batch-script'; script.setAttribute('aria-label', t('multi-edit.s79d5c05'));
     script.value = kind === 'notes' ? 'x = lerp(-500, 500, u);\nsize = 1 + 0.25 * sin(u * pi);' : 'start += 20 * sin(u * pi);\nend += 20 * sin(u * pi);';
     scriptBox.append(script);
-    const help = document.createElement('details'); const summary = document.createElement('summary'); summary.textContent = '脚本语法与变量'; help.append(summary); scriptBox.append(help);
-    hint(help, '每行一个赋值，支持 = += -= *= /=、算术、比较、&& ||、条件 ? 值 : 值、# 注释。不执行 JavaScript，不访问文件或网络，无循环。');
-    hint(help, 'i 从 0 开始；N 为数量；u 为 0…1；原版 n：音符从 0、事件从 1。t1/t2 以拍为单位，visibleTime 以秒为单位。表达式按语句顺序计算。');
-    hint(help, `可写：${(kind === 'notes' ? NOTE_BATCH_FIELDS : EVENT_BATCH_FIELDS).map(([key]) => key).filter(key => !['hitSound', 'both', 'order'].includes(key)).join(', ')}${kind === 'notes' ? ', type, isFake, above' : ', inst'}。事件按种类分别排序。`);
-    hint(help, '函数：sin cos tan abs min max floor ceil round sqrt pow clamp lerp ease；常量 pi。例：t1 += i / 4; t2 += i / 4;');
+    const help = document.createElement('details'); const summary = document.createElement('summary'); summary.textContent = t('multi-edit.sa4ef858'); help.append(summary); scriptBox.append(help);
+    hint(help, t('multi-edit.s8a1d50f'));
+    hint(help, t('multi-edit.sa5dbd4b'));
+    hint(help, t('multi-edit.sae69bd8', { p0: (kind === 'notes' ? NOTE_BATCH_FIELDS : EVENT_BATCH_FIELDS).map(([key]) => key).filter(key => !['hitSound', 'both', 'order'].includes(key)).join(', '), p1: kind === 'notes' ? ', type, isFake, above' : ', inst' }));
+    hint(help, t('multi-edit.s4db201b'));
     const clone = document.createElement('div'); clone.hidden = true; root.append(clone);
-    const targets = control(clone, '目标线号序列', String(this.getSession().lineIndex));
-    const increment = control(clone, '时间增量（横线数）', '0');
-    const retainLabel = document.createElement('label'); retainLabel.className = 'field'; retainLabel.append('保留源事件');
-    const retainSource = document.createElement('input'); retainSource.type = 'checkbox'; retainSource.checked = true; retainSource.setAttribute('aria-label', '保留源事件'); retainLabel.append(retainSource); clone.append(retainLabel);
-    hint(clone, '线号用空格分隔，可重复。第一个副本时间不变；后续每份递增“横线数 ÷ 当前横线细分”拍。取消保留源事件后，应用时移除选中的源事件；副本和未选中的事件保留，基础事件留在同一层。');
+    const targets = control(clone, t('multi-edit.s60316f0'), String(this.getSession().lineIndex));
+    const increment = control(clone, t('multi-edit.s5e5824d'), '0');
+    const retainLabel = document.createElement('label'); retainLabel.className = 'field'; retainLabel.append(t('multi-edit.sd2cec64'));
+    const retainSource = document.createElement('input'); retainSource.type = 'checkbox'; retainSource.checked = true; retainSource.setAttribute('aria-label', t('multi-edit.sd2cec64')); retainLabel.append(retainSource); clone.append(retainLabel);
+    hint(clone, t('multi-edit.s3091c5b'));
     const channels = new Map();
     for (const [type, name] of EVENT_BATCH_TYPES.slice(1, 5)) {
-      const details = document.createElement('details'); const heading = document.createElement('summary'); heading.textContent = `${name} 数值偏移`; details.append(heading); clone.append(details);
+      const details = document.createElement('details'); const heading = document.createElement('summary'); heading.textContent = t('multi-edit.s9498be5', { p0: name }); details.append(heading); clone.append(details);
       channels.set(type, distributionFields(details, `${name} · `));
     }
-    hint(clone, 'X、Y、旋转、透明度分别按目标线顺序分配偏移；速度及特殊事件保持数值。缓动、Bezier、绑定组与未知属性保留。');
-    const randomButton = document.createElement('button'); randomButton.type = 'button'; randomButton.textContent = '重新采样扰动'; root.append(randomButton);
+    hint(clone, t('multi-edit.secef59e'));
+    const randomButton = document.createElement('button'); randomButton.type = 'button'; randomButton.textContent = t('multi-edit.sd364fde'); root.append(randomButton);
     randomButton.onclick = () => { this.seed++; this.parameters.update(kind, this.read()); this.refresh(); };
     this.summary = hint(root, ''); this.summary.setAttribute('role', 'status');
     const previewLabel = document.createElement('label'); previewLabel.className = 'batch-preview-toggle';
-    const preview = document.createElement('input'); preview.type = 'checkbox'; preview.checked = true; previewLabel.append(preview, '在编辑区显示结果虚影'); root.append(previewLabel); this.previewEnabled = preview;
+    const preview = document.createElement('input'); preview.type = 'checkbox'; preview.checked = true; previewLabel.append(preview, t('multi-edit.s00b7dd3')); root.append(previewLabel); this.previewEnabled = preview;
     const actions = document.createElement('div'); actions.className = 'action-grid batch-panel-actions'; root.append(actions);
-    this.apply = document.createElement('button'); this.apply.type = 'button'; this.apply.className = 'primary'; this.apply.textContent = '应用更改';
-    const reset = document.createElement('button'); reset.type = 'button'; reset.textContent = '重置参数';
-    const cancel = document.createElement('button'); cancel.type = 'button'; cancel.textContent = '返回谱面工具'; actions.append(this.apply, reset, cancel);
+    this.apply = document.createElement('button'); this.apply.type = 'button'; this.apply.className = 'primary'; this.apply.textContent = t('multi-edit.sb3144a8');
+    const reset = document.createElement('button'); reset.type = 'button'; reset.textContent = t('multi-edit.sb1a4621');
+    const cancel = document.createElement('button'); cancel.type = 'button'; cancel.textContent = t('multi-edit.sb3669b2'); actions.append(this.apply, reset, cancel);
     cancel.onclick = () => this.close();
     this.read = () => ({ ...readDistribution(), mode: mode.value, field: field.value, operation: operation.value,
       eventApplicationMode: applicationMode?.value ?? 'per-line',
@@ -152,11 +153,11 @@ export class MultiEditPanel {
       const result = this.result; const amount = result.changes.length;
       this.committing = true;
       try {
-        commitSelectionEdit(this.getSession(), result, mode.value === 'clone' ? '批量克隆事件' : `多${kind === 'notes' ? '音符' : '事件'}编辑`);
+        commitSelectionEdit(this.getSession(), result, mode.value === 'clone' ? t('multi-edit.s7b5795d') : t('multi-edit.s57c5445', { p0: kind === 'notes' ? t('multi-edit.s7ac3289') : t('multi-edit.s550e328') }));
         const position = this.parameters.remember(kind, this.read()); this.updateHistory(); history.value = position;
         this.result = null; this.chart = this.getSession().chart; this.signature = this.selectionSignature();
-        this.summary.textContent = `已应用 ${amount} 个物件；参数已保留。调整参数可预览下一次修改。`;
-        this.notify(`已应用 ${amount} 个物件的批量编辑`, 'success'); this.invalidate();
+        this.summary.textContent = t('multi-edit.s60014d9', { p0: amount });
+        this.notify(t('multi-edit.s684ad73', { p0: amount }), 'success'); this.invalidate();
       }
       catch (error) { this.notify(error.message, 'error'); }
       finally { this.committing = false; }
@@ -187,7 +188,7 @@ export class MultiEditPanel {
     try {
       const snapshot = captureSelection(this.getSession()); const options = this.read();
       this.result = options.mode === 'clone' ? previewEventClones(snapshot, options) : previewMultiEdit(snapshot, this.kind, options);
-      this.summary.textContent = `${this.result.changes.length} 个结果 · ${new Set(this.result.changes.map(change => change.lineIndex)).size} 条判定线 · 应用后可一次撤销`;
+      this.summary.textContent = t('multi-edit.s72fa7cc', { p0: this.result.changes.length, p1: new Set(this.result.changes.map(change => change.lineIndex)).size });
       this.summary.classList.remove('batch-error');
     } catch (error) { this.summary.textContent = error.message; this.summary.classList.add('batch-error'); }
     this.apply.disabled = !this.result;

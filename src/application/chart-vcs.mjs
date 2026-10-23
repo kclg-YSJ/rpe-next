@@ -4,10 +4,11 @@ import {
   canonicalJson, cloneValue, decodeText, diffCharts, diffTrees, graphLayout, hasTreeChanges,
   hashBytes, mergeAssets, mergeCharts, mergeFolders, resolveChartMerge, sha256Hex, shortId, textBytes
 } from '../core/chart-vcs.mjs';
+import { t } from '../i18n.mjs';
 
 export const VCS_FORMAT = 'rpe-next-chart-vcs';
 export const VCS_VERSION = 1;
-const DEFAULT_AUTHOR = { name: '本地用户', email: 'local@rpe-next' };
+const DEFAULT_AUTHOR = { name: t('chart-vcs.sea431f3'), email: 'local@rpe-next' };
 const MAX_REFLOG = 200;
 
 const randomId = () => globalThis.crypto?.randomUUID?.() ?? `id-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -29,7 +30,7 @@ async function assetBytes(value) {
   return new Uint8Array(value ?? []);
 }
 
-function dirtyWorkingTree(message = '工作区有未提交的更改，此操作会覆盖它们。请先提交、储藏或放弃更改。') {
+function dirtyWorkingTree(message = t('chart-vcs.sd0dd573')) {
   const error = new Error(message);
   error.code = 'DIRTY_WORKING_TREE';
   return error;
@@ -148,7 +149,7 @@ export class ChartRepository {
   async writeTreeFromParts({ chartText, assets = [], folders = [], chartName = 'chart.json' }) {
     const chart = await this.ensureBlobText(chartText);
     for (const entry of assets) {
-      if (!(await this.store.get('blobs', entry.blob))) throw new Error(`缺少素材对象：${entry.path}`);
+      if (!(await this.store.get('blobs', entry.blob))) throw new Error(t('chart-vcs.s08efcd5', { p0: entry.path }));
     }
     const tree = { chart, assets: [...assets].sort(comparePaths), folders: [...folders].sort(), chartName: chartName || 'chart.json' };
     tree.id = await sha256Hex(canonicalJson(tree));
@@ -166,7 +167,7 @@ export class ChartRepository {
   async readChart(tree) {
     if (!tree) return createChart();
     const blob = await this.readBlob(tree.chart);
-    if (!blob) throw new Error('版本缺少谱面对象');
+    if (!blob) throw new Error(t('chart-vcs.sffc33b6'));
     return parseChart(decodeText(blob.bytes));
   }
 
@@ -177,7 +178,7 @@ export class ChartRepository {
     const assets = new Map();
     for (const entry of tree.assets ?? []) {
       const blob = await this.readBlob(entry.blob);
-      if (!blob) throw new Error(`版本缺少素材：${entry.path}`);
+      if (!blob) throw new Error(t('chart-vcs.s0140b97', { p0: entry.path }));
       assets.set(entry.path, blob.bytes);
     }
     return { chart, assets, folders: new Set(tree.folders ?? []), chartName: tree.chartName || 'chart.json', treeId };
@@ -233,7 +234,7 @@ export class ChartRepository {
   async createCommit(repo, { tree, parents, author, message, kind = 'commit' }) {
     const payload = {
       repoId: this.repoId, tree, parents: parents ?? [], author: normalizeAuthor(author ?? repo.config?.author),
-      timestamp: this.now(), message: String(message ?? '').trim() || '提交', kind
+      timestamp: this.now(), message: String(message ?? '').trim() || t('chart-vcs.s09cbc97'), kind
     };
     const id = await sha256Hex(canonicalJson(payload));
     const commit = { id, ...payload };
@@ -246,14 +247,14 @@ export class ChartRepository {
     const headId = this.resolveHead(repo);
     const head = await this.readCommit(headId);
     const indexId = repo.index ?? head?.tree ?? null;
-    if (!indexId) throw new Error('没有可提交的暂存内容');
-    if (head && indexId === head.tree && !amend && !allowEmpty) throw new Error('暂存区没有更改；请先暂存修改或勾选“修正上一次提交”');
+    if (!indexId) throw new Error(t('chart-vcs.s8099edc'));
+    if (head && indexId === head.tree && !amend && !allowEmpty) throw new Error(t('chart-vcs.s34138af'));
     const parents = amend && head ? head.parents ?? [] : headId ? [headId] : [];
     const commit = await this.createCommit(repo, { tree: indexId, parents, author, message });
     this.updateHead(repo, commit.id);
     repo.index = indexId;
     repo.merge = null;
-    this.pushReflog(repo, `提交：${commit.message}`, headId, commit.id);
+    this.pushReflog(repo, t('chart-vcs.s96acb4b', { p0: commit.message }), headId, commit.id);
     await this.save(repo);
     return { commit, repo, snapshot: await this.readSnapshot(indexId) };
   }
@@ -286,9 +287,9 @@ export class ChartRepository {
   }
 
   async createBranch(name, at = null) {
-    const branch = assertRefName(name, '分支');
+    const branch = assertRefName(name, t('chart-vcs.s2f6f9d5'));
     const repo = await this.read();
-    if (Object.hasOwn(repo.branches, branch)) throw new Error(`分支“${branch}”已存在`);
+    if (Object.hasOwn(repo.branches, branch)) throw new Error(t('chart-vcs.s2c0f73a', { p0: branch }));
     setReference(repo.branches, branch, at ?? this.resolveHead(repo));
     await this.save(repo);
     return repo;
@@ -296,18 +297,18 @@ export class ChartRepository {
 
   async deleteBranch(name) {
     const repo = await this.read();
-    if (repo.head?.type === 'branch' && repo.head.name === name) throw new Error('不能删除当前分支');
-    if (!Object.hasOwn(repo.branches, name)) throw new Error('分支不存在');
+    if (repo.head?.type === 'branch' && repo.head.name === name) throw new Error(t('chart-vcs.s617c3a6'));
+    if (!Object.hasOwn(repo.branches, name)) throw new Error(t('chart-vcs.sb170069'));
     delete repo.branches[name];
     await this.save(repo);
     return repo;
   }
 
   async renameBranch(name, next) {
-    const target = assertRefName(next, '分支');
+    const target = assertRefName(next, t('chart-vcs.s2f6f9d5'));
     const repo = await this.read();
-    if (!Object.hasOwn(repo.branches, name)) throw new Error('分支不存在');
-    if (name !== target && Object.hasOwn(repo.branches, target)) throw new Error(`分支“${target}”已存在`);
+    if (!Object.hasOwn(repo.branches, name)) throw new Error(t('chart-vcs.sb170069'));
+    if (name !== target && Object.hasOwn(repo.branches, target)) throw new Error(t('chart-vcs.s8ac0d06', { p0: target }));
     setReference(repo.branches, target, repo.branches[name]);
     if (name !== target) delete repo.branches[name];
     if (repo.head?.type === 'branch' && repo.head.name === name) repo.head.name = target;
@@ -323,14 +324,14 @@ export class ChartRepository {
 
   async checkoutBranch(name, { snapshot, force = false } = {}) {
     const repo = await this.read();
-    if (!Object.hasOwn(repo.branches, name)) throw new Error('分支不存在');
+    if (!Object.hasOwn(repo.branches, name)) throw new Error(t('chart-vcs.sb170069'));
     await this.requireClean(snapshot, force);
     const target = repo.branches[name];
     const targetCommit = target ? await this.readCommit(target) : null;
     const previous = this.resolveHead(repo);
     repo.head = { type: 'branch', name };
     repo.index = targetCommit?.tree ?? null;
-    this.pushReflog(repo, `检出分支：${name}`, previous, target ?? null);
+    this.pushReflog(repo, t('chart-vcs.sbc4184c', { p0: name }), previous, target ?? null);
     await this.save(repo);
     return { repo, snapshot: targetCommit ? await this.readSnapshot(targetCommit.tree) : null };
   }
@@ -338,12 +339,12 @@ export class ChartRepository {
   async checkoutCommit(commitId, { snapshot, force = false } = {}) {
     const repo = await this.read();
     const commit = await this.readCommit(commitId);
-    if (!commit) throw new Error('提交不存在');
+    if (!commit) throw new Error(t('chart-vcs.sc2059bf'));
     await this.requireClean(snapshot, force);
     const previous = this.resolveHead(repo);
     repo.head = { type: 'detached', commit: commitId };
     repo.index = commit.tree;
-    this.pushReflog(repo, `检出提交：${shortId(commitId)}`, previous, commitId);
+    this.pushReflog(repo, t('chart-vcs.s77eef15', { p0: shortId(commitId) }), previous, commitId);
     await this.save(repo);
     return { repo, snapshot: await this.readSnapshot(commit.tree) };
   }
@@ -351,7 +352,7 @@ export class ChartRepository {
   async restore(treeId) {
     const repo = await this.read();
     const snapshot = await this.readSnapshot(treeId);
-    if (!snapshot) throw new Error('版本不存在');
+    if (!snapshot) throw new Error(t('chart-vcs.s3131910'));
     repo.index = treeId;
     await this.save(repo);
     return { repo, snapshot };
@@ -413,7 +414,7 @@ export class ChartRepository {
     const commits = await this.store.listCommits(this.repoId);
     const matches = commits.filter(commit => commit.id.startsWith(value));
     if (matches.length === 1) return matches[0].id;
-    throw new Error(`找不到引用：${value}`);
+    throw new Error(t('chart-vcs.s343f897', { p0: value }));
   }
 
   async mergeTrees({ baseTreeId, oursTreeId, theirsTreeId, parents, kind, targetRef, message }) {
@@ -421,7 +422,7 @@ export class ChartRepository {
     const [baseTree, oursTree, theirsTree] = await Promise.all([
       this.readTree(baseTreeId), this.readTree(oursTreeId), this.readTree(theirsTreeId)
     ]);
-    if (!oursTree || !theirsTree) throw new Error('合并对象缺少谱面版本');
+    if (!oursTree || !theirsTree) throw new Error(t('chart-vcs.sd03e73d'));
     const [baseChart, oursChart, theirsChart] = await Promise.all([
       this.readChart(baseTree), this.readChart(oursTree), this.readChart(theirsTree)
     ]);
@@ -456,70 +457,70 @@ export class ChartRepository {
     const repo = await this.read();
     const targetId = await this.resolveRef(repo, ref);
     const target = await this.readCommit(targetId);
-    if (!target) throw new Error('合并目标不存在');
+    if (!target) throw new Error(t('chart-vcs.s35cb0e2'));
     const headId = this.resolveHead(repo);
     const head = await this.readCommit(headId);
-    if (!head) throw new Error('请先创建初始提交');
+    if (!head) throw new Error(t('chart-vcs.s6b04f3f'));
     await this.requireClean(snapshot);
     if (targetId === headId || await this.isAncestor(targetId, headId)) return { type: 'up-to-date', repo };
     if (await this.isAncestor(headId, targetId)) {
       this.updateHead(repo, targetId);
       repo.index = target.tree;
       repo.merge = null;
-      this.pushReflog(repo, `快进合并：${ref}`, headId, targetId);
+      this.pushReflog(repo, t('chart-vcs.s8a64e96', { p0: ref }), headId, targetId);
       await this.save(repo);
       return { type: 'fast-forward', commit: target, snapshot: await this.readSnapshot(target.tree) };
     }
     const base = await this.mergeBase(headId, targetId);
-    if (!base) throw new Error('两个分支没有共同历史，无法合并');
+    if (!base) throw new Error(t('chart-vcs.s73db723'));
     return this.mergeTrees({
       baseTreeId: base.tree, oursTreeId: head.tree, theirsTreeId: target.tree,
       parents: [head.id, target.id], kind: 'merge', targetRef: ref,
-      message: `合并 ${ref} 到 ${repo.head?.type === 'branch' ? repo.head.name : shortId(head.id)}`
+      message: t('chart-vcs.s5c742b0', { p0: ref, p1: repo.head?.type === 'branch' ? repo.head.name : shortId(head.id) })
     });
   }
 
   async cherryPick(commitId, { snapshot } = {}) {
     const repo = await this.read();
     const target = await this.readCommit(commitId);
-    if (!target) throw new Error('提交不存在');
+    if (!target) throw new Error(t('chart-vcs.sc2059bf'));
     const headId = this.resolveHead(repo);
     const head = await this.readCommit(headId);
-    if (!head) throw new Error('请先创建初始提交');
+    if (!head) throw new Error(t('chart-vcs.s6b04f3f'));
     await this.requireClean(snapshot);
     const baseTreeId = target.parents?.[0] ? (await this.readCommit(target.parents[0]))?.tree ?? await this.emptyTree() : await this.emptyTree();
     return this.mergeTrees({
       baseTreeId, oursTreeId: head.tree, theirsTreeId: target.tree,
       parents: [head.id], kind: 'cherry-pick', targetRef: shortId(commitId),
-      message: `拣选 ${shortId(commitId)}：${target.message}`
+      message: t('chart-vcs.s5bd7115', { p0: shortId(commitId), p1: target.message })
     });
   }
 
   async revert(commitId, { snapshot } = {}) {
     const repo = await this.read();
     const target = await this.readCommit(commitId);
-    if (!target) throw new Error('提交不存在');
+    if (!target) throw new Error(t('chart-vcs.sc2059bf'));
     const headId = this.resolveHead(repo);
     const head = await this.readCommit(headId);
-    if (!head) throw new Error('请先创建初始提交');
+    if (!head) throw new Error(t('chart-vcs.s6b04f3f'));
     await this.requireClean(snapshot);
     const parent = target.parents?.[0] ? await this.readCommit(target.parents[0]) : null;
     return this.mergeTrees({
       baseTreeId: target.tree, oursTreeId: head.tree,
       theirsTreeId: parent?.tree ?? await this.emptyTree(),
       parents: [head.id], kind: 'revert', targetRef: shortId(commitId),
-      message: `回退 ${shortId(commitId)}：${target.message}`
+      message: t('chart-vcs.sbf71a57', { p0: shortId(commitId), p1: target.message })
     });
   }
 
   async resolveMerge(choices) {
     const repo = await this.read();
     const state = repo.merge;
-    if (!state) throw new Error('没有正在进行的合并');
+    if (!state) throw new Error(t('chart-vcs.sa66770e'));
     const [baseTree, oursTree, theirsTree] = await Promise.all([
       this.readTree(state.baseTree), this.readTree(state.oursTree), this.readTree(state.theirsTree)
     ]);
-    if (!oursTree || !theirsTree) throw new Error('合并状态已损坏');
+    if (!oursTree || !theirsTree) throw new Error(t('chart-vcs.s87951d5'));
     const [baseChart, oursChart, theirsChart] = await Promise.all([
       this.readChart(baseTree), this.readChart(oursTree), this.readChart(theirsTree)
     ]);
@@ -550,7 +551,7 @@ export class ChartRepository {
 
   async abortMerge() {
     const repo = await this.read();
-    if (!repo.merge) throw new Error('没有正在进行的合并');
+    if (!repo.merge) throw new Error(t('chart-vcs.sa66770e'));
     const oursTree = repo.merge.oursTree;
     repo.merge = null;
     await this.save(repo);
@@ -560,28 +561,28 @@ export class ChartRepository {
   async reset(commitId, mode = 'mixed') {
     const repo = await this.read();
     const target = await this.readCommit(commitId);
-    if (!target) throw new Error('提交不存在');
+    if (!target) throw new Error(t('chart-vcs.sc2059bf'));
     const previous = this.resolveHead(repo);
     if (mode === 'soft') {
       this.updateHead(repo, commitId);
-      this.pushReflog(repo, `软重置到 ${shortId(commitId)}`, previous, commitId);
+      this.pushReflog(repo, t('chart-vcs.sb7f715e', { p0: shortId(commitId) }), previous, commitId);
       await this.save(repo);
       return { snapshot: null, repo };
     }
     this.updateHead(repo, commitId);
     repo.index = target.tree;
     repo.merge = null;
-    this.pushReflog(repo, `${mode === 'hard' ? '硬' : '混合'}重置到 ${shortId(commitId)}`, previous, commitId);
+    this.pushReflog(repo, t('chart-vcs.s2043efe', { p0: mode === 'hard' ? t('chart-vcs.s32709a5') : t('chart-vcs.sa4a06e0'), p1: shortId(commitId) }), previous, commitId);
     await this.save(repo);
     return { snapshot: mode === 'hard' ? await this.readSnapshot(target.tree) : null, repo };
   }
 
   async createTag(name, commitId = null, message = '') {
-    const tag = assertRefName(name, '标签');
+    const tag = assertRefName(name, t('chart-vcs.sae0a7af'));
     const repo = await this.read();
-    if (Object.hasOwn(repo.tags, tag)) throw new Error(`标签“${tag}”已存在`);
+    if (Object.hasOwn(repo.tags, tag)) throw new Error(t('chart-vcs.s5169284', { p0: tag }));
     const target = commitId ?? this.resolveHead(repo);
-    if (!target) throw new Error('没有可标记的提交');
+    if (!target) throw new Error(t('chart-vcs.s36aed76'));
     setReference(repo.tags, tag, { commit: target, message: String(message ?? '').trim(), tagger: normalizeAuthor(repo.config?.author), timestamp: this.now() });
     await this.save(repo);
     return repo;
@@ -589,7 +590,7 @@ export class ChartRepository {
 
   async deleteTag(name) {
     const repo = await this.read();
-    if (!Object.hasOwn(repo.tags, name)) throw new Error('标签不存在');
+    if (!Object.hasOwn(repo.tags, name)) throw new Error(t('chart-vcs.sdf81700'));
     delete repo.tags[name];
     await this.save(repo);
     return repo;
@@ -599,16 +600,16 @@ export class ChartRepository {
     const repo = await this.read();
     const headId = this.resolveHead(repo);
     const head = await this.readCommit(headId);
-    if (!head) throw new Error('请先创建初始提交');
+    if (!head) throw new Error(t('chart-vcs.s6b04f3f'));
     const tree = await this.treeFromSnapshot(snapshot, { write: true });
     const entry = {
       id: randomId(), tree: tree.id, baseTree: head.tree,
-      message: String(message ?? '').trim() || `储藏于 ${new Date(this.now()).toLocaleString()}`,
+      message: String(message ?? '').trim() || t('chart-vcs.s425c34a', { p0: new Date(this.now()).toLocaleString() }),
       timestamp: this.now(), branch: repo.head?.type === 'branch' ? repo.head.name : null
     };
     repo.stash.unshift(entry);
     repo.index = head.tree;
-    this.pushReflog(repo, `储藏：${entry.message}`, headId, headId);
+    this.pushReflog(repo, t('chart-vcs.s12a8e48', { p0: entry.message }), headId, headId);
     await this.save(repo);
     return { repo, snapshot: await this.readSnapshot(head.tree) };
   }
@@ -616,9 +617,9 @@ export class ChartRepository {
   async stashApply(index, snapshot) {
     const repo = await this.read();
     const entry = repo.stash[index];
-    if (!entry) throw new Error('储藏不存在');
+    if (!entry) throw new Error(t('chart-vcs.s41e6af5'));
     const [baseTree, theirsTree] = await Promise.all([this.readTree(entry.baseTree), this.readTree(entry.tree)]);
-    if (!theirsTree) throw new Error('储藏内容已丢失');
+    if (!theirsTree) throw new Error(t('chart-vcs.sc38bc30'));
     const oursTree = await this.treeFromSnapshot(snapshot, { write: true });
     const [baseChart, oursChart, theirsChart] = await Promise.all([
       this.readChart(baseTree), this.readChart(oursTree), this.readChart(theirsTree)
@@ -627,7 +628,7 @@ export class ChartRepository {
     const assetMerge = mergeAssets(baseTree?.assets ?? [], oursTree.assets ?? [], theirsTree.assets ?? []);
     const conflicts = [...chartMerge.conflicts, ...assetMerge.conflicts];
     if (conflicts.length) {
-      const error = new Error(`应用储藏时发生 ${conflicts.length} 处冲突，请先手动处理或改用弹出后对比。`);
+      const error = new Error(t('chart-vcs.se3ecc4c', { p0: conflicts.length }));
       error.code = 'STASH_CONFLICT';
       error.conflicts = conflicts;
       throw error;
@@ -649,7 +650,7 @@ export class ChartRepository {
 
   async stashDrop(index) {
     const repo = await this.read();
-    if (index < 0 || index >= repo.stash.length) throw new Error('储藏不存在');
+    if (index < 0 || index >= repo.stash.length) throw new Error(t('chart-vcs.s41e6af5'));
     repo.stash.splice(index, 1);
     await this.save(repo);
     return repo;
@@ -657,11 +658,11 @@ export class ChartRepository {
 
   async diffCommit(commitId) {
     const commit = await this.readCommit(commitId);
-    if (!commit) throw new Error('提交不存在');
+    if (!commit) throw new Error(t('chart-vcs.sc2059bf'));
     const parent = commit.parents?.[0] ? await this.readCommit(commit.parents[0]) : null;
     const oldTree = parent ? await this.readTree(parent.tree) : null;
     const newTree = await this.readTree(commit.tree);
-    if (!newTree) throw new Error('提交缺少版本数据');
+    if (!newTree) throw new Error(t('chart-vcs.s2865d40'));
     const oldChart = await this.readChart(oldTree);
     const newChart = await this.readChart(newTree);
     return { commit, parent, chartDiff: diffCharts(oldChart, newChart), treeDiff: diffTrees(oldTree, newTree) };
@@ -731,54 +732,54 @@ export class ChartRepository {
   }
 
   async importBundle(bundle) {
-    if (!bundle || bundle.format !== VCS_FORMAT) throw new Error('不是有效的谱面版本仓库包');
-    if (Number(bundle.version) > VCS_VERSION) throw new Error(`仓库包版本 ${bundle.version} 高于当前支持的版本 ${VCS_VERSION}`);
-    if (!Array.isArray(bundle.commits) || !Array.isArray(bundle.trees) || !Array.isArray(bundle.blobs)) throw new Error('仓库包缺少提交、树或对象数据');
-    if (bundle.commits.some(commit => typeof commit?.id !== 'string' || typeof commit.tree !== 'string' || !Array.isArray(commit.parents ?? []))) throw new Error('仓库包包含无效的提交记录');
-    if (bundle.trees.some(tree => typeof tree?.id !== 'string')) throw new Error('仓库包包含无效的树对象');
-    if (bundle.blobs.some(blob => !Array.isArray(blob) || blob.length !== 2 || typeof blob[0] !== 'string' || typeof blob[1] !== 'string')) throw new Error('仓库包包含无效的对象数据');
+    if (!bundle || bundle.format !== VCS_FORMAT) throw new Error(t('chart-vcs.s3ca70d2'));
+    if (Number(bundle.version) > VCS_VERSION) throw new Error(t('chart-vcs.s9ea4f20', { p0: bundle.version, p1: VCS_VERSION }));
+    if (!Array.isArray(bundle.commits) || !Array.isArray(bundle.trees) || !Array.isArray(bundle.blobs)) throw new Error(t('chart-vcs.s0fd5a62'));
+    if (bundle.commits.some(commit => typeof commit?.id !== 'string' || typeof commit.tree !== 'string' || !Array.isArray(commit.parents ?? []))) throw new Error(t('chart-vcs.s502db71'));
+    if (bundle.trees.some(tree => typeof tree?.id !== 'string')) throw new Error(t('chart-vcs.sf8e96da'));
+    if (bundle.blobs.some(blob => !Array.isArray(blob) || blob.length !== 2 || typeof blob[0] !== 'string' || typeof blob[1] !== 'string')) throw new Error(t('chart-vcs.s479124a'));
 
     const blobs = new Map();
     for (const [id, text] of bundle.blobs) {
       let bytes;
-      try { bytes = base64ToBytes(text); } catch { throw new Error(`仓库包对象无法解码：${id}`); }
-      if (await sha256Hex(bytes) !== id) throw new Error(`仓库包对象校验失败：${id}`);
-      if (blobs.has(id) && !equalBytes(blobs.get(id), bytes)) throw new Error(`仓库包对象重复且内容不一致：${id}`);
+      try { bytes = base64ToBytes(text); } catch { throw new Error(t('chart-vcs.s72d9664', { p0: id })); }
+      if (await sha256Hex(bytes) !== id) throw new Error(t('chart-vcs.s36f0d1d', { p0: id }));
+      if (blobs.has(id) && !equalBytes(blobs.get(id), bytes)) throw new Error(t('chart-vcs.s4c30fa2', { p0: id }));
       blobs.set(id, bytes);
     }
     const trees = new Map();
     for (const tree of bundle.trees) {
-      if (!tree || typeof tree.chart !== 'string' || !Array.isArray(tree.assets) || !Array.isArray(tree.folders) || typeof tree.chartName !== 'string') throw new Error('仓库包包含无效的树对象');
+      if (!tree || typeof tree.chart !== 'string' || !Array.isArray(tree.assets) || !Array.isArray(tree.folders) || typeof tree.chartName !== 'string') throw new Error(t('chart-vcs.sf8e96da'));
       const { id, ...body } = tree;
-      if (await sha256Hex(canonicalJson(body)) !== id) throw new Error(`仓库包树对象校验失败：${id}`);
-      if (trees.has(id)) throw new Error(`仓库包包含重复的树对象：${id}`);
+      if (await sha256Hex(canonicalJson(body)) !== id) throw new Error(t('chart-vcs.sb703ab0', { p0: id }));
+      if (trees.has(id)) throw new Error(t('chart-vcs.sf3602c1', { p0: id }));
       trees.set(id, tree);
     }
     const sourceCommits = new Map();
     for (const commit of bundle.commits) {
-      if (sourceCommits.has(commit.id)) throw new Error(`仓库包包含重复的提交：${commit.id}`);
+      if (sourceCommits.has(commit.id)) throw new Error(t('chart-vcs.scb96b80', { p0: commit.id }));
       sourceCommits.set(commit.id, commit);
     }
     for (const commit of bundle.commits) {
-      if (!trees.has(commit.tree) && !(await this.store.get('trees', commit.tree))) throw new Error(`仓库包提交缺少树对象：${commit.id}`);
-      for (const parent of commit.parents ?? []) if (!sourceCommits.has(parent)) throw new Error(`仓库包提交缺少父提交：${parent}`);
+      if (!trees.has(commit.tree) && !(await this.store.get('trees', commit.tree))) throw new Error(t('chart-vcs.scfa7d0c', { p0: commit.id }));
+      for (const parent of commit.parents ?? []) if (!sourceCommits.has(parent)) throw new Error(t('chart-vcs.s14b4e1b', { p0: parent }));
     }
     for (const tree of trees.values()) {
       for (const id of [tree.chart, ...tree.assets.map(entry => entry?.blob)]) {
-        if (typeof id !== 'string' || (!blobs.has(id) && !(await this.store.get('blobs', id)))) throw new Error(`仓库包树缺少对象：${id ?? '未知'}`);
+        if (typeof id !== 'string' || (!blobs.has(id) && !(await this.store.get('blobs', id)))) throw new Error(t('chart-vcs.sff43a27', { p0: id ?? t('chart-vcs.sd9c32a4') }));
       }
     }
 
     const repo = await this.read();
     for (const [id, bytes] of blobs) {
       const existing = await this.store.get('blobs', id);
-      if (existing && !equalBytes(existing.bytes, bytes)) throw new Error(`版本对象与现有数据冲突：${id}`);
+      if (existing && !equalBytes(existing.bytes, bytes)) throw new Error(t('chart-vcs.s8f30f7f', { p0: id }));
       if (!existing) await this.store.put('blobs', { id, bytes });
       this.knownBlobs.add(id);
     }
     for (const tree of trees.values()) {
       const existing = await this.store.get('trees', tree.id);
-      if (existing && canonicalJson(existing) !== canonicalJson(tree)) throw new Error(`版本树对象与现有数据冲突：${tree.id}`);
+      if (existing && canonicalJson(existing) !== canonicalJson(tree)) throw new Error(t('chart-vcs.sac80cef', { p0: tree.id }));
       if (!existing) await this.store.put('trees', tree);
     }
     const mapped = new Map();
@@ -800,7 +801,7 @@ export class ChartRepository {
       const id = await sha256Hex(canonicalJson(payload));
       mapped.set(commit.id, id);
       const existing = await this.store.get('commits', id);
-      if (existing && canonicalJson(existing) !== canonicalJson({ id, ...payload })) throw new Error(`版本提交与现有数据冲突：${id}`);
+      if (existing && canonicalJson(existing) !== canonicalJson({ id, ...payload })) throw new Error(t('chart-vcs.s8b3b619', { p0: id }));
       if (!existing) await this.store.put('commits', { id, ...payload });
     }
     const addedBranches = [], addedTags = [];
@@ -833,9 +834,9 @@ export class ChartRepository {
       addedTags.push(next);
     }
     for (const entry of bundle.repo?.stash ?? []) {
-      repo.stash.push({ ...entry, id: randomId(), message: `${entry.message}（导入）` });
+      repo.stash.push({ ...entry, id: randomId(), message: t('chart-vcs.s38ababc', { p0: entry.message }) });
     }
-    this.pushReflog(repo, `导入仓库包：${bundle.commits?.length ?? 0} 个提交`, null, this.resolveHead(repo));
+    this.pushReflog(repo, t('chart-vcs.s46f73db', { p0: bundle.commits?.length ?? 0 }), null, this.resolveHead(repo));
     await this.save(repo);
     return { repo, commits: ordered.length, branches: addedBranches, tags: addedTags };
   }

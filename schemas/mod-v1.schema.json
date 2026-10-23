@@ -2,38 +2,337 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "RPEN executable mod API 1 manifest",
   "type": "object",
-  "required": ["protocol", "api", "id", "name", "version", "author", "description", "entry"],
+  "required": [
+    "protocol",
+    "api",
+    "id",
+    "name",
+    "version",
+    "author",
+    "description",
+    "entry"
+  ],
   "description": "Structural validation only; RPEN also validates paths, package files, JS syntax and setting defaults. Imports run with full editor page authority after explicit consent and activation.",
   "properties": {
-    "protocol": {"const": "rpen-mod"}, "api": {"const": 1},
-    "id": {"$ref": "#/$defs/id"},
-    "name": {"type": "string", "minLength": 1, "maxLength": 100},
-    "version": {"type": "string", "maxLength": 60, "pattern": "^\\d+\\.\\d+\\.\\d+(?:[-+][a-zA-Z0-9.-]+)?$"},
-    "author": {"type": "string", "maxLength": 160},
-    "description": {"type": "string", "maxLength": 4000},
-    "entry": {"type": "string", "minLength": 1, "maxLength": 240, "pattern": "\\.m?js$"},
-    "dependencies": {"$ref": "#/$defs/ids"}, "conflicts": {"$ref": "#/$defs/ids"},
-    "settings": {"type": "object", "maxProperties": 100, "propertyNames": {"$ref": "#/$defs/id"}, "additionalProperties": {"$ref": "#/$defs/setting"}}
+    "protocol": {
+      "const": "rpen-mod"
+    },
+    "api": {
+      "const": 1
+    },
+    "id": {
+      "$ref": "#/$defs/id"
+    },
+    "name": {
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "pattern": "^[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{2,8})*$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          }
+        }
+      ]
+    },
+    "version": {
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "pattern": "^[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{2,8})*$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+          }
+        }
+      ]
+    },
+    "author": {
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "pattern": "^[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{2,8})*$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          }
+        }
+      ]
+    },
+    "description": {
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "pattern": "^[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{2,8})*$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          }
+        }
+      ]
+    },
+    "entry": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 240,
+      "pattern": "\\.m?js$"
+    },
+    "dependencies": {
+      "$ref": "#/$defs/ids"
+    },
+    "conflicts": {
+      "$ref": "#/$defs/ids"
+    },
+    "settings": {
+      "type": "object",
+      "maxProperties": 100,
+      "propertyNames": {
+        "$ref": "#/$defs/id"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/setting"
+      }
+    }
   },
   "additionalProperties": true,
   "$defs": {
-    "id": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$"},
-    "ids": {"type": "array", "maxItems": 64, "items": {"$ref": "#/$defs/id"}},
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,63}$"
+    },
+    "ids": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "$ref": "#/$defs/id"
+      }
+    },
     "setting": {
-      "type": "object", "required": ["type", "label", "default"],
+      "type": "object",
+      "required": [
+        "type",
+        "label",
+        "default"
+      ],
       "properties": {
-        "type": {"enum": ["boolean", "number", "text", "color", "select", "shortcut"]},
-        "label": {"type": "string", "maxLength": 120}, "description": {"type": "string"},
-        "default": {}, "min": {"type": "number"}, "max": {"type": "number"},
-        "step": {"type": "number", "exclusiveMinimum": 0},
-        "options": {"type": "object", "minProperties": 1, "maxProperties": 200, "propertyNames": {"maxLength": 2000}, "additionalProperties": {"type": "string", "maxLength": 2000}}
+        "type": {
+          "enum": [
+            "boolean",
+            "number",
+            "text",
+            "color",
+            "select",
+            "shortcut"
+          ]
+        },
+        "label": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            {
+              "type": "object",
+              "minProperties": 1,
+              "propertyNames": {
+                "pattern": "^[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{2,8})*$"
+              },
+              "additionalProperties": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120
+              }
+            }
+          ]
+        },
+        "description": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000
+            },
+            {
+              "type": "object",
+              "minProperties": 1,
+              "propertyNames": {
+                "pattern": "^[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{2,8})*$"
+              },
+              "additionalProperties": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              }
+            }
+          ]
+        },
+        "default": {},
+        "min": {
+          "type": "number"
+        },
+        "max": {
+          "type": "number"
+        },
+        "step": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "options": {
+          "type": "object",
+          "minProperties": 1,
+          "maxProperties": 200,
+          "propertyNames": {
+            "maxLength": 2000
+          },
+          "additionalProperties": {
+            "oneOf": [
+              {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              {
+                "type": "object",
+                "minProperties": 1,
+                "propertyNames": {
+                  "pattern": "^[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{2,8})*$"
+                },
+                "additionalProperties": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2000
+                }
+              }
+            ]
+          }
+        }
       },
       "allOf": [
-        {"if": {"properties": {"type": {"const": "boolean"}}}, "then": {"properties": {"default": {"type": "boolean"}}}},
-        {"if": {"properties": {"type": {"const": "number"}}}, "then": {"required": ["min", "max"], "properties": {"default": {"type": "number"}}}},
-        {"if": {"properties": {"type": {"enum": ["text", "color", "select", "shortcut"]}}}, "then": {"properties": {"default": {"type": "string", "maxLength": 2000}}}},
-        {"if": {"properties": {"type": {"const": "color"}}}, "then": {"properties": {"default": {"pattern": "^#[0-9a-fA-F]{6}$"}}}},
-        {"if": {"properties": {"type": {"const": "select"}}}, "then": {"required": ["options"]}}
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "boolean"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "default": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "number"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "min",
+              "max"
+            ],
+            "properties": {
+              "default": {
+                "type": "number"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "enum": [
+                  "text",
+                  "color",
+                  "select",
+                  "shortcut"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "default": {
+                "type": "string",
+                "maxLength": 2000
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "color"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "default": {
+                "pattern": "^#[0-9a-fA-F]{6}$"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "select"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "options"
+            ]
+          }
+        }
       ]
     }
   }

@@ -34,7 +34,11 @@
     "build:desktop": "node tools/build-desktop.mjs",
     "build:release": "node tools/build-release.mjs",
     "desktop": "electron desktop/main.cjs",
-    "smoke-build": "node tools/smoke-build.mjs"
+    "smoke-build": "node tools/smoke-build.mjs",
+    "i18n:check": "node tools/i18n.mjs check",
+    "i18n:report": "node tools/i18n.mjs report",
+    "i18n:audit": "node tools/i18n-audit.mjs",
+    "i18n:verify": "node tools/i18n-verify.mjs"
   },
   "devDependencies": {
     "@electron/packager": "20.3.0",

@@ -3,6 +3,7 @@ import { lineDisplayLabel } from '../core/line-groups.mjs';
 import { noiseLayers } from '../core/noise-skin.mjs';
 import { trackedNoiseArea, noiseTrackingChart } from '../core/noise-tracking.mjs';
 import { beatInputControl } from './beat-input.mjs';
+import { t } from '../i18n.mjs';
 
 const button = (text, action) => { const node = document.createElement('button'); node.type = 'button'; node.textContent = text; node.onclick = action; return node; };
 
@@ -11,7 +12,7 @@ export class NoiseTrackingPanel {
     Object.assign(this, { host, stage, getContext, activate, invalidate, notify, pause });
     this.options = { mode: 'line', lineIndex: 0, start: '0:0/1', end: '4:0/1', width: 500, height: 100, active: true, invert: false, layerId: 'default', sampleRate: 120, show: true };
     this.sampler = document.createElement('div'); this.sampler.className = 'noise-tracking-sampler'; this.sampler.hidden = true;
-    this.sampler.setAttribute('aria-label', '点击预览中的追踪对象'); stage.append(this.sampler);
+    this.sampler.setAttribute('aria-label', t('noise-tracking.se636eb1')); stage.append(this.sampler);
     this.sampler.onclick = event => this.pick(event);
     stage.addEventListener('wheel', event => {
       if (!this.previewing) return;
@@ -19,7 +20,7 @@ export class NoiseTrackingPanel {
     }, { passive: false, capture: true });
     this.sampleBar = document.createElement('div'); this.sampleBar.className = 'noise-sample-bar noise-tracking-sample-bar'; this.sampleBar.hidden = true;
     this.sampleHint = document.createElement('p'); this.sampleHint.className = 'hint';
-    this.sampleBar.append(this.sampleHint, button('取消取样', () => this.endSample())); stage.append(this.sampleBar);
+    this.sampleBar.append(this.sampleHint, button(t('noise-tracking.s2052a51'), () => this.endSample())); stage.append(this.sampleBar);
     window.addEventListener('keydown', event => {
       if (this.sampling && event.key === 'Escape') { event.preventDefault(); event.stopImmediatePropagation(); this.endSample(); }
     }, true);
@@ -59,30 +60,30 @@ export class NoiseTrackingPanel {
   }
   render() {
     this.host.replaceChildren(); this.controls = new Map(); this.scroll = document.createElement('div'); this.scroll.className = 'noise-tracking-scroll'; this.host.append(this.scroll);
-    const title = document.createElement('div'); title.className = 'panel-title'; title.textContent = '噪域追踪'; this.scroll.append(title);
-    this.field('mode', '追踪模式', { choices: [['line', '判定线'], ['note', '音符']] });
-    this.field('lineIndex', '判定线', { choices: this.context.session.chart.judgeLineList.map((line, index) => [index, lineDisplayLabel(this.context.session.chart, index)]) });
+    const title = document.createElement('div'); title.className = 'panel-title'; title.textContent = t('noise-tracking.sd5825e9'); this.scroll.append(title);
+    this.field('mode', t('noise-tracking.s88b3073'), { choices: [['line', t('transport.line')], ['note', t('noise-tracking.s7ac3289')]] });
+    this.field('lineIndex', t('transport.line'), { choices: this.context.session.chart.judgeLineList.map((line, index) => [index, lineDisplayLabel(this.context.session.chart, index)]) });
     this.targetLabel = document.createElement('p'); this.targetLabel.className = 'hint noise-tracking-target'; this.scroll.append(this.targetLabel);
-    this.sampleButton = button('在预览中取样', () => this.beginSample()); this.sampleButton.className = 'wide-button'; this.scroll.append(this.sampleButton);
-    this.field('start', '开始拍', { beat: true }); this.field('end', '结束拍', { beat: true });
-    this.field('width', '宽度', { min: 0.001, max: 100000 }); this.field('height', '高度', { min: 0.001, max: 100000 });
-    this.field('layerId', '目标噪域层', { choices: noiseLayers(this.context.session.chart).map(layer => [layer.id, layer.name]) });
-    this.field('invert', '反转噪域', { checkbox: true }); this.field('active', '整个区间激活', { checkbox: true });
-    this.field('sampleRate', '采样精度', { choices: [[60, '标准 · 60 Hz'], [120, '精细 · 120 Hz'], [240, '高精度 · 240 Hz']] });
-    this.field('show', '显示实时预览', { checkbox: true });
+    this.sampleButton = button(t('noise-tracking.s162755d'), () => this.beginSample()); this.sampleButton.className = 'wide-button'; this.scroll.append(this.sampleButton);
+    this.field('start', t('noise-tracking.s087c451'), { beat: true }); this.field('end', t('noise-tracking.sc4d3fa4'), { beat: true });
+    this.field('width', t('noise-tracking.s86ec1ca'), { min: 0.001, max: 100000 }); this.field('height', t('noise-tracking.seea51aa'), { min: 0.001, max: 100000 });
+    this.field('layerId', t('noise-tracking.s660dfdf'), { choices: noiseLayers(this.context.session.chart).map(layer => [layer.id, layer.name]) });
+    this.field('invert', t('noise-tracking.s5ec676c'), { checkbox: true }); this.field('active', t('noise-tracking.sced2eff'), { checkbox: true });
+    this.field('sampleRate', t('noise-tracking.s423c4be'), { choices: [[60, t('noise-tracking.s40508e8')], [120, t('noise-tracking.s8f71922')], [240, t('noise-tracking.s71a42f5')]] });
+    this.field('show', t('noise-tracking.sf43e6d2'), { checkbox: true });
     const playback = document.createElement('div'); playback.className = 'noise-tracking-playback';
-    this.playButton = button('▶ 演示追踪', () => { this.animating = !this.animating; this.animationEpoch = null; this.playButton.textContent = this.animating ? 'Ⅱ 暂停演示' : '▶ 演示追踪'; this.invalidate(); });
-    this.progress = document.createElement('input'); this.progress.type = 'range'; this.progress.min = 0; this.progress.max = 1; this.progress.step = 0.001; this.progress.value = 0; this.progress.setAttribute('aria-label', '噪域追踪预览进度');
-    this.progress.oninput = () => { this.animating = false; this.playButton.textContent = '▶ 演示追踪'; if (this.range) this.previewSeconds = this.range.start + Number(this.progress.value) * (this.range.end - this.range.start); this.invalidate(); };
+    this.playButton = button(t('noise-tracking.see93fc2'), () => { this.animating = !this.animating; this.animationEpoch = null; this.playButton.textContent = this.animating ? t('noise-tracking.s41852e3') : t('noise-tracking.see93fc2'); this.invalidate(); });
+    this.progress = document.createElement('input'); this.progress.type = 'range'; this.progress.min = 0; this.progress.max = 1; this.progress.step = 0.001; this.progress.value = 0; this.progress.setAttribute('aria-label', t('noise-tracking.sbf11602'));
+    this.progress.oninput = () => { this.animating = false; this.playButton.textContent = t('noise-tracking.see93fc2'); if (this.range) this.previewSeconds = this.range.start + Number(this.progress.value) * (this.range.end - this.range.start); this.invalidate(); };
     this.previewTime = document.createElement('output'); playback.append(this.playButton, this.progress, this.previewTime); this.scroll.append(playback);
-    const help = document.createElement('p'); help.className = 'hint'; help.textContent = '预览中点击取样，Hold 身体也可选中；追踪位置按头部计算。宽高关于中心对称，角度跟随判定线（顺时针）。生成的是普通事件，之后修改目标不会自动更新；需要重新生成。采样点会按坐标 0.2、角度 0.02° 的误差合并，瞬移单独保留。'; this.scroll.append(help);
+    const help = document.createElement('p'); help.className = 'hint'; help.textContent = t('noise-tracking.s850ffe3'); this.scroll.append(help);
     const footer = document.createElement('div'); footer.className = 'noise-tracking-footer'; this.message = document.createElement('p'); this.message.className = 'hint'; this.message.setAttribute('role', 'status');
-    this.generate = button('生成噪域', () => this.apply()); this.generate.className = 'primary'; this.generate.disabled = true;
-    footer.append(this.message, button('返回谱面工具', () => this.activate('chart')), this.generate); this.host.append(footer); this.updateVisibility();
+    this.generate = button(t('noise-tracking.s6cbec60'), () => this.apply()); this.generate.className = 'primary'; this.generate.disabled = true;
+    footer.append(this.message, button(t('noise-tracking.sb3669b2'), () => this.activate('chart')), this.generate); this.host.append(footer); this.updateVisibility();
   }
   updateVisibility() {
     this.controls.get('lineIndex').closest('.field').hidden = this.options.mode !== 'line';
-    this.targetLabel.textContent = this.options.mode === 'line' ? '可用下拉列表或在预览中选择；取样时所有判定线临时显示为不透明。' : this.noteTarget ? `${lineDisplayLabel(this.context.session.chart, this.noteTarget.lineIndex)} · 音符 ${this.noteTarget.noteIndex}` : '尚未选择音符，请在预览中取样。';
+    this.targetLabel.textContent = this.options.mode === 'line' ? t('noise-tracking.s6d81bbc') : this.noteTarget ? t('noise-tracking.s8dfdc65', { p0: lineDisplayLabel(this.context.session.chart, this.noteTarget.lineIndex), p1: this.noteTarget.noteIndex }) : t('noise-tracking.sbafe94d');
   }
   fail(message) { this.area = null; this.previewChart = null; this.generate.disabled = true; this.message.textContent = message; this.message.classList.add('error'); this.updateChrome(); this.invalidate(); }
   rebuild() {
@@ -95,7 +96,7 @@ export class NoiseTrackingPanel {
       this.previewChart = this.appliedArea && session.chart.blockAreaList?.includes(this.appliedArea) ? session.chart : noiseTrackingChart(session.chart, this.area);
       this.previewSeconds = Math.max(this.range.start, Math.min(this.range.end - 1e-7, this.previewSeconds ?? this.range.start));
       this.generate.disabled = false; this.message.classList.remove('error');
-      this.message.textContent = `将生成 1 个噪域 · ${this.area.moveXEvents.length} 组移动 / 旋转事件`;
+      this.message.textContent = t('noise-tracking.s8e38f09', { p0: this.area.moveXEvents.length });
     } catch (error) { this.fail(error.message); return; }
     this.updateChrome(); this.invalidate();
   }
@@ -122,13 +123,13 @@ export class NoiseTrackingPanel {
     if (this.generate) this.generate.disabled = Boolean(this.sampling || !this.area);
   }
   beginSample() {
-    this.pause(); this.animating = false; this.playButton.textContent = '▶ 演示追踪'; this.sampling = true;
-    this.sampleHint.textContent = this.options.mode === 'line' ? '点击判定线选择追踪对象 · 此时所有判定线临时不透明 · Esc 取消' : '点击音符的头部或 Hold 身体 · Esc 取消';
+    this.pause(); this.animating = false; this.playButton.textContent = t('noise-tracking.see93fc2'); this.sampling = true;
+    this.sampleHint.textContent = this.options.mode === 'line' ? t('noise-tracking.s48e533a') : t('noise-tracking.s7c9fc73');
     this.updateChrome(); this.invalidate();
   }
   endSample() { this.sampling = false; this.updateChrome(); this.invalidate(); }
   wheel(event) {
-    this.animating = false; this.animationEpoch = null; this.playButton.textContent = '▶ 演示追踪';
+    this.animating = false; this.animationEpoch = null; this.playButton.textContent = t('noise-tracking.see93fc2');
     this.context.wheel(event);
     this.previewSeconds = this.context.seconds(); this.invalidate();
   }
@@ -157,7 +158,7 @@ export class NoiseTrackingPanel {
       this.previewSeconds = this.range.start + ((timestamp - this.animationEpoch) / 1000 % (this.range.end - this.range.start));
     }
     this.progress.value = Math.max(0, Math.min(1, (this.previewSeconds - this.range.start) / (this.range.end - this.range.start)));
-    this.previewTime.textContent = formatBeat(fromNumber(this.context.tempo.beat(this.previewSeconds))) + ' 拍';
+    this.previewTime.textContent = formatBeat(fromNumber(this.context.tempo.beat(this.previewSeconds))) + t('noise-tracking.s8e6821f');
     return { chart: this.previewChart, seconds: this.previewSeconds };
   }
   action(action) {
@@ -167,10 +168,10 @@ export class NoiseTrackingPanel {
   }
   apply() {
     try {
-      this.sync(); if (!this.area || this.sampling) throw new Error('请先选择追踪对象并填写有效参数');
+      this.sync(); if (!this.area || this.sampling) throw new Error(t('noise-tracking.sae2c1bf'));
       const { session } = this.context; const area = this.area; this.appliedArea = area;
-      session.commit('噪域追踪', noiseTrackingChart(session.chart, area));
-      this.rebuild(); this.message.textContent = '已生成 1 个噪域，可撤销 / 重做。修改目标后需重新生成。'; this.notify('噪域追踪已生成', 'success');
+      session.commit(t('noise-tracking.sd5825e9'), noiseTrackingChart(session.chart, area));
+      this.rebuild(); this.message.textContent = t('noise-tracking.s1269edf'); this.notify(t('noise-tracking.s04a0ee3'), 'success');
     } catch (error) { this.fail(error.message); this.notify(error.message, 'error'); }
   }
 }

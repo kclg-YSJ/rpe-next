@@ -1,6 +1,7 @@
 import { CollaborationMessageReader, CollaborationMessageSender, CollaborationSyncDeadline } from '../core/collaboration-wire.mjs';
 import { CollaborationMedia } from './collaboration-media.mjs';
 import { assetBase64 } from './collaboration-assets.mjs';
+import { t } from '../i18n.mjs';
 
 export class CollaborationTransport extends EventTarget {
   constructor() {
@@ -27,7 +28,7 @@ export class CollaborationTransport extends EventTarget {
     const deadline = new CollaborationSyncDeadline(reason => {
       if (this.socket !== socket) return;
       this.trace('sync-timeout', { reason });
-      this.emit('message', { type: 'error', message: reason === 'idle' ? '谱面同步已连续 60 秒没有进展，请检查网络或导出联机诊断' : '谱面同步超过 10 分钟，请检查网络或导出联机诊断' });
+      this.emit('message', { type: 'error', message: reason === 'idle' ? t('collaboration-transport.sb799ba5') : t('collaboration-transport.s8ee1c15') });
       socket.close();
     });
     this.syncDeadline = deadline;
@@ -45,7 +46,7 @@ export class CollaborationTransport extends EventTarget {
       const percent = Math.floor(progress.sent / progress.total * 100);
       if (progress.type === 'create' && percent !== uploadPercent) {
         uploadPercent = percent;
-        this.emit('state', percent === 100 ? '谱面已发送，等待服务器确认' : `正在发送谱面 ${percent}%`);
+        this.emit('state', percent === 100 ? t('collaboration-transport.s988d260') : t('collaboration-transport.sb4f023d', { p0: percent }));
         if (percent % 10 === 0) this.trace('sync-sending', { sent: progress.sent, total: progress.total });
       }
     });
@@ -53,7 +54,7 @@ export class CollaborationTransport extends EventTarget {
     socket.onopen = () => {
       if (this.socket !== socket) return;
       this.connected = true; this.trace('socket-open');
-      deadline.start(); this.emit('state', '已连接，正在同步');
+      deadline.start(); this.emit('state', t('collaboration-transport.s078406e'));
       try { this.send(this.hello); }
       catch (error) { this.trace('hello-failed', { error: error.name }); this.emit('message', { type: 'error', message: error.message }); socket.close(); }
     };
@@ -67,7 +68,7 @@ export class CollaborationTransport extends EventTarget {
         }
         if (!message) {
           const percent = Math.floor(reader.parts.length / reader.total * 100);
-          if (!synchronized && percent !== downloadPercent) { downloadPercent = percent; this.emit('state', `正在接收谱面 ${percent}%`); }
+          if (!synchronized && percent !== downloadPercent) { downloadPercent = percent; this.emit('state', t('collaboration-transport.seebb153', { p0: percent })); }
           if (reader.parts.length === 1 || reader.parts.length % 64 === 0) this.trace('sync-receiving', { parts: reader.parts.length, total: reader.total, bytes: reader.bytes });
           return;
         }
@@ -75,7 +76,7 @@ export class CollaborationTransport extends EventTarget {
         if (['welcome', 'waiting', 'error'].includes(message.type)) deadline.stop();
         if (message.type === 'welcome') {
           if (message.chartAccepted) {
-            if (this.hello.type !== 'create' || !this.hello.chart || message.id !== message.host || message.revision !== 0) throw new Error('谱面确认不匹配');
+            if (this.hello.type !== 'create' || !this.hello.chart || message.id !== message.host || message.revision !== 0) throw new Error(t('collaboration-transport.s85c546c'));
             message.chart = this.hello.chart;
           }
           synchronized = true;
@@ -112,19 +113,19 @@ export class CollaborationTransport extends EventTarget {
           try { this.updatePeers(message.members); } catch (error) { this.trace('p2p-fallback', { error: error.name }); }
         }
         this.emit('message', message);
-      } catch (error) { this.trace('decode-failed', { error: error.name }); this.emit('state', '收到无效消息，请导出联机诊断'); }
+      } catch (error) { this.trace('decode-failed', { error: error.name }); this.emit('state', t('collaboration-transport.s2c69c95')); }
     };
     socket.onclose = event => {
       if (this.socket !== socket) return;
       deadline.stop(); this.sender.close(); this.cancelAssetTransfers(); this.media.close(); this.trace('socket-close', { code: event.code, clean: event.wasClean, pendingParts: reader.parts.length, receivedBytes: reader.bytes });
       this.connected = false; for (const id of this.peers.keys()) this.dropPeer(id);
-      this.emit('state', event.code === 4003 ? '加入被拒绝或已被移出' : `连接已断开（${event.code}），编辑暂停`);
+      this.emit('state', event.code === 4003 ? t('collaboration-transport.s3ff1256') : t('collaboration-transport.s2e4799f', { p0: event.code }));
       if (!this.closed && this.hello.resume && event.code !== 4003 && event.code !== 4000) this.retry = setTimeout(() => this.connect(url, this.hello), 2500);
     };
-    socket.onerror = () => { if (this.socket === socket) { this.trace('socket-error'); this.emit('state', '连接失败，请检查服务器地址或联系维护者'); } };
+    socket.onerror = () => { if (this.socket === socket) { this.trace('socket-error'); this.emit('state', t('collaboration-transport.se802b42')); } };
   }
   send(message) {
-    if (!this.connected || this.socket.readyState !== WebSocket.OPEN) throw new Error('尚未连接，修改不会发送');
+    if (!this.connected || this.socket.readyState !== WebSocket.OPEN) throw new Error(t('collaboration-transport.s016478e'));
     this.sender.send(message);
     if (['create', 'join', 'approve', 'edit'].includes(message.type)) this.trace('send', { type: message.type, bytes: new TextEncoder().encode(JSON.stringify(message)).byteLength });
   }
@@ -134,35 +135,35 @@ export class CollaborationTransport extends EventTarget {
     if (this.connected && this.assetDelivery) this.send({ type: 'asset-subscribe', enabled: this.acceptAssets });
   }
   async sendAsset(message) {
-    if (!this.connected) throw new Error('传输连接已关闭');
+    if (!this.connected) throw new Error(t('collaboration-transport.sbc9d39d'));
     if (!this.assetDelivery) { await this.sender.sendAsync(message); return; }
-    if (this.assetReceipts.size >= 4) throw new Error('素材发送窗口已满');
+    if (this.assetReceipts.size >= 4) throw new Error(t('collaboration-transport.s414c05f'));
     const delivery = crypto.randomUUID();
     const result = await new Promise((resolve, reject) => {
-      const timer = setTimeout(() => { this.assetReceipts.delete(delivery); reject(new Error('素材接收超过 60 秒没有确认，请检查接收者连接')); }, 60000);
+      const timer = setTimeout(() => { this.assetReceipts.delete(delivery); reject(new Error(t('collaboration-transport.s1eee8d1'))); }, 60000);
       this.assetReceipts.set(delivery, { resolve, reject, timer });
       try { this.send({ ...message, delivery }); }
       catch (error) { clearTimeout(timer); this.assetReceipts.delete(delivery); reject(error); }
     });
-    if (result.failed) throw new Error('部分接收者连接中断，请重新发送素材');
-    if (!result.recipients) throw new Error('没有已开启接收素材的在线协作者');
+    if (result.failed) throw new Error(t('collaboration-transport.s6965975'));
+    if (!result.recipients) throw new Error(t('collaboration-transport.s8ab01bf'));
   }
   cancelAssetTransfers() {
-    for (const receipt of this.assetReceipts.values()) { clearTimeout(receipt.timer); receipt.reject(new Error('素材传输连接已关闭')); }
+    for (const receipt of this.assetReceipts.values()) { clearTimeout(receipt.timer); receipt.reject(new Error(t('collaboration-transport.s734b3b0'))); }
     this.assetReceipts.clear();
-    for (const receipt of this.mediaReceipts.values()) receipt.finish(new Error('素材传输连接已关闭'));
+    for (const receipt of this.mediaReceipts.values()) receipt.finish(new Error(t('collaboration-transport.s734b3b0')));
   }
   uploadMediaChunk(chunk, signal) {
     return this.requestMediaUpload({ type: 'media-upload', upload: chunk.upload, hash: chunk.hash, index: chunk.index, data: assetBase64(chunk.bytes) }, signal);
   }
   requestMediaUpload(message, signal) {
     signal.throwIfAborted();
-    if (!this.connected) return Promise.reject(new Error('素材传输连接已关闭'));
-    if (this.mediaReceipts.size >= 2) return Promise.reject(new Error('备用素材发送窗口已满'));
+    if (!this.connected) return Promise.reject(new Error(t('collaboration-transport.s734b3b0')));
+    if (this.mediaReceipts.size >= 2) return Promise.reject(new Error(t('collaboration-transport.sa6e8e0f')));
     const request = crypto.randomUUID();
     return new Promise((resolve, reject) => {
       let timer; const started = Date.now();
-      const abort = () => finish(signal.reason ?? new DOMException('操作已取消', 'AbortError'));
+      const abort = () => finish(signal.reason ?? new DOMException(t('collaboration-transport.sf2878ae'), 'AbortError'));
       const finish = (error, result) => {
         if (!this.mediaReceipts.delete(request)) return;
         clearTimeout(timer); signal.removeEventListener('abort', abort);
@@ -170,7 +171,7 @@ export class CollaborationTransport extends EventTarget {
       };
       const touch = () => {
         clearTimeout(timer);
-        timer = setTimeout(() => finish(new DOMException('备用素材通道没有继续收到确认，请检查连接并导出诊断', 'TimeoutError')), Math.max(0, Math.min(60000, 600000 - (Date.now() - started))));
+        timer = setTimeout(() => finish(new DOMException(t('collaboration-transport.se7b74fc'), 'TimeoutError')), Math.max(0, Math.min(60000, 600000 - (Date.now() - started))));
       };
       this.mediaReceipts.set(request, { finish, touch }); touch(); signal.addEventListener('abort', abort, { once: true });
       try { this.send({ ...message, request }); }

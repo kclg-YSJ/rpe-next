@@ -2,6 +2,7 @@ import { beatValue } from '../core/beat.mjs';
 import { alignShaderParameters } from '../core/shader-events.mjs';
 import { chartWithEventLists, eventKey, eventList, eventListAt } from './event-commands.mjs';
 import { captureSelection, commitSelectionEdit, shiftedTime } from './batch-edit.mjs';
+import { t } from '../i18n.mjs';
 
 export function copyObjects(session) {
   const snapshot = captureSelection(session);
@@ -18,11 +19,11 @@ export function copyObjects(session) {
 export function cutObjects(session) {
   const count = copyObjects(session);
   if (!count) return 0;
-  deleteObjects(session, '剪切选中项');
+  deleteObjects(session, t('clipboard.s67ac29d'));
   return count;
 }
 
-export function deleteObjects(session, label = '删除选中项') {
+export function deleteObjects(session, label = t('clipboard.s324b30a')) {
   const snapshot = captureSelection(session);
   const count = snapshot.notes.length + snapshot.events.length;
   if (!count) return 0;
@@ -131,5 +132,5 @@ export function pasteObjects(session, beat, options) {
   session.clipboardVisible = true;
   return commitSelectionEdit(session, { chart, lineIndex: session.lineIndex, eventLayer: session.eventLayer,
     focus: projected.notes.length ? 'notes' : 'events', selection, eventSelection,
-    multiLineSelection, multiEventSelection }, options?.mirror ? '镜像粘贴' : '粘贴选中项');
+    multiLineSelection, multiEventSelection }, options?.mirror ? t('clipboard.sa64e503') : t('clipboard.s1e020a8'));
 }

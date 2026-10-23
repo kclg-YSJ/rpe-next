@@ -5,30 +5,31 @@ import { easing } from '../core/easing.mjs';
 import { compileExpression, compileBatchScript } from '../core/batch-script.mjs';
 import { alignShaderParameters } from '../core/shader-events.mjs';
 import { eventList, eventKey, chartWithEventLists } from './event-commands.mjs';
+import { t } from '../i18n.mjs';
 
 export const NOTE_BATCH_FIELDS = [
-  ['x', 'X · 横坐标'], ['speed', 'Speed · 速度'], ['size', 'Size · 大小'], ['yOffset', 'YOffset · 纵向偏移'],
-  ['visibleTime', 'VisibleTime · 可见秒数'], ['alpha', 'Alpha · 透明度'], ['t1', 'Time1 · 开始拍'], ['t2', 'Time2 · 结束拍'],
-  ['line', 'Line · 移动到线'], ['hitSound', 'HitSound · 打击音效'], ['judgeArea', 'judgeArea · 判定宽度'],
+  ['x', t('multi-edit.s663ad0d')], ['speed', t('multi-edit.s0125bc6')], ['size', t('multi-edit.s34a6f69')], ['yOffset', t('multi-edit.saaf45bc')],
+  ['visibleTime', t('multi-edit.s35fe5a7')], ['alpha', t('multi-edit.se498bbe')], ['t1', t('multi-edit.saaf45f4')], ['t2', t('multi-edit.sca5cb8c')],
+  ['line', t('multi-edit.sfae5957')], ['hitSound', t('multi-edit.s2482510')], ['judgeArea', t('multi-edit.s7849633')],
   ['red', 'Red'], ['green', 'Green'], ['blue', 'Blue'],
 ];
 export const EVENT_BATCH_FIELDS = [
-  ['both', 'Both · 首尾数值'], ['end', 'End · 结束值'], ['start', 'Start · 开始值'], ['easing', 'Easing · 缓动'],
-  ['t1', 'StartTime · 开始拍'], ['t2', 'EndTime · 结束拍'], ['line', 'Line · 复制到线'],
-  ['linkgroup', 'LinkGroup · 绑定组'], ['duration', 'Duration · 时长并首尾相接'], ['order', 'Order · 重排内容（保留时间槽）'],
+  ['both', t('multi-edit.sb9b4ab9')], ['end', t('multi-edit.s02341a7')], ['start', t('multi-edit.sb577153')], ['easing', t('multi-edit.s866ddab')],
+  ['t1', t('multi-edit.s0e1d000')], ['t2', t('multi-edit.s9ad044e')], ['line', t('multi-edit.s72b16cf')],
+  ['linkgroup', t('multi-edit.s150e064')], ['duration', t('multi-edit.sad26cd1')], ['order', t('multi-edit.s06528e5')],
 ];
 export const EVENT_BATCH_TYPES = [
-  ['all', '全部'], ['moveXEvents', 'X'], ['moveYEvents', 'Y'], ['rotateEvents', '旋转'], ['alphaEvents', '透明度'],
-  ['speedEvents', '速度'], ['scaleXEvents', '缩放 X'], ['scaleYEvents', '缩放 Y'], ['paintEvents', '着色器'],
-  ['colorEvents', '颜色'], ['textEvents', '文字'],
+  ['all', t('multi-edit.s778fc8f')], ['moveXEvents', 'X'], ['moveYEvents', 'Y'], ['rotateEvents', t('multi-edit.sa69e51e')], ['alphaEvents', t('multi-edit.s61b101b')],
+  ['speedEvents', t('multi-edit.sf2fdffb')], ['scaleXEvents', t('multi-edit.s4175cf1')], ['scaleYEvents', t('multi-edit.sd55daa9')], ['paintEvents', t('multi-edit.s14f807e')],
+  ['colorEvents', t('multi-edit.s8ef4886')], ['textEvents', t('multi-edit.sf4d3dab')],
 ];
-export const BATCH_OPERATIONS = [['By', 'By · 增减'], ['To', 'To · 设为'], ['Times', 'Times · 倍乘'], ['Max', 'Max · 下限'], ['Min', 'Min · 上限'], ['Flip', 'Flip · 绕值翻转']];
+export const BATCH_OPERATIONS = [['By', t('multi-edit.s798a5de')], ['To', t('multi-edit.s1cf4382')], ['Times', t('multi-edit.s2f757ce')], ['Max', t('multi-edit.s63f1ded')], ['Min', t('multi-edit.se76be40')], ['Flip', t('multi-edit.s1e32eeb')]];
 
 export function batchOperation(before, value, operation) {
   switch (operation) {
     case 'By': return before + value; case 'To': return value; case 'Times': return before * value;
     case 'Max': return Math.max(before, value); case 'Min': return Math.min(before, value); case 'Flip': return value * 2 - before;
-    default: throw new Error('未知修改方式');
+    default: throw new Error(t('multi-edit.s5b57638'));
   }
 }
 
@@ -47,7 +48,7 @@ function distribution(options, random) {
   const upper = compileExpression(String(options.upper ?? 0))({});
   const cycle = sequence(options.cycle, [1], true); const disturbance = sequence(options.disturbance, []);
   const easingType = Number(options.easingType ?? 1);
-  if (!Number.isInteger(easingType) || easingType < 1 || easingType > 29) throw new Error('缓动编号须为 1–29');
+  if (!Number.isInteger(easingType) || easingType < 1 || easingType > 29) throw new Error(t('multi-edit.s149b25e'));
   return (index, progress) => {
     const multiplier = cycle[index % cycle.length]; if (multiplier === null) return null;
     let value = lower + (upper - lower) * easing(progress, easingType);
@@ -84,10 +85,10 @@ function validateChange(change, lineCount, snapshot) {
   if (change.kind === 'notes') change.after = integerNoteAlpha(change.after);
   else if (change.type === 'alphaEvents') change.after = integerAlphaEvent(change.after);
   const { after, kind, type } = change;
-  if (!Number.isInteger(change.lineIndex) || change.lineIndex < 0 || change.lineIndex >= lineCount) throw new Error(`目标线 ${change.lineIndex} 不存在`);
+  if (!Number.isInteger(change.lineIndex) || change.lineIndex < 0 || change.lineIndex >= lineCount) throw new Error(t('multi-edit.s35d8e57', { p0: change.lineIndex }));
   if (kind === 'notes') {
-    if (![1, 2, 3, 4].includes(after.type)) throw new Error('音符类型须为 1 Tap / 2 Hold / 3 Flick / 4 Drag');
-    if (![0, 1, 2].includes(after.above ?? 1) || ![0, 1].includes(after.isFake ?? 0)) throw new Error('above 须为 0/1/2，isFake 须为 0/1');
+    if (![1, 2, 3, 4].includes(after.type)) throw new Error(t('multi-edit.s8872b88'));
+    if (![0, 1, 2].includes(after.above ?? 1) || ![0, 1].includes(after.isFake ?? 0)) throw new Error(t('multi-edit.s6d1382d'));
     after.above = (after.above ?? 1) === 1 ? 1 : after.type === 2 ? 0 : 2;
     if (after.type === 2 && change.before.type !== 2 && beatValue(after.endTime) === beatValue(after.startTime)) after.endTime = fromNumber(beatValue(after.startTime) + 0.25);
   }
@@ -95,12 +96,12 @@ function validateChange(change, lineCount, snapshot) {
     if (beatValue(after.startTime) === beatValue(change.before.startTime) && beatValue(after.endTime) !== beatValue(change.before.endTime)) after.startTime = [...after.endTime];
     else after.endTime = [...after.startTime];
   }
-  if (beatValue(after.endTime) < beatValue(after.startTime)) throw new Error('结束拍不能早于开始拍');
+  if (beatValue(after.endTime) < beatValue(after.startTime)) throw new Error(t('multi-edit.sffce99d'));
   if (kind === 'events' && after.inst && JSON.stringify(after.start) !== JSON.stringify(after.end)) after.inst = 0;
-  if (kind === 'events' && ![0, 1, false, true].includes(after.inst ?? 0)) throw new Error('钩定 inst 须为 0/1');
+  if (kind === 'events' && ![0, 1, false, true].includes(after.inst ?? 0)) throw new Error(t('multi-edit.s41eaccc'));
   if (kind === 'events' && type === 'paintEvents' && snapshot.shaderAutoAlign !== false && beatValue(after.startTime) !== beatValue(change.before.startTime)) change.after = alignShaderParameters(after);
-  for (const [key, value] of Object.entries(change.after)) if (typeof value === 'number' && !Number.isFinite(value)) throw new Error(`${key} 的结果不是有限数字`);
-  if (after.easingType !== undefined && (!Number.isInteger(after.easingType) || after.easingType < 1 || after.easingType > 29)) throw new Error('结果中的缓动编号须为 1–29 的整数');
+  for (const [key, value] of Object.entries(change.after)) if (typeof value === 'number' && !Number.isFinite(value)) throw new Error(t('multi-edit.sbb4b7da', { p0: key }));
+  if (after.easingType !== undefined && (!Number.isInteger(after.easingType) || after.easingType < 1 || after.easingType > 29)) throw new Error(t('multi-edit.s5aa429b'));
 }
 
 function assemble(snapshot, changes, kind, removeSource = false) {
@@ -177,7 +178,7 @@ export function previewMultiEdit(snapshot, kind, options = {}) {
   const fields = (kind === 'notes' ? NOTE_BATCH_FIELDS : EVENT_BATCH_FIELDS).map(([key]) => key).filter(key => !['hitSound', 'both', 'order'].includes(key));
   if (kind === 'notes') fields.push('type', 'isFake', 'above'); else fields.push('inst');
   const script = scriptMode ? compileBatchScript(options.script ?? '', fields) : [];
-  if (scriptMode && !script.length) throw new Error('请输入至少一条赋值');
+  if (scriptMode && !script.length) throw new Error(t('multi-edit.s963208d'));
   const condition = options.condition?.trim() ? compileExpression(options.condition) : () => 1;
   const random = randomSource(options.seed ?? 1);
   const modifier = scriptMode || field === 'hitSound' ? null : distribution(options, random);
@@ -205,13 +206,13 @@ export function previewMultiEdit(snapshot, kind, options = {}) {
         for (const statement of script) {
           const value = statement.evaluate(scope); const previous = scope[statement.field];
           const next = statement.operator === '=' ? value : statement.operator === '+=' ? previous + value : statement.operator === '-=' ? previous - value : statement.operator === '*=' ? previous * value : previous / value;
-          if (!Number.isFinite(next)) throw new Error(`${statement.field} 计算结果无效`);
+          if (!Number.isFinite(next)) throw new Error(t('multi-edit.sfaa68de', { p0: statement.field }));
           if (statement.field === 'line') { change.lineIndex = Math.round(next); change.copy = kind === 'events'; }
           else writeField(after, statement.field, next);
           Object.assign(scope, scopeFor(after, kind, change.lineIndex, index, filtered.length));
         }
       } else if (field === 'hitSound') {
-        if (operation !== 'To') throw new Error('HitSound 仅支持 To');
+        if (operation !== 'To') throw new Error(t('multi-edit.sb1c01c7'));
         after.hitSound = String(options.lower || options.upper || '');
       } else {
         const endpointDistribution = kind === 'notes' || ['line', 'duration', 'order'].includes(field);
@@ -219,14 +220,14 @@ export function previewMultiEdit(snapshot, kind, options = {}) {
         const value = modifier(index, progress); if (value === null) return;
         if (field === 'line') { change.lineIndex = Math.round(batchOperation(sourceLine, value, operation)); change.copy = kind === 'events'; }
         else if (field === 'both') {
-          if (typeof after.start !== 'number' || typeof after.end !== 'number') throw new Error('首尾数值编辑适用于数值事件；颜色、文字、着色器可编辑时间或克隆');
+          if (typeof after.start !== 'number' || typeof after.end !== 'number') throw new Error(t('multi-edit.sac3b03e'));
           after.start = batchOperation(after.start, value, operation); after.end = batchOperation(after.end, value, operation);
         } else if (field === 'duration' && kind === 'events') {
           const duration = Math.max(0, batchOperation(scope.duration, value, operation));
           after.startTime = fromNumber(time); after.endTime = fromNumber(time + duration); time += duration;
         } else if (field === 'order') change.priority = batchOperation(scope.u, value, operation);
         else {
-          if (typeof scope[field] !== 'number') throw new Error('当前物件不支持此数值属性');
+          if (typeof scope[field] !== 'number') throw new Error(t('multi-edit.sfe2eaba'));
           writeField(after, field, batchOperation(scope[field], value, operation));
         }
       }
@@ -238,16 +239,16 @@ export function previewMultiEdit(snapshot, kind, options = {}) {
     }
     for (const change of groupChanges) { validateChange(change, snapshot.chart.judgeLineList.length, snapshot); changes.push(change); }
   }
-  if (!changes.length) throw new Error('没有匹配的选中物件');
+  if (!changes.length) throw new Error(t('multi-edit.sdd2c6a4'));
   return assemble(snapshot, changes, kind);
 }
 
 export function previewEventClones(snapshot, options = {}) {
   const targets = sequence(options.targets, []);
-  if (!targets.length) throw new Error('请输入目标线号序列');
-  if (targets.some(value => !Number.isInteger(value) || value < 0 || value >= snapshot.chart.judgeLineList.length)) throw new Error('目标线号必须是已有判定线的整数编号');
-  if (!snapshot.events.length) throw new Error('请先选中事件');
-  if (targets.length * snapshot.events.length > 100000) throw new Error('单次克隆超过 100000 个事件，请分批执行');
+  if (!targets.length) throw new Error(t('multi-edit.s79fc9c9'));
+  if (targets.some(value => !Number.isInteger(value) || value < 0 || value >= snapshot.chart.judgeLineList.length)) throw new Error(t('multi-edit.s3003deb'));
+  if (!snapshot.events.length) throw new Error(t('multi-edit.s7ae99ea'));
+  if (targets.length * snapshot.events.length > 100000) throw new Error(t('multi-edit.s5042d52'));
   const increment = compileExpression(String(options.increment ?? 0))({}) / Math.max(1, options.division ?? 4);
   const random = randomSource(options.seed ?? 1); const modifiers = new Map();
   for (const type of ['moveXEvents', 'moveYEvents', 'rotateEvents', 'alphaEvents']) modifiers.set(type, distribution(options.channels?.[type] ?? {}, random));

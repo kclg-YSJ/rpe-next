@@ -1,16 +1,17 @@
 import { easing } from './easing.mjs';
+import { t } from '../i18n.mjs';
 
 export const NOISE_REVEALS = [
-  ['left', '从左到右'], ['right', '从右到左'], ['top', '从上到下'], ['bottom', '从下到上'],
-  ['diagonal', '左上到右下'], ['reverse-diagonal', '右上到左下'], ['rows', '逐行扫描'], ['snake', '逐行往返'],
-  ['columns', '逐列扫描'], ['center', '中心向外'], ['outside', '外围向内'], ['horizontal', '中间向两侧'],
-  ['vertical', '中间向上下'], ['clockwise', '顺时针扫过'], ['counterclockwise', '逆时针扫过'],
-  ['spiral', '螺旋展开'], ['reverse-spiral', '螺旋收拢'], ['random', '随机浮现'],
+  ['left', t('noise-fit.s88453e8')], ['right', t('noise-fit.sef48c67')], ['top', t('noise-fit.s0d03ac2')], ['bottom', t('noise-fit.s2e11e22')],
+  ['diagonal', t('noise-fit.s27ab79e')], ['reverse-diagonal', t('noise-fit.s1aef8b2')], ['rows', t('noise-fit.seea8766')], ['snake', t('noise-fit.s83c5d7c')],
+  ['columns', t('noise-fit.scbd6480')], ['center', t('noise-fit.s0e32acf')], ['outside', t('noise-fit.sadfe53c')], ['horizontal', t('noise-fit.s1e8ddc4')],
+  ['vertical', t('noise-fit.s5af4125')], ['clockwise', t('noise-fit.s771e0be')], ['counterclockwise', t('noise-fit.s982ce95')],
+  ['spiral', t('noise-fit.s6fdd0de')], ['reverse-spiral', t('noise-fit.sfcbaac3')], ['random', t('noise-fit.s5720e5f')],
 ];
 
 export function noiseAppearanceOffsets(count, easingType = 1) {
-  if (!Number.isInteger(count) || count < 1 || count > 20000) throw new Error('噪域数量须在 1–20000 之间');
-  if (!Number.isInteger(easingType) || easingType < 1 || easingType > 29) throw new Error('缓动编号须在 1–29 内');
+  if (!Number.isInteger(count) || count < 1 || count > 20000) throw new Error(t('noise-fit.s2b3094f'));
+  if (!Number.isInteger(easingType) || easingType < 1 || easingType > 29) throw new Error(t('noise-fit.s112d35f'));
   const offsets = new Float64Array(count);
   if (count === 1) return offsets;
   offsets[count - 1] = 1;
@@ -39,8 +40,8 @@ export function noiseAppearanceOffsets(count, easingType = 1) {
 }
 
 export function binaryNoiseMask(pixels, width, height, { threshold = 128, polarity = 'dark', invert = false } = {}) {
-  if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1 || width * height > 1024 * 1024 || pixels.length !== width * height * 4) throw new Error('图案像素尺寸无效');
-  if (!Number.isFinite(threshold) || threshold < 0 || threshold > 255 || !['dark', 'light', 'alpha'].includes(polarity)) throw new Error('二值化参数无效');
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1 || width * height > 1024 * 1024 || pixels.length !== width * height * 4) throw new Error(t('noise-fit.sdf4bb04'));
+  if (!Number.isFinite(threshold) || threshold < 0 || threshold > 255 || !['dark', 'light', 'alpha'].includes(polarity)) throw new Error(t('noise-fit.s80af088'));
   const mask = new Uint8Array(width * height);
   for (let index = 0; index < mask.length; index++) {
     const offset = index * 4; const alpha = pixels[offset + 3];
@@ -75,13 +76,13 @@ function cover(mask, width, height, maxSpan, transpose) {
 }
 
 export function fitNoiseRectangles(mask, width, height, { maxSpan = 16, merge = true, trim = true } = {}) {
-  if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1 || width > 512 || height > 512 || mask.length !== width * height) throw new Error('拟合精度须在 1–512 像素之间');
-  if (!Number.isInteger(maxSpan) || maxSpan < 1 || maxSpan > 512) throw new Error('矩形最大边长须在 1–512 格之间');
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1 || width > 512 || height > 512 || mask.length !== width * height) throw new Error(t('noise-fit.s0953a67'));
+  if (!Number.isInteger(maxSpan) || maxSpan < 1 || maxSpan > 512) throw new Error(t('noise-fit.s976ee4c'));
   let left = width; let right = -1; let top = height; let bottom = -1; let pixels = 0;
   for (let row = 0; row < height; row++) for (let column = 0; column < width; column++) if (mask[row * width + column]) {
     pixels++; left = Math.min(left, column); right = Math.max(right, column); top = Math.min(top, row); bottom = Math.max(bottom, row);
   }
-  if (!pixels) throw new Error('二值化后没有可拟合的内容，请调整文字、前景或阈值');
+  if (!pixels) throw new Error(t('noise-fit.sdbeda5c'));
   const bounds = trim ? { x: left, y: top, width: right - left + 1, height: bottom - top + 1 } : { x: 0, y: 0, width, height };
   const horizontal = cover(mask, width, height, merge ? maxSpan : 1, false);
   const vertical = merge ? cover(mask, width, height, maxSpan, true) : horizontal;
@@ -95,7 +96,7 @@ function randomValue(index, seed) {
 }
 
 export function orderedNoiseRectangles(fit, reveal = 'left', seed = 1) {
-  if (!NOISE_REVEALS.some(([key]) => key === reveal)) throw new Error('请选择有效的浮现方式');
+  if (!NOISE_REVEALS.some(([key]) => key === reveal)) throw new Error(t('noise-fit.scd607ed'));
   const radius = Math.hypot(fit.width, fit.height) / 2;
   return fit.rectangles.map((rectangle, index) => {
     const x = rectangle.x + rectangle.width / 2; const y = rectangle.y + rectangle.height / 2;

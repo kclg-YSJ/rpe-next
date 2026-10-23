@@ -4,6 +4,7 @@ import { createChart, createLine } from '../core/chart.mjs';
 import { beatValue, fromNumber } from '../core/beat.mjs';
 import { selectionState, sameSelection, remapSelection, restoreSelection } from './selection-history.mjs';
 import { emitModHook } from '../core/mod-hooks.mjs';
+import { t } from '../i18n.mjs';
 
 export class EditorSession extends EventTarget {
   constructor(chart = createChart()) {
@@ -104,7 +105,7 @@ export class EditorSession extends EventTarget {
       if (!replacements.has(chart)) replacements.set(chart, { ...chart, META: { ...chart.META, song: name } });
       return replacements.get(chart);
     };
-    if (this.collaboration) return this.collaboration.commit('更换音乐资源', replace(this.chart), { recordHistory: false });
+    if (this.collaboration) return this.collaboration.commit(t('session.s5816272'), replace(this.chart), { recordHistory: false });
     this.history.document = replace(this.chart);
     for (const command of [...this.history.undoStack, ...this.history.redoStack]) {
       command.before = replace(command.before); command.after = replace(command.after);
@@ -127,7 +128,7 @@ export class EditorSession extends EventTarget {
   }
 
   updateLine(label, change, beforeSelection = this.selectionState()) {
-    if (!this.line) throw new Error('请先新增判定线');
+    if (!this.line) throw new Error(t('session.s1ad6f80'));
     const lines = [...this.chart.judgeLineList];
     lines[this.lineIndex] = change(this.line);
     this.commit(label, { ...this.chart, judgeLineList: lines }, beforeSelection);
@@ -140,11 +141,11 @@ export class EditorSession extends EventTarget {
     }, beforeSelection);
   }
 
-  insertNotes(notes, label = '添加音符') {
+  insertNotes(notes, label = t('session.s229874f')) {
     return this.insertNotesAt(this.lineIndex, notes, label);
   }
 
-  insertNotesAt(lineIndex, notes, label = '添加音符') {
+  insertNotesAt(lineIndex, notes, label = t('session.s229874f')) {
     const beforeSelection = this.selectionState();
     const lines = [...this.chart.judgeLineList];
     let selected = [];
@@ -189,7 +190,7 @@ export class EditorSession extends EventTarget {
     }
     this.selection = new Set();
     if (this.multiLineActive && this.multiLineMode === 'notes') this.multiLineSelection = new Map();
-    this.commit('删除音符', { ...this.chart, judgeLineList: lines }, beforeSelection);
+    this.commit(t('session.s4c896a7'), { ...this.chart, judgeLineList: lines }, beforeSelection);
   }
 
   transformSelection(label, change) {
@@ -231,7 +232,7 @@ export class EditorSession extends EventTarget {
       lines[targetLineIndex] = { ...target, notes: targetNotes, numOfNotes: targetNotes.length };
       this.multiLineSelection = new Map([[targetLineIndex, selectedIndices]]);
       this.selection = targetLineIndex === this.lineIndex ? new Set(selectedIndices) : new Set();
-      this.commit('移动音符到判定线', { ...this.chart, judgeLineList: lines }, beforeSelection);
+      this.commit(t('session.s060c482'), { ...this.chart, judgeLineList: lines }, beforeSelection);
       return;
     }
     if (targetLineIndex === this.lineIndex) return;
@@ -247,7 +248,7 @@ export class EditorSession extends EventTarget {
     this.lineIndex = targetLineIndex;
     this.selection = new Set(moving.map((_, index) => target.notes.length + index));
     this.eventSelection.clear();
-    this.commit('移动音符到判定线', { ...this.chart, judgeLineList: lines }, beforeSelection);
+    this.commit(t('session.s060c482'), { ...this.chart, judgeLineList: lines }, beforeSelection);
   }
 
   copy() { this.clipboard = structuredClone(this.notes.filter((note, index) => this.selection.has(index))); }
@@ -260,7 +261,7 @@ export class EditorSession extends EventTarget {
       positionX: note.positionX * (mirror ? -1 : 1),
       startTime: delta === 0 ? [...note.startTime] : fromNumber(beatValue(note.startTime) + delta),
       endTime: delta === 0 ? [...note.endTime] : fromNumber(beatValue(note.endTime) + delta),
-    })), '粘贴音符');
+    })), t('session.sba9e2d5'));
   }
 
   selectLine(index) {
@@ -275,7 +276,7 @@ export class EditorSession extends EventTarget {
     this.lineIndex = this.chart.judgeLineList?.length ?? 0;
     this.selection.clear();
     this.eventSelection.clear();
-    this.commit('新增判定线', { ...this.chart, judgeLineList: [...(this.chart.judgeLineList ?? []), createLine(`Line ${this.lineIndex + 1}`)] }, beforeSelection);
+    this.commit(t('session.s665c6b7'), { ...this.chart, judgeLineList: [...(this.chart.judgeLineList ?? []), createLine(`Line ${this.lineIndex + 1}`)] }, beforeSelection);
   }
 
   travel(direction) {

@@ -3,6 +3,7 @@ import { readZip, writeZip } from './archive.mjs';
 import { parseNoteSkin, serializeNoteSkinInfo, NOTE_SKIN_LIMITS } from '../core/note-skin.mjs';
 import { assetUrl } from '../core/asset-url.mjs';
 import { nativeStorage, nativePackages } from './native.mjs';
+import { t } from '../i18n.mjs';
 
 async function access(mode, action) {
   const database = await openDatabase('rpe-next-note-skins', 1, (connection, transaction) => ensureStore(connection, transaction, 'packages', { keyPath: 'id' }));
@@ -10,7 +11,7 @@ async function access(mode, action) {
     const transaction = database.transaction('packages',mode); let request;
     try {request=action(transaction.objectStore('packages'));} catch(error) {database.close();reject(error);return;}
     transaction.oncomplete=()=>{database.close();resolve(request.result);};
-    transaction.onabort=transaction.onerror=()=>{database.close();reject(transaction.error??new Error('皮肤存储失败'));};
+    transaction.onabort=transaction.onerror=()=>{database.close();reject(transaction.error??new Error(t('note-skins.s9edc07c')));};
   });
 }
 export const readNoteSkins = () => nativeStorage ? nativePackages('note-skins', 'read') : access('readonly',store=>store.getAll());
@@ -22,10 +23,10 @@ export async function decodeNoteSkinSounds(record,context) {
   return new Map(await Promise.all([...record.sounds].map(async ([type,bytes])=>{
     let timer;
     try {
-      const buffer=await Promise.race([context.decodeAudioData(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength)),new Promise((resolve,reject)=>{timer=setTimeout(()=>reject(new Error('音效解码超时')),20000);})]);
-      if(buffer.duration>120)throw new Error('打击音效超过 120 秒');
+      const buffer=await Promise.race([context.decodeAudioData(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength)),new Promise((resolve,reject)=>{timer=setTimeout(()=>reject(new Error(t('note-skins.s36e604f'))),20000);})]);
+      if(buffer.duration>120)throw new Error(t('note-skins.s70082a8'));
       return [type,buffer];
-    } catch(error) {throw new Error(`${type} 音效读取失败：${error.message}`);}
+    } catch(error) {throw new Error(t('note-skins.sa93480a', { p0: type, p1: error.message }));}
     finally {clearTimeout(timer);}
   })));
 }
@@ -40,11 +41,11 @@ export function updateNoteSkin(record, info, replacements = new Map()) {
 export async function importNoteSkin(files, directory = false) {
   let entries;
   if (!directory) {
-    const file=files[0]; if (!file || file.size>NOTE_SKIN_LIMITS.bytes+1024*1024) throw new Error('音符皮肤包过大');
+    const file=files[0]; if (!file || file.size>NOTE_SKIN_LIMITS.bytes+1024*1024) throw new Error(t('note-skins.s85028f4'));
     entries=await readZip(await file.arrayBuffer(),{maxFiles:NOTE_SKIN_LIMITS.files,maxBytes:NOTE_SKIN_LIMITS.bytes,maxFileBytes:NOTE_SKIN_LIMITS.fileBytes});
   } else {
     const selected=[...files];
-    if(selected.length>NOTE_SKIN_LIMITS.files || selected.some(file=>file.size>NOTE_SKIN_LIMITS.fileBytes) || selected.reduce((sum,file)=>sum+file.size,0)>NOTE_SKIN_LIMITS.bytes) throw new Error('音符皮肤文件数量或大小超限');
+    if(selected.length>NOTE_SKIN_LIMITS.files || selected.some(file=>file.size>NOTE_SKIN_LIMITS.fileBytes) || selected.reduce((sum,file)=>sum+file.size,0)>NOTE_SKIN_LIMITS.bytes) throw new Error(t('note-skins.s7b834c6'));
     entries=new Map(await Promise.all(selected.map(async file=>[file.webkitRelativePath||file.name,new Uint8Array(await file.arrayBuffer())])));
   }
   const record=parseNoteSkin(entries);
@@ -57,13 +58,13 @@ export async function importNoteSkin(files, directory = false) {
 }
 
 export async function builtinNoteSkins() {
-  const response=await fetch(assetUrl('note-skins/index.json')); if(!response.ok) throw new Error('内置音符皮肤目录读取失败');
-  const list=await response.json(); if(!Array.isArray(list)) throw new Error('内置音符皮肤目录无效');
+  const response=await fetch(assetUrl('note-skins/index.json')); if(!response.ok) throw new Error(t('note-skins.s10cf901'));
+  const list=await response.json(); if(!Array.isArray(list)) throw new Error(t('note-skins.sab42917'));
   return Promise.all(list.map(async entry=>{
-    if(!entry || !/^[a-z0-9-]+$/.test(entry.directory) || !Array.isArray(entry.files) || entry.files.length>NOTE_SKIN_LIMITS.files) throw new Error('内置音符皮肤条目无效');
+    if(!entry || !/^[a-z0-9-]+$/.test(entry.directory) || !Array.isArray(entry.files) || entry.files.length>NOTE_SKIN_LIMITS.files) throw new Error(t('note-skins.sfe07f89'));
     const files=new Map(await Promise.all(entry.files.map(async name=>{
-      if(typeof name!=='string'||name.startsWith('/')||name.includes('..')||name.includes('\\')) throw new Error('内置音符皮肤路径无效');
-      const result=await fetch(assetUrl(`note-skins/${entry.directory}/${name}`));if(!result.ok)throw new Error('内置音符皮肤素材缺失');
+      if(typeof name!=='string'||name.startsWith('/')||name.includes('..')||name.includes('\\')) throw new Error(t('note-skins.s42f3060'));
+      const result=await fetch(assetUrl(`note-skins/${entry.directory}/${name}`));if(!result.ok)throw new Error(t('note-skins.sa98a6e9'));
       return [name,new Uint8Array(await result.arrayBuffer())];
     })));
     const record=parseNoteSkin(files,'builtin-'+entry.directory);return {...record,builtin:true,originalFiles:record.files};

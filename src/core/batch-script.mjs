@@ -1,4 +1,5 @@
 import { easing } from './easing.mjs';
+import { t } from '../i18n.mjs';
 
 const functions = Object.freeze({
   abs: Math.abs, min: Math.min, max: Math.max, floor: Math.floor, ceil: Math.ceil, round: Math.round,
@@ -11,28 +12,28 @@ const precedence = { '||': 1, '&&': 2, '==': 3, '!=': 3, '<': 4, '>': 4, '<=': 4
 
 export function compileExpression(source, options = {}) {
   const expressionFunctions = options.functions ?? functions;
-  if (source.length > 4096) throw new Error('单个表达式不能超过 4096 字符');
+  if (source.length > 4096) throw new Error(t('batch-script.s02f3332'));
   const tokens = []; let offset = 0;
   while (offset < source.length) {
     const match = /^(\s+|(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?|[A-Za-z_][A-Za-z_0-9]*(?:\.[A-Za-z_][A-Za-z_0-9]*)?|\*\*|&&|\|\||==|!=|<=|>=|[+\-*/%^<>()!,?:])/i.exec(source.slice(offset));
-    if (!match) throw new Error(`表达式包含不支持的字符：${source.slice(offset, offset + 12)}`);
+    if (!match) throw new Error(t('batch-script.s0f40108', { p0: source.slice(offset, offset + 12) }));
     offset += match[0].length;
     if (match[0].trim()) tokens.push(match[0]);
   }
-  if (tokens.length > 512) throw new Error('表达式过于复杂');
+  if (tokens.length > 512) throw new Error(t('batch-script.s788db8a'));
   let cursor = 0;
-  const requireToken = token => { if (tokens[cursor++] !== token) throw new Error(`表达式缺少 ${token}`); };
+  const requireToken = token => { if (tokens[cursor++] !== token) throw new Error(t('batch-script.s9e28966', { p0: token })); };
   const atom = () => {
     const token = tokens[cursor++];
-    if (!token) throw new Error('表达式未完成');
+    if (!token) throw new Error(t('batch-script.sd3adc10'));
     if (['+', '-', '!'].includes(token)) {
       const value = atom(); return scope => token === '-' ? -value(scope) : token === '!' ? Number(!value(scope)) : value(scope);
     }
     if (token === '(') { const value = expression(); requireToken(')'); return value; }
     if (/^(\d|\.)/.test(token)) return () => Number(token);
-    if (!/^[A-Za-z_]/.test(token)) throw new Error(`无法解析 ${token}`);
+    if (!/^[A-Za-z_]/.test(token)) throw new Error(t('batch-script.s3561094', { p0: token }));
     if (tokens[cursor] === '(') {
-      if (!Object.hasOwn(expressionFunctions, token)) throw new Error(`不支持函数 ${token}`);
+      if (!Object.hasOwn(expressionFunctions, token)) throw new Error(t('batch-script.s1db9927', { p0: token }));
       cursor++; const args = [];
       if (tokens[cursor] !== ')') { do { args.push(expression()); if (tokens[cursor] !== ',') break; cursor++; } while (true); }
       requireToken(')'); return scope => expressionFunctions[token](...args.map(arg => arg(scope)));
@@ -41,7 +42,7 @@ export function compileExpression(source, options = {}) {
       if (token === 'pi') return Math.PI;
       if (token === 'true') return 1;
       if (token === 'false') return 0;
-      if (!Object.hasOwn(scope, token)) throw new Error(`未知变量 ${token}`);
+      if (!Object.hasOwn(scope, token)) throw new Error(t('batch-script.s19d7972', { p0: token }));
       return scope[token];
     };
   };
@@ -71,17 +72,17 @@ export function compileExpression(source, options = {}) {
     return left;
   };
   const result = expression();
-  if (cursor !== tokens.length) throw new Error(`多余的表达式：${tokens[cursor]}`);
-  return scope => { const value = result(scope); if (!Number.isFinite(value)) throw new Error('计算结果不是有限数字（请检查除零或函数参数）'); return value; };
+  if (cursor !== tokens.length) throw new Error(t('batch-script.scebb19b', { p0: tokens[cursor] }));
+  return scope => { const value = result(scope); if (!Number.isFinite(value)) throw new Error(t('batch-script.s09cf120')); return value; };
 }
 
 export function compileBatchScript(source, fields) {
-  if (source.length > 16384) throw new Error('脚本不能超过 16384 字符');
+  if (source.length > 16384) throw new Error(t('batch-script.sf8507b4'));
   const statements = source.replace(/#[^\n]*/g, '').split(/[;\n]/).map(value => value.trim()).filter(Boolean);
-  if (statements.length > 64) throw new Error('脚本最多 64 条赋值');
+  if (statements.length > 64) throw new Error(t('batch-script.s89f7fcc'));
   return statements.map(statement => {
     const match = /^([A-Za-z_][A-Za-z_0-9.]*)\s*(\+=|-=|\*=|\/=|=)\s*(.+)$/.exec(statement);
-    if (!match || !fields.includes(match[1])) throw new Error(`不支持的赋值：${statement}`);
+    if (!match || !fields.includes(match[1])) throw new Error(t('batch-script.s5704165', { p0: statement }));
     return { field: match[1], operator: match[2], evaluate: compileExpression(match[3]) };
   });
 }

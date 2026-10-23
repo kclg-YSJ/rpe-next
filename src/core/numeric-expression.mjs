@@ -1,8 +1,9 @@
 import { compileExpression } from './batch-script.mjs';
+import { t } from '../i18n.mjs';
 
 export const isNumericLiteral = text => /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(String(text).trim()) && Number.isFinite(Number(text));
 const method = (name, arity, calculate) => (...values) => {
-  if (values.length !== arity) throw new Error(`${name} 需要 ${arity} 个参数`);
+  if (values.length !== arity) throw new Error(t('numeric-expression.s3380796', { p0: name, p1: arity }));
   return calculate(...values);
 };
 const methods = Object.fromEntries(Object.entries({
@@ -16,7 +17,7 @@ const methods = Object.fromEntries(Object.entries({
 
 export function evaluateNumericExpression(source) {
   const text = String(source).trim();
-  if (!text) throw new Error('数值不能为空');
+  if (!text) throw new Error(t('numeric-expression.scab3948'));
   if (isNumericLiteral(text)) return Number(text);
   // The shared parser evaluates an arithmetic tree; no JavaScript is executed.
   return compileExpression(text, { functions: methods, powerAssociativity: 'left' })({ Pi: Math.PI, e: Math.E });
@@ -25,11 +26,11 @@ export function evaluateNumericExpression(source) {
 export function evaluateEventNumber(source, { type, field, event, tempo, factor = 1 }) {
   const text = String(source).trim();
   if (!text.endsWith('v')) return evaluateNumericExpression(text);
-  if (type !== 'moveYEvents' || !['start', 'end'].includes(field)) throw new Error('v 后缀仅用于 Y 移动事件的首值和尾值');
+  if (type !== 'moveYEvents' || !['start', 'end'].includes(field)) throw new Error(t('numeric-expression.sed27492'));
   const speed = evaluateNumericExpression(text.slice(0, -1));
   const duration = tempo.seconds(event.endTime, factor) - tempo.seconds(event.startTime, factor);
   const other = event[field === 'start' ? 'end' : 'start'];
   const value = other + (field === 'end' ? 1 : -1) * 120 * duration * speed;
-  if (!Number.isFinite(value) || duration < 0) throw new Error('无法计算 Y 移动事件的位移');
+  if (!Number.isFinite(value) || duration < 0) throw new Error(t('numeric-expression.s98c281d'));
   return value;
 }

@@ -5,6 +5,7 @@ import { shaderEventLanes } from '../core/shader-events.mjs';
 import { captureSelection, editCapturedSelection, commitSelectionEdit } from '../application/batch-edit.mjs';
 import { eventDisplayIndex } from './event-display-index.mjs';
 import { intervalSelection, extendIntervalSelection } from '../core/selection-interval.mjs';
+import { t } from '../i18n.mjs';
 
 export class EventInteraction {
   constructor(timeline, reportError) {
@@ -195,8 +196,8 @@ export class EventInteraction {
           endTime: drag.kind === 'startTime' ? current.endTime : fromNumber(beatValue(current.endTime) + delta) });
         if (session.multiLineActive && session.multiLineMode === 'events') {
           const result = editCapturedSelection(captureSelection(session), { event: change });
-          commitSelectionEdit(session, result, drag.kind === 'move' ? '移动事件' : '调整事件时长');
-        } else transformEvents(session, drag.kind === 'move' ? '移动事件' : '调整事件时长', change);
+          commitSelectionEdit(session, result, drag.kind === 'move' ? t('event-interaction.s9728d19') : t('event-interaction.s8c3d905'));
+        } else transformEvents(session, drag.kind === 'move' ? t('event-interaction.s9728d19') : t('event-interaction.s8c3d905'), change);
       }
     } catch (error) { this.reportError(error); }
     this.timeline.changed();

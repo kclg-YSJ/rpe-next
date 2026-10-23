@@ -1,39 +1,40 @@
 import { load, dump, CORE_SCHEMA } from './vendor/js-yaml.mjs';
+import { t } from '../i18n.mjs';
 
 export const NOTE_SKIN_LIMITS = Object.freeze({ files: 256, bytes: 192 * 1024 * 1024, fileBytes: 48 * 1024 * 1024, pixels: 96 * 1024 * 1024, dimension: 16384 });
 export const NOTE_SKIN_IMAGES = ['click.png', 'click_mh.png', 'drag.png', 'drag_mh.png', 'flick.png', 'flick_mh.png', 'hold.png', 'hold_mh.png', 'hit_fx.png'];
 export const NOTE_SKIN_SOUNDS = Object.freeze({ tap: 'click.ogg', drag: 'drag.ogg', flick: 'flick.ogg' });
 export const NOTE_SKIN_DEFAULTS = Object.freeze({ description: '', hitFxDuration: 0.5, hitFxScale: 1, hitFxRotate: false, hitFxTinted: true, hideParticles: false, holdKeepHead: false, holdRepeat: false, holdCompact: false, colorPerfect: 0xe1ffec9f, colorGood: 0xebb4e1ff });
-const fail = message => { throw new Error('音符皮肤：' + message); };
+const fail = message => { throw new Error(t('note-skin.s7ac4dd3') + message); };
 const plain = value => value && typeof value === 'object' && !Array.isArray(value) && [Object.prototype, null].includes(Object.getPrototypeOf(value));
 
 export function noteSkinInfo(source) {
-  if (!plain(source)) fail('info.yml 须为属性映射');
+  if (!plain(source)) fail(t('note-skin.see68a47'));
   const info = { ...NOTE_SKIN_DEFAULTS };
   for (const key of ['name','author','hitFx','holdAtlas','holdAtlasMH',...Object.keys(NOTE_SKIN_DEFAULTS)]) if (Object.hasOwn(source,key)) info[key]=source[key];
   for (const [key, limit] of [['name',100], ['author',200], ['description',4000]]) {
-    if (typeof info[key] !== 'string' || info[key].length > limit || key === 'name' && !info[key].trim()) fail(`${key} 须为${key === 'name' ? '非空' : ''}文本，最多 ${limit} 字符`);
+    if (typeof info[key] !== 'string' || info[key].length > limit || key === 'name' && !info[key].trim()) fail(t('note-skin.sd2c9ac4', { p0: key, p1: key === 'name' ? t('note-skin.s5cdf1b3') : '', p2: limit }));
   }
   for (const key of ['hitFx','holdAtlas','holdAtlasMH']) {
     const minimum = key === 'hitFx' ? 1 : 0;
-    if (!Array.isArray(info[key]) || info[key].length !== 2 || !info[key].every(value => Number.isInteger(value) && value >= minimum && value <= 65535)) fail(`${key} 须为两个${minimum ? '正' : '非负'}整数`);
+    if (!Array.isArray(info[key]) || info[key].length !== 2 || !info[key].every(value => Number.isInteger(value) && value >= minimum && value <= 65535)) fail(t('note-skin.sf82447d', { p0: key, p1: minimum ? t('note-skin.sb67ca11') : t('note-skin.s404f4fe') }));
     info[key] = [...info[key]];
   }
-  if (info.hitFx[0] * info.hitFx[1] > 10240) fail('打击动画图集不能超过 10240 帧');
-  for (const key of ['hitFxDuration','hitFxScale']) if (!Number.isFinite(info[key]) || info[key] <= 0 || info[key] > (key === 'hitFxDuration' ? 120 : 64)) fail(`${key} 须为有效正数`);
-  for (const key of ['hitFxRotate','hitFxTinted','hideParticles','holdKeepHead','holdRepeat','holdCompact']) if (typeof info[key] !== 'boolean') fail(`${key} 须为 true 或 false`);
+  if (info.hitFx[0] * info.hitFx[1] > 10240) fail(t('note-skin.s7783d84'));
+  for (const key of ['hitFxDuration','hitFxScale']) if (!Number.isFinite(info[key]) || info[key] <= 0 || info[key] > (key === 'hitFxDuration' ? 120 : 64)) fail(t('note-skin.s2f6567c', { p0: key }));
+  for (const key of ['hitFxRotate','hitFxTinted','hideParticles','holdKeepHead','holdRepeat','holdCompact']) if (typeof info[key] !== 'boolean') fail(t('note-skin.s7d24ed9', { p0: key }));
   for (const key of ['colorPerfect','colorGood']) {
     if (typeof info[key] === 'string' && /^(?:0x|#)[\da-f]{6}(?:[\da-f]{2})?$/i.test(info[key])) info[key] = parseInt(info[key].replace(/^(0x|#)/i,''),16);
-    if (!Number.isInteger(info[key]) || info[key] < 0 || info[key] > 0xffffffff) fail(`${key} 须为 RGB 或 ARGB 十六进制颜色`);
+    if (!Number.isInteger(info[key]) || info[key] < 0 || info[key] > 0xffffffff) fail(t('note-skin.s3719b02', { p0: key }));
   }
   return info;
 }
 
 export function parseNoteSkinInfo(text) {
-  if (typeof text !== 'string' || text.length > 65536) fail('info.yml 超过 64 KiB');
+  if (typeof text !== 'string' || text.length > 65536) fail(t('note-skin.sfb815fb'));
   let source;
   try { source = load(text.replace(/^\uFEFF/,''), { schema: CORE_SCHEMA }); }
-  catch (error) { fail('info.yml 语法错误：' + error.message); }
+  catch (error) { fail(t('note-skin.s5aa131b') + error.message); }
   return noteSkinInfo(source);
 }
 
@@ -46,33 +47,33 @@ export function noteSkinColor(value) {
 }
 
 function imageSize(bytes, name) {
-  if (!(bytes instanceof Uint8Array) || bytes.length < 33 || [137,80,78,71,13,10,26,10].some((value,index) => bytes[index] !== value) || String.fromCharCode(...bytes.subarray(12,16)) !== 'IHDR') fail(`${name} 不是 PNG 图片`);
+  if (!(bytes instanceof Uint8Array) || bytes.length < 33 || [137,80,78,71,13,10,26,10].some((value,index) => bytes[index] !== value) || String.fromCharCode(...bytes.subarray(12,16)) !== 'IHDR') fail(t('note-skin.sb147c52', { p0: name }));
   const view = new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength); const width = view.getUint32(16); const height = view.getUint32(20);
-  if (!width || !height || width > NOTE_SKIN_LIMITS.dimension || height > NOTE_SKIN_LIMITS.dimension) fail(`${name} 的图片尺寸无效或过大`);
+  if (!width || !height || width > NOTE_SKIN_LIMITS.dimension || height > NOTE_SKIN_LIMITS.dimension) fail(t('note-skin.s2844a32', { p0: name }));
   return {width,height};
 }
 
 export function normalizeNoteSkinFiles(source) {
-  if (!(source instanceof Map) || source.size > NOTE_SKIN_LIMITS.files) fail('文件数量超限');
+  if (!(source instanceof Map) || source.size > NOTE_SKIN_LIMITS.files) fail(t('note-skin.s5f616ec'));
   const files = new Map(); let bytes = 0;
   for (const [path,value] of source) {
-    if (typeof path !== 'string' || !path || path.startsWith('/') || path.includes('\\') || path.includes(':') || path.includes('\0') || path.split('/').some(part => part === '..' || part === '.')) fail('包中包含不安全路径');
+    if (typeof path !== 'string' || !path || path.startsWith('/') || path.includes('\\') || path.includes(':') || path.includes('\0') || path.split('/').some(part => part === '..' || part === '.')) fail(t('note-skin.s25bc6a8'));
     if (path.endsWith('/') || path.startsWith('__MACOSX/') || path.split('/').at(-1).startsWith('.')) continue;
-    if (!(value instanceof Uint8Array) || value.length > NOTE_SKIN_LIMITS.fileBytes) fail('素材文件无效或过大');
-    bytes += value.length; if (bytes > NOTE_SKIN_LIMITS.bytes) fail('资源包解压后过大');
+    if (!(value instanceof Uint8Array) || value.length > NOTE_SKIN_LIMITS.fileBytes) fail(t('note-skin.s7aff15f'));
+    bytes += value.length; if (bytes > NOTE_SKIN_LIMITS.bytes) fail(t('note-skin.s41cf753'));
     files.set(path,value);
   }
   const manifests = [...files.keys()].filter(path => /(^|\/)info\.ya?ml$/i.test(path));
-  if (manifests.length !== 1) fail('资源包需要唯一的 info.yml');
+  if (manifests.length !== 1) fail(t('note-skin.sdaaa7bd'));
   const manifest = manifests[0]; const prefix = manifest.slice(0,manifest.lastIndexOf('/')+1);
-  if (prefix && [...files.keys()].some(path=>!path.startsWith(prefix))) fail('资源包包含皮肤目录以外的文件');
+  if (prefix && [...files.keys()].some(path=>!path.startsWith(prefix))) fail(t('note-skin.s4184c64'));
   const normalized = new Map();
   for (const [path,value] of files) {
     let name = path.slice(prefix.length);
     const lower = name.toLowerCase();
     if (NOTE_SKIN_IMAGES.includes(lower) || Object.values(NOTE_SKIN_SOUNDS).includes(lower) || lower === 'ending.ogg') name = lower;
     if (path === manifest) name = 'info.yml';
-    if (normalized.has(name)) fail(`文件名重复：${name}`);
+    if (normalized.has(name)) fail(t('note-skin.sd831117', { p0: name }));
     normalized.set(name,value);
   }
   return normalized;
@@ -80,18 +81,18 @@ export function normalizeNoteSkinFiles(source) {
 
 export function parseNoteSkin(source, id = null) {
   const files = normalizeNoteSkinFiles(source); const images = {}; let pixels = 0;
-  let text; try { text = new TextDecoder('utf-8',{fatal:true}).decode(files.get('info.yml')); } catch { fail('info.yml 需要 UTF-8 编码'); }
+  let text; try { text = new TextDecoder('utf-8',{fatal:true}).decode(files.get('info.yml')); } catch { fail(t('note-skin.s43436e9')); }
   const info = parseNoteSkinInfo(text);
   for (const name of NOTE_SKIN_IMAGES) {
-    if (!files.has(name)) fail(`缺少 ${name}`);
+    if (!files.has(name)) fail(t('note-skin.s0da5507', { p0: name }));
     images[name] = imageSize(files.get(name),name); pixels += images[name].width * images[name].height;
   }
-  if (pixels > NOTE_SKIN_LIMITS.pixels) fail('贴图总像素数过大');
-  for (const [name,key] of [['hold.png','holdAtlas'],['hold_mh.png','holdAtlasMH']]) if (info[key][0]+info[key][1] >= images[name].height) fail(`${key} 的头尾高度之和必须小于 ${name} 的高度`);
-  if (info.hitFx[0] > images['hit_fx.png'].width || info.hitFx[1] > images['hit_fx.png'].height) fail('hitFx 帧数超出图片尺寸');
+  if (pixels > NOTE_SKIN_LIMITS.pixels) fail(t('note-skin.s549cb9c'));
+  for (const [name,key] of [['hold.png','holdAtlas'],['hold_mh.png','holdAtlasMH']]) if (info[key][0]+info[key][1] >= images[name].height) fail(t('note-skin.seef0596', { p0: key, p1: name }));
+  if (info.hitFx[0] > images['hit_fx.png'].width || info.hitFx[1] > images['hit_fx.png'].height) fail(t('note-skin.s0802cc2'));
   const warnings = [];
-  if (images['hit_fx.png'].width % info.hitFx[0] || images['hit_fx.png'].height % info.hitFx[1]) warnings.push('打击动画尺寸不能被帧数整除，将按等分区域读取');
-  if (files.has('ending.ogg')) warnings.push('结算音乐保留在皮肤包中，编辑器不播放结算界面');
+  if (images['hit_fx.png'].width % info.hitFx[0] || images['hit_fx.png'].height % info.hitFx[1]) warnings.push(t('note-skin.s8a49e62'));
+  if (files.has('ending.ogg')) warnings.push(t('note-skin.sb52dcc1'));
   const sounds = new Map(Object.entries(NOTE_SKIN_SOUNDS).filter(([,name])=>files.has(name)).map(([type,name])=>[type,files.get(name)]));
   return { id, info, files, images, sounds, warnings, bytes:[...files.values()].reduce((sum,value)=>sum+value.length,0) };
 }

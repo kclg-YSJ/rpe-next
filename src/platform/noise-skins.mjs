@@ -1,17 +1,18 @@
 import { assetUrl } from '../core/asset-url.mjs';
 import { parseNoiseSkin, skinPath } from '../core/noise-skin.mjs';
+import { t } from '../i18n.mjs';
 
 export async function loadBuiltinNoiseSkins(request = url => fetch(url)) {
   const read = async path => {
     const response = await request(assetUrl(`noise-skins/${path}`));
-    if (!response.ok) throw new Error('内置皮肤资源载入失败：' + path);
+    if (!response.ok) throw new Error(t('noise-skins.s413fc39') + path);
     return new Uint8Array(await response.arrayBuffer());
   };
   const catalogue = JSON.parse(new TextDecoder().decode(await read('index.json')));
   const names = new Set();
-  if (!Array.isArray(catalogue)) throw new Error('内置皮肤列表无效');
+  if (!Array.isArray(catalogue)) throw new Error(t('noise-skins.sf28f7a6'));
   for (const entry of catalogue) {
-    if (!entry || typeof entry.name !== 'string' || !entry.name || entry.name.includes('/') || names.has(entry.name) || !Array.isArray(entry.files) || !entry.files.includes('main.glsl')) throw new Error('内置皮肤条目无效');
+    if (!entry || typeof entry.name !== 'string' || !entry.name || entry.name.includes('/') || names.has(entry.name) || !Array.isArray(entry.files) || !entry.files.includes('main.glsl')) throw new Error(t('noise-skins.scd063f4'));
     skinPath(entry.name); names.add(entry.name);
     for (const path of entry.files) skinPath(path);
   }

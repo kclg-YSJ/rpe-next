@@ -1,5 +1,6 @@
 import { storeProjectDirect } from './library.mjs';
 import { applySnapshotPart } from './recovery-transfer.mjs';
+import { t } from '../i18n.mjs';
 
 let project, chart, media;
 self.onmessage = async ({ data }) => {
@@ -12,7 +13,7 @@ self.onmessage = async ({ data }) => {
     else if (data.kind === 'chart') chart = applySnapshotPart(chart, data.part);
     else if (data.kind === 'asset') {
       const file = media[data.index];
-      if (!file || data.offset !== file.received || file.received + data.bytes.length > file.length) throw Error('后台保存收到的素材分片不连续');
+      if (!file || data.offset !== file.received || file.received + data.bytes.length > file.length) throw Error(t('library-worker.s56b7141'));
       file.parts.push(data.bytes); file.received += data.bytes.length;
       if (file.received === file.length) {
         // Blob-backed IDB records avoid allocating a second contiguous buffer for
@@ -21,7 +22,7 @@ self.onmessage = async ({ data }) => {
       }
     }
     else if (data.kind === 'commit') {
-      if (media.some(file => file.received !== file.length)) throw Error('后台保存素材不完整');
+      if (media.some(file => file.received !== file.length)) throw Error(t('library-worker.s30f5e2e'));
       result = await storeProjectDirect({ ...project, chart });
     }
     self.postMessage({ ok: true, result });

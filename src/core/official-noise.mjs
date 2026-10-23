@@ -1,15 +1,16 @@
 import { fromNumber } from './beat.mjs';
 import { createNoiseArea, createNoiseEvent, noiseCenter, validateNoiseAreas } from './noise-areas.mjs';
+import { t } from '../i18n.mjs';
 
 const easingTypes = [1, 5, 4, 7, 9, 8, 12, 11, 10, 13, 15, 14];
 const finite = (value, path) => {
-  if (!Number.isFinite(value)) throw new Error(path + ': 必须为有限数字');
+  if (!Number.isFinite(value)) throw new Error(path + t('official-noise.s9e2600e'));
   return value;
 };
 const position = (value, path) => ({ x: finite(value?.x, path + '.x') * 1350 - 675, y: finite(value?.y, path + '.y') * 900 - 450 });
 const array = (value, path) => {
   if (value == null) return [];
-  if (!Array.isArray(value)) throw new Error(path + ': 必须为数组');
+  if (!Array.isArray(value)) throw new Error(path + t('official-noise.s1271099'));
   return value;
 };
 
@@ -17,7 +18,7 @@ function frames(source, type, read, path, anchored) {
   return array(source[type], path + '.' + type).map((event, index) => {
     const eventPath = `${path}.${type}[${index}]`;
     const ease = event?.easeType ?? event?.['easeType' + read.axis] ?? 0;
-    if (!Number.isInteger(ease) || ease < 0 || ease > 14) throw new Error(eventPath + ': 官谱缓动编号须在 0–14 内');
+    if (!Number.isInteger(ease) || ease < 0 || ease > 14) throw new Error(eventPath + t('official-noise.sa85d3ba'));
     return { time: finite(event?.time, eventPath + '.time'), value: read.value(event, eventPath), ease,
       ...(anchored ? { anchor: position(event?.anchor, eventPath + '.anchor') } : {}) };
   }).sort((first, second) => first.time - second.time);
@@ -83,20 +84,20 @@ function convertTrack(keyframes, beat, preserveInstant = false) {
 }
 
 export function convertOfficialNoiseAreas(source, bpm, offset = 0) {
-  finite(bpm, '官谱 BPM'); if (bpm <= 0) throw new Error('官谱 BPM 必须大于零');
+  finite(bpm, t('official-noise.sac2d060')); if (bpm <= 0) throw new Error(t('official-noise.s91d7c9a'));
   finite(offset, 'offset');
   const beat = seconds => fromNumber((seconds - offset) * bpm / 60, 1000000000);
   const areas = array(source, 'blockAreaList').map((entry, index) => {
     const path = `blockAreaList[${index}]`;
-    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) throw new Error(path + ': 无效噪域');
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) throw new Error(path + t('official-noise.sdc9e863'));
     const area = createNoiseArea();
     area.bottomLeft = position(entry.bottomLeftPercentage, path + '.bottomLeftPercentage');
     area.topRight = position(entry.topRightPercentage, path + '.topRightPercentage');
     for (const field of ['appearTime', 'disappearTime']) area[field] = beat(finite(entry[field], path + '.' + field));
     const enable = finite(entry.enableTime, path + '.enableTime'); const disable = finite(entry.disableTime, path + '.disableTime');
-    if (enable > disable) throw new Error(path + ': enableTime 不能晚于 disableTime');
+    if (enable > disable) throw new Error(path + t('official-noise.sd440489'));
     area.activeIntervals = [{ startTime: beat(enable), endTime: beat(disable), readyFlash: 0.5 }];
-    if (entry.isSubtract != null && typeof entry.isSubtract !== 'boolean') throw new Error(path + '.isSubtract: 必须为布尔值');
+    if (entry.isSubtract != null && typeof entry.isSubtract !== 'boolean') throw new Error(path + t('official-noise.sbb6fdf3'));
     area.isInvert = entry.isSubtract ?? false;
     area.Name = typeof entry.Name === 'string' ? entry.Name : '';
     const center = noiseCenter(area);
@@ -106,7 +107,7 @@ export function convertOfficialNoiseAreas(source, bpm, offset = 0) {
       area['scale' + suffix + 'Events'] = convertTrack(frames(entry, 'scaleEvents', { axis: suffix, value: (event, eventPath) => finite(event?.scale?.[axis], eventPath + '.scale.' + axis) }, path, true), beat, true);
     }
     area.rotateEvents = convertTrack(frames(entry, 'rotateEvents', { value: (event, eventPath) => -finite(event?.rotation, eventPath + '.rotation') }, path, true), beat, true);
-    if (!Number.isFinite(center.x) || !Number.isFinite(center.y)) throw new Error(path + ': 初始矩形坐标超出范围');
+    if (!Number.isFinite(center.x) || !Number.isFinite(center.y)) throw new Error(path + t('official-noise.s2bae13c'));
     return area;
   });
   return validateNoiseAreas(areas);

@@ -1,6 +1,7 @@
 import { normalizeShortcutKey, parseShortcut } from './shortcut-spec.mjs';
 import { validFpsLimit } from './frame-timing.mjs';
 import { DEFAULT_SETTINGS } from './default-settings.mjs';
+import { t } from '../i18n.mjs';
 
 export const DEFAULT_HOTKEYS = {
   AddTap: 'Q', AddDrag: 'W', AddFlick: 'E', AddHold: 'R', AddEvent: 'R', Pause: 'SPACE', Save: 'LEFTCTRL&S',
@@ -28,7 +29,7 @@ export function parseHotkeys(text) {
 
 export function migratePreferences(settingsText = '{}', hotkeyText = '', uiText = '') {
   const originalSettings = JSON.parse(settingsText.replace(/^\uFEFF/, ''));
-  if (!originalSettings || typeof originalSettings !== 'object' || Array.isArray(originalSettings)) throw new Error('Settings.json 必须为对象');
+  if (!originalSettings || typeof originalSettings !== 'object' || Array.isArray(originalSettings)) throw new Error(t('preferences.s1f3f1ea'));
   const originalHotkeys = parseHotkeys(hotkeyText);
   const applied = Object.keys(originalSettings).filter(key => SUPPORTED_SETTINGS.includes(key));
   return { version: 1, originalSettings, originalHotkeys, originalUI: uiText,

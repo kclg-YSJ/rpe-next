@@ -1,5 +1,6 @@
 import { MediaDiagnostics, mediaErrorCode } from './media-diagnostics.mjs';
 import { verifyLocalMediaRoute } from './collaboration-local-media.mjs';
+import { t } from '../i18n.mjs';
 
 const hex = bytes => [...bytes].map(value => value.toString(16).padStart(2, '0')).join('');
 
@@ -17,16 +18,16 @@ export async function digestBytes(input, signal = new AbortController().signal, 
         return await new Promise((resolve, reject) => {
           let settled = false;
           const finish = (callback, value) => { if (settled) return; settled = true; clearTimeout(timer); signal.removeEventListener('abort', abort); worker.terminate(); callback(value); };
-          const abort = () => finish(reject, signal.reason ?? new DOMException('操作已取消', 'AbortError'));
-          const timer = setTimeout(() => { trace('hash-worker-timeout'); finish(reject, new DOMException('素材校验超过 120 秒，请重试', 'TimeoutError')); }, 120000);
+          const abort = () => finish(reject, signal.reason ?? new DOMException(t('collaboration-media.sf2878ae'), 'AbortError'));
+          const timer = setTimeout(() => { trace('hash-worker-timeout'); finish(reject, new DOMException(t('collaboration-media.s082bbe3'), 'TimeoutError')); }, 120000);
           worker.onmessage = event => {
             if (['ready', 'digest-start'].includes(event.data?.phase)) { trace(`hash-worker-${event.data.phase}`); return; }
             if (event.data?.error) { finish(reject, new Error(event.data.error)); return; }
-            if (!/^[0-9a-f]{64}$/.test(event.data?.hash)) { finish(reject, new Error('后台校验结果无效')); return; }
+            if (!/^[0-9a-f]{64}$/.test(event.data?.hash)) { finish(reject, new Error(t('collaboration-media.s0ae2cbe'))); return; }
             trace('hash-worker-complete'); finish(resolve, event.data.hash);
           };
-          worker.onerror = event => { trace('hash-worker-error'); finish(reject, new Error('后台素材校验失败')); event.preventDefault?.(); };
-          worker.onmessageerror = () => finish(reject, new Error('后台校验消息无效'));
+          worker.onerror = event => { trace('hash-worker-error'); finish(reject, new Error(t('collaboration-media.s0a67fc5'))); event.preventDefault?.(); };
+          worker.onmessageerror = () => finish(reject, new Error(t('collaboration-media.s06b5a75')));
           signal.addEventListener('abort', abort, { once: true });
           if (signal.aborted) { abort(); return; }
           try { worker.postMessage(copy, [copy.buffer]); trace('hash-worker-posted'); }
@@ -42,8 +43,8 @@ export async function digestBytes(input, signal = new AbortController().signal, 
   trace('hash-native-start');
   const digest = await new Promise((resolve, reject) => {
     const finish = (callback, value) => { clearTimeout(timer); signal.removeEventListener('abort', abort); callback(value); };
-    const abort = () => finish(reject, signal.reason ?? new DOMException('操作已取消', 'AbortError'));
-    const timer = setTimeout(() => { trace('hash-native-timeout'); finish(reject, new DOMException('素材校验超过 120 秒，请重试', 'TimeoutError')); }, 120000);
+    const abort = () => finish(reject, signal.reason ?? new DOMException(t('collaboration-media.sf2878ae'), 'AbortError'));
+    const timer = setTimeout(() => { trace('hash-native-timeout'); finish(reject, new DOMException(t('collaboration-media.s082bbe3'), 'TimeoutError')); }, 120000);
     signal.addEventListener('abort', abort, { once: true });
     if (signal.aborted) { abort(); return; }
     Promise.resolve().then(() => crypto.subtle.digest('SHA-256', bytes)).then(value => finish(resolve, value), error => finish(reject, error));
@@ -103,7 +104,7 @@ export class CollaborationMedia extends EventTarget {
         const response = await this.request(new URL(path, this.base), { ...options, signal: AbortSignal.any([signal, timeout]), credentials: 'omit', redirect: 'error', referrerPolicy: 'no-referrer', cache: 'no-store', headers: { ...options?.headers, Authorization: `Bearer ${this.token}` } });
         this.trace('media-response-headers', { endpoint, attempt: attempt + 1, status: response.status });
         if (!response.ok) {
-          const error = new Error((await response.json().catch(() => null))?.error ?? `素材请求失败（${response.status}）`); error.status = response.status; throw error;
+          const error = new Error((await response.json().catch(() => null))?.error ?? t('collaboration-media.s7ef7aea', { p0: response.status })); error.status = response.status; throw error;
         }
         const result = options?.binary ? new Uint8Array(await response.arrayBuffer()) : await response.json();
         end('complete', { status: response.status }); return result;
@@ -128,10 +129,10 @@ export class CollaborationMedia extends EventTarget {
       await this.routeReady; signal.throwIfAborted();
       this.progress({ phase: 'prepare' });
       const prepare = await this.fetch('prepare', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ files: files.map(({ name, size, hash }) => ({ name, size, hash })) }) }, signal);
-      if (!/^[0-9a-f]{32}$/.test(prepare.id) || prepare.chunkSize !== 1024 * 1024 || !Array.isArray(prepare.missing) || prepare.missing.length > files.length) throw new Error('服务器素材上传参数无效');
+      if (!/^[0-9a-f]{32}$/.test(prepare.id) || prepare.chunkSize !== 1024 * 1024 || !Array.isArray(prepare.missing) || prepare.missing.length > files.length) throw new Error(t('collaboration-media.sab4b1b7'));
       const unique = new Map(files.map(file => [file.hash, file])); const jobs = [];
       for (const hash of prepare.missing) {
-        const file = unique.get(hash); if (!file) throw new Error('服务器素材列表无效');
+        const file = unique.get(hash); if (!file) throw new Error(t('collaboration-media.s2ffa13e'));
         for (let index = 0; index < Math.ceil(file.size / prepare.chunkSize); index++) jobs.push({ file, index });
       }
       let sent = 0; const total = prepare.missing.reduce((sum, hash) => sum + unique.get(hash).size, 0); const started = performance.now();
@@ -141,7 +142,7 @@ export class CollaborationMedia extends EventTarget {
       const httpSignal = AbortSignal.any([signal, httpController.signal]); let stallTimer;
       const arm = () => {
         clearTimeout(stallTimer);
-        stallTimer = setTimeout(() => httpController.abort(new DOMException('HTTP 上传连续 15 秒没有分片确认', 'TimeoutError')), this.uploadStallMilliseconds);
+        stallTimer = setTimeout(() => httpController.abort(new DOMException(t('collaboration-media.s5fb9556'), 'TimeoutError')), this.uploadStallMilliseconds);
       };
       const confirm = (job, bytes, channel) => {
         remaining.delete(job); sent += bytes.length;
@@ -164,7 +165,7 @@ export class CollaborationMedia extends EventTarget {
           const { file, index } = job; const bytes = file.bytes.subarray(index * prepare.chunkSize, (index + 1) * prepare.chunkSize);
           try {
             const result = await this.fetch(`upload/${prepare.id}/${file.hash}/${index}`, { method: 'PUT', body: bytes }, httpSignal, 1, 300000);
-            if (result.received !== bytes.length) throw new Error('服务器分片确认长度不正确');
+            if (result.received !== bytes.length) throw new Error(t('collaboration-media.s982aa41'));
             confirm(job, bytes, this.localRoute ? 'local' : 'http'); arm();
           } catch (error) { httpController.abort(error); throw error; }
         }, httpSignal);
@@ -173,12 +174,12 @@ export class CollaborationMedia extends EventTarget {
         const cause = httpController.signal.reason ?? error;
         if (cause.status && ![429, 500, 502, 503, 504].includes(cause.status)) throw cause;
         clearTimeout(stallTimer);
-        if (!this.socketUpload) throw new Error('HTTP 素材上传没有完成，请更新协作服务器以启用备用上传通道后重试');
+        if (!this.socketUpload) throw new Error(t('collaboration-media.sb61d301'));
         this.trace('media-upload-fallback', { remainingChunks: remaining.size, confirmedBytes: sent, error: mediaErrorCode(cause) });
         this.progress({ phase: 'upload-fallback', bytes: sent, total });
         if (this.socketResume) {
           const result = await this.socketResume(prepare.id, signal);
-          if (!Array.isArray(result.completed) || result.completed.length > jobs.length) throw new Error('服务器续传清单无效');
+          if (!Array.isArray(result.completed) || result.completed.length > jobs.length) throw new Error(t('collaboration-media.s2ce2aa0'));
           const completed = new Set(result.completed.map(part => `${part.hash}:${part.index}`));
           for (const job of remaining) if (completed.has(`${job.file.hash}:${job.index}`)) {
             const bytes = job.file.bytes.subarray(job.index * prepare.chunkSize, (job.index + 1) * prepare.chunkSize);
@@ -191,7 +192,7 @@ export class CollaborationMedia extends EventTarget {
           const finish = this.diagnostics.start('socket-upload', { index, bytes: bytes.length });
           try {
             const result = await this.socketUpload({ upload: prepare.id, hash: file.hash, index, bytes }, signal);
-            if (result.received !== bytes.length) throw new Error('服务器分片确认长度不正确');
+            if (result.received !== bytes.length) throw new Error(t('collaboration-media.s982aa41'));
             confirm(job, bytes, 'socket'); finish();
           } catch (failure) { finish(signal.aborted ? 'cancelled' : 'failed', { error: mediaErrorCode(failure) }); throw failure; }
         }, signal, 2);
@@ -209,11 +210,11 @@ export class CollaborationMedia extends EventTarget {
     const signal = controller.signal;
     try {
       await this.routeReady; signal.throwIfAborted();
-      if (!manifest || !/^[0-9a-f]{32}$/.test(manifest.id) || manifest.chunkSize !== 1024 * 1024 || !Array.isArray(manifest.files) || manifest.files.length > 512) throw new Error('素材清单无效');
+      if (!manifest || !/^[0-9a-f]{32}$/.test(manifest.id) || manifest.chunkSize !== 1024 * 1024 || !Array.isArray(manifest.files) || manifest.files.length > 512) throw new Error(t('collaboration-media.sb682de0'));
       for (const file of manifest.files) {
-        if (!file || !/^[0-9a-f]{64}$/.test(file.hash) || typeof file.name !== 'string' || file.name.length > 256 || /(^[/\\]|(^|[/\\])\.\.([/\\]|$)|:)/.test(file.name) || !/\.(png|jpe?g|webp|gif|ogg|mp3|wav|flac|m4a)$/i.test(file.name) || !Number.isSafeInteger(file.size) || file.size <= 0 || file.size > 128 * 1024 * 1024) throw new Error('素材清单无效');
+        if (!file || !/^[0-9a-f]{64}$/.test(file.hash) || typeof file.name !== 'string' || file.name.length > 256 || /(^[/\\]|(^|[/\\])\.\.([/\\]|$)|:)/.test(file.name) || !/\.(png|jpe?g|webp|gif|ogg|mp3|wav|flac|m4a)$/i.test(file.name) || !Number.isSafeInteger(file.size) || file.size <= 0 || file.size > 128 * 1024 * 1024) throw new Error(t('collaboration-media.sb682de0'));
       }
-      if (manifest.files.reduce((sum, file) => sum + file.size, 0) > 512 * 1024 * 1024) throw new Error('素材组超过 512 MiB');
+      if (manifest.files.reduce((sum, file) => sum + file.size, 0) > 512 * 1024 * 1024) throw new Error(t('collaboration-media.s8b2f997'));
       for (const file of [...manifest.files].sort((left, right) => left.size - right.size)) {
         if (this.received.get(file.name) === file.hash) continue;
         signal.throwIfAborted(); const bytes = new Uint8Array(file.size); let received = 0; const started = performance.now();
@@ -221,12 +222,12 @@ export class CollaborationMedia extends EventTarget {
         await parallelJobs(jobs, async index => {
           const part = await this.fetch(`file/${manifest.id}/${file.hash}/${index}`, { method: 'GET', binary: true }, signal);
           const expected = Math.min(manifest.chunkSize, file.size - index * manifest.chunkSize);
-          if (part.length !== expected) throw new Error('素材下载长度不正确');
+          if (part.length !== expected) throw new Error(t('collaboration-media.s7853877'));
           bytes.set(part, index * manifest.chunkSize); received += part.length;
           this.progress({ phase: 'download', name: file.name, bytes: received, total: file.size, channel: this.localRoute ? 'local' : 'http', seconds: (performance.now() - started) / 1000 });
         }, signal);
         this.progress({ phase: 'verify', name: file.name, bytes: file.size, total: file.size, seconds: (performance.now() - started) / 1000 });
-        if (await this.hash(bytes, signal, { direction: 'download', fileIndex: manifest.files.indexOf(file), kind: /\.(png|jpe?g|webp|gif)$/i.test(file.name) ? 'image' : 'audio' }) !== file.hash) { this.trace('media-hash-mismatch'); throw new Error('素材校验失败，请重新勾选接收以重试'); }
+        if (await this.hash(bytes, signal, { direction: 'download', fileIndex: manifest.files.indexOf(file), kind: /\.(png|jpe?g|webp|gif)$/i.test(file.name) ? 'image' : 'audio' }) !== file.hash) { this.trace('media-hash-mismatch'); throw new Error(t('collaboration-media.sf216ee0')); }
         signal.throwIfAborted(); const installed = this.diagnostics.start('install', { fileIndex: manifest.files.indexOf(file), bytes: file.size });
         try { await install(file.name, bytes); signal.throwIfAborted(); this.received.set(file.name, file.hash); installed(); }
         catch (error) { installed('failed', { error: mediaErrorCode(error) }); throw error; }

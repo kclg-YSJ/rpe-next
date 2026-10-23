@@ -1,5 +1,6 @@
 import { beatValue, fromNumber } from './beat.mjs';
 import { SHADER_NAMES, shaderIdentity, shaderLine } from './shader.mjs';
+import { t } from '../i18n.mjs';
 export { shaderIdentity, shaderLine } from './shader.mjs';
 
 const cache = new WeakMap();
@@ -49,7 +50,7 @@ export function serializeShaderEvent(event, lineIndex) {
 
 export function replaceShaderEvents(chart, lineIndex, events) {
   for (const event of events) {
-    if (beatValue(event.endTime) < beatValue(event.startTime)) throw new Error('着色器结束拍不能早于开始拍');
+    if (beatValue(event.endTime) < beatValue(event.startTime)) throw new Error(t('shader-events.s2a12e0d'));
   }
   const keep = events => (events ?? []).filter(event => !event || typeof event !== 'object' || shaderLine(event, chart) !== lineIndex);
   const lines = [...chart.judgeLineList];
@@ -112,6 +113,6 @@ export function shaderParameters(source) {
 export function parseShaderValue(text, dimensions) {
   const parts = String(text).split(',').map(part => part.trim());
   const values = parts.map(Number);
-  if (parts.some(part => !part) || values.length !== dimensions || !values.every(Number.isFinite)) throw new Error(`请输入 ${dimensions} 个有限数字，多个分量用逗号分隔`);
+  if (parts.some(part => !part) || values.length !== dimensions || !values.every(Number.isFinite)) throw new Error(t('shader-events.s99fbcbb', { p0: dimensions }));
   return dimensions === 1 ? values[0] : values;
 }

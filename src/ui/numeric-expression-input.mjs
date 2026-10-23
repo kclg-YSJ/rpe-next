@@ -1,5 +1,6 @@
 import { evaluateNumericExpression, isNumericLiteral } from '../core/numeric-expression.mjs';
 import { formatBeat, parseBeat } from '../core/beat.mjs';
+import { t } from '../i18n.mjs';
 
 const resolvers = new WeakMap();
 const sources = new WeakMap();
@@ -21,7 +22,7 @@ export function installNumericExpressionInputs(root = document) {
   const normalize = (input, state, source) => {
     if (state.kind === 'beat') return formatBeat(parseBeat(source));
     const value = (resolvers.get(input) ?? evaluateNumericExpression)(source);
-    if (!Number.isFinite(value)) throw new Error('表达式结果必须为有限数字');
+    if (!Number.isFinite(value)) throw new Error(t('numeric-expression-input.s05b3df3'));
     return String(value);
   };
   const beginEditing = input => {

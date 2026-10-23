@@ -1,3 +1,4 @@
+import { t } from '../i18n.mjs';
 const yieldEncoding = () => globalThis.scheduler?.yield ? globalThis.scheduler.yield() : new Promise(resolve => setTimeout(resolve, 0));
 
 export async function pcmWave(buffer, cancelled = () => false, leadingSeconds = 0) {
@@ -5,7 +6,7 @@ export async function pcmWave(buffer, cancelled = () => false, leadingSeconds = 
   const leadingFrames = Math.max(0, Math.round(Number(leadingSeconds) * buffer.sampleRate));
   const totalFrames = leadingFrames + buffer.length;
   const dataSize = totalFrames * channels * 4;
-  if (!Number.isSafeInteger(dataSize) || dataSize > 0xffffffff - 36 || channels < 1) throw new Error('音频大小超出 PCM 播放缓存限制');
+  if (!Number.isSafeInteger(dataSize) || dataSize > 0xffffffff - 36 || channels < 1) throw new Error(t('pcm-wave.se8b6c41'));
   const header = new ArrayBuffer(44);
   const view = new DataView(header);
   const text = (offset, value) => { for (let index = 0; index < value.length; index++) view.setUint8(offset + index, value.charCodeAt(index)); };

@@ -2,12 +2,13 @@ import { COLLAB_ID, identifyChart, chartChanges, applyChanges, inverseChanges, c
 import { assertChart } from '../core/chart.mjs';
 import { eventListAt } from './event-commands.mjs';
 import { remapSelection, restoreSelection } from './selection-history.mjs';
+import { t } from '../i18n.mjs';
 
 export class CollaborationClient extends EventTarget {
   constructor(transport, { session, receiveChart, notify, interactionBusy = () => false }) {
     super(); this.transport = transport; this.getSession = session; this.receiveChart = receiveChart; this.notify = notify;
     this.interactionBusy = interactionBusy;
-    this.queue = []; this.undo = []; this.redo = []; this.members = []; this.locks = new Map(); this.requests = []; this.chat = []; this.state = '未连接';
+    this.queue = []; this.undo = []; this.redo = []; this.members = []; this.locks = new Map(); this.requests = []; this.chat = []; this.state = t('collaboration-client.sf2f3e98');
     transport.addEventListener('message', event => this.message(event.detail));
     transport.addEventListener('state', event => { this.state = event.detail; this.changed(); });
   }
@@ -17,10 +18,10 @@ export class CollaborationClient extends EventTarget {
     this.profile = cleanProfile(profile); this.server = server;
     const chart = invitation ? null : identifyChart(this.getSession().chart);
     try { this.transport.connect(server, invitation ? { type: 'join', ...invitation, profile: this.profile } : { type: 'create', chart, profile: this.profile, creationKey }); }
-    catch (error) { this.active = false; this.state = '连接未建立'; this.changed(); throw error; }
+    catch (error) { this.active = false; this.state = t('collaboration-client.sc5b0820'); this.changed(); throw error; }
     this.active = true;
     this.session = this.getSession(); this.session.collaboration = this;
-    this.state = '连接中'; this.changed();
+    this.state = t('collaboration-client.s699ade1'); this.changed();
   }
   get ready() { return this.active && this.transport.connected && this.authoritative && this.members.some(member => member.id === this.host && member.online); }
   attach(session) { session.collaboration = this; this.session = session; this.syncHistory(); }
@@ -34,10 +35,10 @@ export class CollaborationClient extends EventTarget {
   }
   commit(label, chart, { recordHistory = true } = {}) {
     try {
-      if (!this.ready) throw new Error('联机尚未就绪或房主离线，编辑暂停');
+      if (!this.ready) throw new Error(t('collaboration-client.s53c0f25'));
       const next = identifyChart(chart); const changes = chartChanges(this.session.chart, next); if (!changes.length) return;
       for (const change of changes) for (const id of changeResources(change)) {
-        const owner = this.locks.get(id); if (owner && owner !== this.id) throw new Error(`该物件由 ${this.members.find(member => member.id === owner)?.name ?? '其他用户'} 编辑中`);
+        const owner = this.locks.get(id); if (owner && owner !== this.id) throw new Error(t('collaboration-client.sc2916d9', { p0: this.members.find(member => member.id === owner)?.name ?? t('collaboration-client.sda15d4d') }));
       }
       const operation = { type: 'edit', operation: crypto.randomUUID(), label, changes, recordHistory };
       this.queue.push(operation); this.setChart(next, true); this.flush(); this.changed();
@@ -49,14 +50,14 @@ export class CollaborationClient extends EventTarget {
     this.transport.send({ type: 'edit', operation: first.operation, label: first.label, changes: first.changes }); first.sent = true;
   }
   travel(direction) {
-    if (this.queue.length) { this.notify('等待本次修改同步完成后再撤销', 'warning'); return; }
+    if (this.queue.length) { this.notify(t('collaboration-client.s49aeb53'), 'warning'); return; }
     const entry = (direction === 'undo' ? this.undo : this.redo).at(-1); if (!entry) return;
     try {
       const changes = direction === 'undo' ? inverseChanges(entry.changes) : entry.changes;
       const next = applyChanges(this.session.chart, changes);
-      this.commit(`${direction === 'undo' ? '撤销' : '重做'}：${entry.label}`, next);
+      this.commit(t('collaboration-client.s1e9057a', { p0: direction === 'undo' ? t('collaboration-client.s9fcefd8') : t('collaboration-client.s1238f0d'), p1: entry.label }), next);
       if (this.queue.length) this.queue.at(-1).travel = { direction, entry };
-    } catch (error) { this.notify(`无法覆盖他人的后续修改：${error.message}`, 'warning'); }
+    } catch (error) { this.notify(t('collaboration-client.se16ee26', { p0: error.message }), 'warning'); }
   }
   message(message) {
     try {
@@ -70,15 +71,15 @@ export class CollaborationClient extends EventTarget {
           this.recoveryChart = this.queue.length ? structuredClone(this.session.chart) : this.recoveryChart;
           this.setChart(message.chart);
           const pending = this.queue.splice(0);
-          if (pending.length) this.notify('重连已恢复最新谱面；未确认操作已保留为本地恢复副本', 'warning');
+          if (pending.length) this.notify(t('collaboration-client.sf3b17df'), 'warning');
           this.recovery = pending;
         }
-        this.state = '已连接'; this.syncHistory();
-        if (!reconnect) this.notify('已加入联机房间：按 / 打开聊天，Enter 发送，Esc 关闭', 'success', 6000);
+        this.state = t('collaboration-client.s65fe35c'); this.syncHistory();
+        if (!reconnect) this.notify(t('collaboration-client.sfd8006b'), 'success', 6000);
       } else if (message.type === 'members') this.members = message.members;
       else if (message.type === 'locks') this.locks = new Map(message.locks.map(lock => [lock.id, lock.owner]));
-      else if (message.type === 'lock-result' && message.conflicts.length) this.notify('选中内容正由其他人编辑，暂不可修改', 'warning');
-      else if (message.type === 'waiting') this.state = '等待房主批准';
+      else if (message.type === 'lock-result' && message.conflicts.length) this.notify(t('collaboration-client.s622b495'), 'warning');
+      else if (message.type === 'waiting') this.state = t('collaboration-client.s8a8e208');
       else if (message.type === 'request') this.requests.push(message);
       else if (message.type === 'pong') this.latency = Math.max(0, Date.now() - message.time);
       else if (message.type === 'presence') {
@@ -111,12 +112,12 @@ export class CollaborationClient extends EventTarget {
       else if (message.type === 'asset') this.dispatchEvent(new CustomEvent('asset', { detail: message }));
       else if (message.type === 'asset-manifest') this.dispatchEvent(new CustomEvent('asset-manifest', { detail: message.manifest }));
       this.changed();
-    } catch (error) { this.transport.trace?.('apply-failed', { type: message.type, error: error.name }); this.state = '同步异常，已暂停'; this.transport.close(); this.notify(error.message, 'error'); this.changed(); }
+    } catch (error) { this.transport.trace?.('apply-failed', { type: message.type, error: error.name }); this.state = t('collaboration-client.s736035e'); this.transport.close(); this.notify(error.message, 'error'); this.changed(); }
   }
   rebase() {
     let chart = this.authoritative;
     try { for (const pending of this.queue) chart = applyChanges(chart, pending.changes); }
-    catch { this.recoveryChart = structuredClone(this.session.chart); this.recovery = [...this.queue]; this.queue = []; chart = this.authoritative; this.notify('操作与他人修改冲突，已恢复确认版本', 'warning'); }
+    catch { this.recoveryChart = structuredClone(this.session.chart); this.recovery = [...this.queue]; this.queue = []; chart = this.authoritative; this.notify(t('collaboration-client.s5960f36'), 'warning'); }
     if (this.interactionBusy()) this.deferred = chart; else { this.deferred = null; this.setChart(chart); }
     this.flush();
   }
@@ -138,6 +139,6 @@ export class CollaborationClient extends EventTarget {
       if (this.authoritative) { this.session.history.undoStack = []; this.session.history.redoStack = []; }
       this.session.notify();
     }
-    this.authoritative = null; this.deferred = null; this.queue = []; this.members = []; this.requests = []; this.chat = []; this.locks.clear(); this.state = '已离开，当前谱面保留在本地'; this.changed();
+    this.authoritative = null; this.deferred = null; this.queue = []; this.members = []; this.requests = []; this.chat = []; this.locks.clear(); this.state = t('collaboration-client.s4ce0e3f'); this.changed();
   }
 }

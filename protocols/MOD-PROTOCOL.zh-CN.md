@@ -47,7 +47,7 @@ example/
 }
 ```
 
-必填项为 `protocol/api/id/name/version/author/description/entry`。`author`、`description` 可为空。`id` 和设置键以小写字母开头，只含小写字母、数字、`-`，最长 64 字符。`version` 用 `1.0.0` 形式，可有 `-beta.1` 或 `+build` 后缀。`entry` 为包内 `.mjs` 或 `.js` ES 模块，必须存在。未知清单字段保留但不自动执行，可用 `x-` 前缀保存扩展元数据。
+必填项为 `protocol/api/id/name/version/author/description/entry`。`author`、`description` 可为空。`name`、`version`、`author`、`description`，以及设置的 `label`、`description` 和 `select` 选项文本，都可以写成语言映射（`{ "zh-CN": "…", "en-US": "…" }`），管理器按当前界面语言显示，缺失语言回退到 `zh-CN`。`id` 和设置键以小写字母开头，只含小写字母、数字、`-`，最长 64 字符。`version` 用 `1.0.0` 形式，可有 `-beta.1` 或 `+build` 后缀。`entry` 为包内 `.mjs` 或 `.js` ES 模块，必须存在。未知清单字段保留但不自动执行，可用 `x-` 前缀保存扩展元数据。
 
 `dependencies`、`conflicts` 为其他模组 ID 的数组，不允许包含自身。依赖先装载，缺失、循环及双方任何一方声明的冲突会阻止装载。禁用依赖也会禁用依赖它的模组。没有依赖关系时按用户启用顺序装载；自动启动按保存的顺序处理。不支持依赖版本范围，作者应在激活时自行检查功能或版本。
 

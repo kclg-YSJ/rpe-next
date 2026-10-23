@@ -1,10 +1,11 @@
 import { createChart, createLine, createNote, createEvent, assertChart } from './chart.mjs';
 import { fromNumber } from './beat.mjs';
+import { t } from '../i18n.mjs';
 
 export function parsePecChart(text) {
   const rows = text.trim().split(/\r?\n/).map(row => row.trim()).filter(row => row && !row.startsWith('//'));
   const offset = Number(rows.shift());
-  if (!Number.isFinite(offset)) throw new Error('PEC offset 无效');
+  if (!Number.isFinite(offset)) throw new Error(t('pec-chart.sdb1a186'));
   const chart = createChart();
   chart.META.offset = offset - 175;
   chart.BPMList = [];
@@ -13,7 +14,7 @@ export function parsePecChart(text) {
   const tracks = new Map();
   let lastNote;
   const getLine = index => {
-    if (!Number.isInteger(index) || index < 0 || index > 10000) throw new Error('PEC 判定线索引无效');
+    if (!Number.isInteger(index) || index < 0 || index > 10000) throw new Error(t('pec-chart.s6be94a8'));
     while (chart.judgeLineList.length <= index) {
       const line = createLine(`Line ${chart.judgeLineList.length + 1}`); line.eventLayers = [{}]; chart.judgeLineList.push(line);
     }
@@ -27,11 +28,11 @@ export function parsePecChart(text) {
   for (const [index, row] of rows.entries()) {
     const [command, ...tokens] = row.split(/\s+/);
     const values = tokens.map(Number);
-    const fail = message => { throw new Error(`PEC 第 ${index + 2} 行：${message}`); };
-    if (!values.every(Number.isFinite)) fail('参数不是有限数字');
+    const fail = message => { throw new Error(t('pec-chart.sacc6233', { p0: index + 2, p1: message })); };
+    if (!values.every(Number.isFinite)) fail(t('pec-chart.s3ec6659'));
     if (command === 'bp' && values.length === 2) { chart.BPMList.push({ startTime: fromNumber(values[0]), bpm: values[1] }); continue; }
     if (command === '#' || command === '&') {
-      if (!lastNote || values.length !== 1) fail('音符附加参数缺少前置音符');
+      if (!lastNote || values.length !== 1) fail(t('pec-chart.sd975e9c'));
       lastNote[command === '#' ? 'speed' : 'size'] = values[0]; continue;
     }
     const lineIndex = values[0];
@@ -40,7 +41,7 @@ export function parsePecChart(text) {
       const type = Number(command[1]);
       const isHold = type === 2;
       const expected = isHold ? 6 : 5;
-      if (values.length !== expected && values.length !== expected - 1) fail('音符参数个数错误');
+      if (values.length !== expected && values.length !== expected - 1) fail(t('pec-chart.s9070749'));
       const coordinateIndex = isHold ? 3 : 2;
       lastNote = createNote(type, values[1], values[coordinateIndex] * 675 / 1024, isHold ? values[2] : values[1]);
       lastNote.above = values[coordinateIndex + 1] === 1 ? 1 : 0;
@@ -56,7 +57,7 @@ export function parsePecChart(text) {
       append(lineIndex, { cd: 'rotateEvents', ca: 'alphaEvents', cv: 'speedEvents' }[command], values[1], values[1], values[2] * (command === 'cv' ? 450 / 770 : 1), 1, true);
     } else if ((command === 'cr' && values.length === 5) || (command === 'cf' && values.length === 4)) {
       append(lineIndex, command === 'cr' ? 'rotateEvents' : 'alphaEvents', values[1], values[2], values[3], values[4] ?? 1, false);
-    } else fail(`不支持命令或参数 ${command}`);
+    } else fail(t('pec-chart.s856992f', { p0: command }));
   }
   for (const track of tracks.values()) {
     let current = track.type === 'alphaEvents' ? 255 : 0;

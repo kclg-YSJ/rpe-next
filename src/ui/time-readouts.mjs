@@ -1,3 +1,4 @@
+import { t } from '../i18n.mjs';
 const decimal = value => (Math.abs(value) < 0.005 ? 0 : value).toFixed(2);
 
 export class TimeReadouts {
@@ -14,7 +15,7 @@ export class TimeReadouts {
   }
 
   update(seconds, duration, beat) {
-    const texts = [`${decimal(seconds)}s/${decimal(duration)}s`, `${decimal(beat)} 拍`];
+    const texts = [`${decimal(seconds)}s/${decimal(duration)}s`, t('time-readouts.s8342148', { p0: decimal(beat) })];
     let changed = false;
     for (const [index, value] of this.values.entries()) if (value.textContent !== texts[index]) { value.textContent = texts[index]; changed = true; }
     if (this.metrics && !changed) return;

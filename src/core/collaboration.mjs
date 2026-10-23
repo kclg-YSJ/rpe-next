@@ -1,4 +1,5 @@
 import { beatValue } from './beat.mjs';
+import { t } from '../i18n.mjs';
 
 export const COLLAB_PROTOCOL = 1;
 export const COLLAB_ID = '_rpeCollabId';
@@ -19,10 +20,10 @@ export function shareChartReferences(before, after) {
 }
 
 export function validateData(value, depth = 0) {
-  if (depth > 48) throw new Error('联机数据嵌套过深');
-  if (typeof value === 'number' && !Number.isFinite(value)) throw new Error('联机数据包含非法数字');
+  if (depth > 48) throw new Error(t('collaboration.s158de46'));
+  if (typeof value === 'number' && !Number.isFinite(value)) throw new Error(t('collaboration.s223212a'));
   if (value && typeof value === 'object') for (const [key, entry] of Object.entries(value)) {
-    if (forbidden.has(key)) throw new Error('非法字段');
+    if (forbidden.has(key)) throw new Error(t('collaboration.s26e2810'));
     validateData(entry, depth + 1);
   }
 }
@@ -54,7 +55,7 @@ export function validateIdentities(chart) {
       for (const entry of value) {
         if (objects && plain(entry)) {
           const id = entry[COLLAB_ID];
-          if (typeof id !== 'string' || id.length > 100 || !id.length || seen.has(id)) throw new Error('物件标识缺失或重复');
+          if (typeof id !== 'string' || id.length > 100 || !id.length || seen.has(id)) throw new Error(t('collaboration.se76e5c5'));
           seen.add(id);
         }
         visit(entry);
@@ -78,7 +79,7 @@ export function validateNewEventOverlaps(before, after) {
           const previousEvent = old.get(event[COLLAB_ID]);
           if (previousEvent && equal(previousEvent.startTime, event.startTime) && equal(previousEvent.endTime, event.endTime)) continue;
           const overlaps = (first, second) => first && second && Math.max(beatValue(first.startTime), beatValue(second.startTime)) < Math.min(beatValue(first.endTime), beatValue(second.endTime)) - 1e-9;
-          if (events.some(other => other !== event && overlaps(event, other) && !overlaps(previousEvent, old.get(other[COLLAB_ID])))) throw new Error('事件区间与其他物件重叠，本次修改未应用');
+          if (events.some(other => other !== event && overlaps(event, other) && !overlaps(previousEvent, old.get(other[COLLAB_ID])))) throw new Error(t('collaboration.s3af8b83'));
         }
       }
     }
@@ -121,25 +122,25 @@ export function changeResources(change) {
 }
 
 export function applyChanges(chart, changes) {
-  if (!Array.isArray(changes) || changes.length > 50000) throw new Error('单次联机操作过大');
+  if (!Array.isArray(changes) || changes.length > 50000) throw new Error(t('collaboration.sd168e70'));
   validateData(changes);
   const result = structuredClone(chart);
   for (const change of changes) {
-    if (!Array.isArray(change.path) || !change.path.length || change.path.length > 16) throw new Error('非法操作路径');
-    if (change.path.some(segment => plain(segment) ? typeof segment.id !== 'string' : typeof segment !== 'string' && (!Number.isInteger(segment) || segment < 0) || forbidden.has(segment) || segment === COLLAB_ID)) throw new Error('非法操作路径');
+    if (!Array.isArray(change.path) || !change.path.length || change.path.length > 16) throw new Error(t('collaboration.s8806cab'));
+    if (change.path.some(segment => plain(segment) ? typeof segment.id !== 'string' : typeof segment !== 'string' && (!Number.isInteger(segment) || segment < 0) || forbidden.has(segment) || segment === COLLAB_ID)) throw new Error(t('collaboration.s8806cab'));
     let parent = result;
     for (const segment of change.path.slice(0, -1)) {
       if (plain(segment)) parent = Array.isArray(parent) ? parent.find(item => item?.[COLLAB_ID] === segment.id) : undefined;
       else parent = parent?.[segment];
-      if (!parent || typeof parent !== 'object') throw new Error('目标已改变，请重新选择');
+      if (!parent || typeof parent !== 'object') throw new Error(t('collaboration.sf62c604'));
     }
     const last = change.path.at(-1);
     const keyed = plain(last);
-    if (keyed && change.after !== undefined && change.after?.[COLLAB_ID] !== last.id) throw new Error('物件标识不匹配');
-    if (keyed && !Array.isArray(parent)) throw new Error('目标列表不存在');
+    if (keyed && change.after !== undefined && change.after?.[COLLAB_ID] !== last.id) throw new Error(t('collaboration.sfc1bcff'));
+    if (keyed && !Array.isArray(parent)) throw new Error(t('collaboration.sfbc947e'));
     const key = keyed ? parent.findIndex(item => item?.[COLLAB_ID] === last.id) : last;
     const current = keyed && key < 0 ? undefined : parent[key];
-    if (!equal(current, change.before)) throw new Error('目标已被修改，本次操作未应用');
+    if (!equal(current, change.before)) throw new Error(t('collaboration.sb37cdaf'));
     if (change.after === undefined) { if (keyed) parent.splice(key, 1); else delete parent[key]; }
     else if (keyed && key < 0) parent.push(structuredClone(change.after));
     else parent[key] = structuredClone(change.after);
@@ -151,7 +152,7 @@ export function applyChanges(chart, changes) {
 export const inverseChanges = changes => [...changes].reverse().map(change => ({ path: change.path, ...(change.after === undefined ? {} : { before: change.after }), ...(change.before === undefined ? {} : { after: change.before }) }));
 
 export function cleanProfile(profile) {
-  return { name: String(profile?.name ?? '').trim().slice(0, 32) || '制谱者', color: /^#[0-9a-f]{6}$/i.test(profile?.color) ? profile.color : '#64dba5' };
+  return { name: String(profile?.name ?? '').trim().slice(0, 32) || t('collaboration.s9d3c09a'), color: /^#[0-9a-f]{6}$/i.test(profile?.color) ? profile.color : '#64dba5' };
 }
 
 export function parseInvitation(source) {
@@ -160,9 +161,9 @@ export function parseInvitation(source) {
   try {
     const encoded = text.startsWith('rpenext:') ? text.slice(8) : new URL(text).hash.slice(1).replace(/^collab=/, '');
     payload = JSON.parse(decodeURIComponent(encoded));
-  } catch { throw new Error('邀请无效，请粘贴完整邀请链接'); }
+  } catch { throw new Error(t('collaboration.s5a1a0da')); }
   const url = new URL(payload.server);
-  if (!['ws:', 'wss:'].includes(url.protocol) || url.username || url.password || url.hash || url.search) throw new Error('服务器地址无效');
-  if (!/^[a-zA-Z0-9_-]{16,100}$/.test(payload.room) || !/^[a-zA-Z0-9_-]{24,120}$/.test(payload.token)) throw new Error('邀请凭据无效');
+  if (!['ws:', 'wss:'].includes(url.protocol) || url.username || url.password || url.hash || url.search) throw new Error(t('collaboration.s783afdd'));
+  if (!/^[a-zA-Z0-9_-]{16,100}$/.test(payload.room) || !/^[a-zA-Z0-9_-]{24,120}$/.test(payload.token)) throw new Error(t('collaboration.s09cdce4'));
   return { server: url.href, room: payload.room, token: payload.token };
 }

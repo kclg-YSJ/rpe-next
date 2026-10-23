@@ -1,4 +1,5 @@
-export function storageError(data, fallback = '本地存储失败') {
+import { t } from '../i18n.mjs';
+export function storageError(data, fallback = t('storage.sc6a19cd')) {
   const error = new Error(data?.message || fallback);
   error.name = data?.name || 'Error';
   for (const key of ['projectId', 'expectedRevision', 'actualRevision']) if (data?.[key] !== undefined) error[key] = data[key];
@@ -6,8 +7,8 @@ export function storageError(data, fallback = '本地存储失败') {
 }
 
 export function storageFailure(error) {
-  if (error?.name === 'QuotaExceededError' || /quota.*(?:exceed|full)|disk.*full/i.test(error?.message ?? '')) return '本地存储空间不足，未完成写入。请先导出当前谱面或谱面库，再删除不需要的项目、恢复备份或皮肤以释放空间；上次成功的存档仍保留。';
-  if (error?.name === 'VersionError') return '本地数据库已由较新的编辑器升级，请刷新或更新此窗口后重试。';
+  if (error?.name === 'QuotaExceededError' || /quota.*(?:exceed|full)|disk.*full/i.test(error?.message ?? '')) return t('storage.s206c0cb');
+  if (error?.name === 'VersionError') return t('storage.s95fed41');
   return error?.message || String(error);
 }
 
@@ -25,7 +26,7 @@ export function openDatabase(name, version, upgrade, { blockedTimeout = 8000 } =
     };
     request.onblocked = () => {
       if (typeof document !== 'undefined') document.dispatchEvent(new CustomEvent('rpen-storage-blocked', { detail: { name } }));
-      timer ??= setTimeout(() => { expired = true; reject(storageError({ name: 'StorageBlockedError', message: '数据库升级正在等待其他窗口。请关闭仍打开此编辑器的旧窗口或标签页，再重试；原有数据未被删除。' })); }, blockedTimeout);
+      timer ??= setTimeout(() => { expired = true; reject(storageError({ name: 'StorageBlockedError', message: t('storage.sbf19bb7') })); }, blockedTimeout);
     };
     request.onerror = () => { clearTimeout(timer); reject(request.error); };
     request.onsuccess = () => {

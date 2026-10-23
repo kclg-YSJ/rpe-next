@@ -1,3 +1,4 @@
+import { t } from '../i18n.mjs';
 export const EASING_NAMES = ['Linear', 'Sine Out', 'Sine In', 'Quad Out', 'Quad In', 'Sine InOut', 'Quad InOut', 'Cubic Out', 'Cubic In', 'Quart Out', 'Quart In', 'Cubic InOut', 'Quart InOut', 'Quint Out', 'Quint In', 'Expo Out', 'Expo In', 'Circ Out', 'Circ In', 'Back Out', 'Back In', 'Circ InOut', 'Back InOut', 'Elastic Out', 'Elastic In', 'Bounce Out', 'Bounce In', 'Bounce InOut', 'Elastic InOut'];
 
 import { assetUrl } from '../core/asset-url.mjs';
@@ -5,7 +6,7 @@ import { assetUrl } from '../core/asset-url.mjs';
 export function createEasingPicker(value, onChange, state = { open: false }) {
   const gallery = document.createElement('details'); gallery.open = state.open;
   gallery.addEventListener('toggle', () => { state.open = gallery.open; });
-  const summary = document.createElement('summary'); summary.textContent = '缓动图示 · 29 种'; gallery.append(summary);
+  const summary = document.createElement('summary'); summary.textContent = t('easing-picker.s36919c3'); gallery.append(summary);
   const choices = document.createElement('div'); choices.className = 'easing-gallery';
   const select = selected => {
     for (const button of choices.children) {

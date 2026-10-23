@@ -7,7 +7,7 @@ const output = join(root, 'dist');
 const pages = process.argv.includes('--pages');
 await rm(output, { recursive: true, force: true });
 await mkdir(output, { recursive: true });
-for (const name of ['src/core', 'src/application', 'src/platform', 'src/ui', 'assets', 'index.html', 'styles.css', 'LICENSE', 'NOTICE', 'protocols', 'schemas']) {
+for (const name of ['src/core', 'src/application', 'src/platform', 'src/ui', 'src/locales', 'src/i18n.mjs', 'assets', 'index.html', 'styles.css', 'LICENSE', 'NOTICE', 'protocols', 'schemas']) {
   await mkdir(join(output, name, '..'), { recursive: true });
   if (pages && name === 'protocols') {
     await mkdir(join(output, name), { recursive: true });

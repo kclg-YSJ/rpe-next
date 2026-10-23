@@ -2,10 +2,11 @@ import { captureSelection, controlSelection, commitSelectionEdit, selectionScale
 import { beatValue } from '../core/beat.mjs';
 import { snapTime } from '../core/edit-grid.mjs';
 import { usesNativeTextShortcut } from './keyboard.mjs';
+import { t } from '../i18n.mjs';
 
 const configurations = {
-  notes: [['note-move', '整体移动音符', '#ff0088'], ['note-scale', '横向缩放；按 1/2 固定首/尾音符', '#00aabb'], ['note-line', '移动到其他判定线', '#b400ff']],
-  events: [['event-move', '整体移动事件（保持长度）；横向拖动达到阈值后移线', '#ef4545'], ['event-end', '整体调整结束拍（首端不变）', '#00aabb'], ['event-start', '整体调整开始拍（尾端不变）', '#8a2be2']],
+  notes: [['note-move', t('batch-controls.s630b77a'), '#ff0088'], ['note-scale', t('batch-controls.sf072b96'), '#00aabb'], ['note-line', t('batch-controls.s27b1657'), '#b400ff']],
+  events: [['event-move', t('batch-controls.se72ad4e'), '#ef4545'], ['event-end', t('batch-controls.s339d424'), '#00aabb'], ['event-start', t('batch-controls.se1eb4de'), '#8a2be2']],
 };
 
 export class BatchControls {
@@ -152,7 +153,7 @@ export class BatchControls {
     Object.defineProperty(view, 'chart', { value: result.chart });
     Object.assign(view, { lineIndex: result.lineIndex, selection: result.selection, eventSelection: result.eventSelection, multiLineSelection: result.multiLineSelection, multiEventSelection: result.multiEventSelection });
     this.timeline.bulkPreview = { ...result, session: view };
-    this.groups.get(active.area).hint.textContent = result.lineIndex !== snapshot.lineIndex ? `线 ${snapshot.lineIndex} → ${result.lineIndex}` : kind === 'note-scale' ? '横向缩放' : `Δ ${deltaBeat.toFixed(3)} 拍`;
+    this.groups.get(active.area).hint.textContent = result.lineIndex !== snapshot.lineIndex ? t('batch-controls.s8c1e4c0', { p0: snapshot.lineIndex, p1: result.lineIndex }) : kind === 'note-scale' ? t('batch-controls.s7c422ba') : t('batch-controls.s4a02020', { p0: deltaBeat.toFixed(3) });
     this.timeline.changed();
   }
 
@@ -162,10 +163,10 @@ export class BatchControls {
     this.timeline.bulkPreview = null; this.timeline.scaleAxis = null; this.timeline.scaleAxisLine = null;
     try {
       if (Math.hypot(active.point.x - active.start.x, active.point.y - active.start.y) > 3) {
-        if (this.getSession() !== active.session || active.session.chart !== active.snapshot.chart || this.signature(active.area, active.session) !== active.signature) throw new Error('选中内容已改变，已取消拖动');
+        if (this.getSession() !== active.session || active.session.chart !== active.snapshot.chart || this.signature(active.area, active.session) !== active.signature) throw new Error(t('batch-controls.s48a33a3'));
         const result = active.result;
         this.active = null;
-        commitSelectionEdit(active.session, result, `控制球${active.button.title.split('；')[0]}`);
+        commitSelectionEdit(active.session, result, t('batch-controls.sba17db7', { p0: active.button.title.split('；')[0] }));
       }
     } catch (error) { this.reportError(error); }
     this.active = null; this.returnBall(active); this.timeline.changed();
