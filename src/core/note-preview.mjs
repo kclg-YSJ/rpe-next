@@ -28,6 +28,7 @@ export class NotePreview {
       draft.hitTimes = [...draft.notes].sort((left, right) => left.start - right.start);
       draft.holdIndex = new IntervalIndex(draft.notes.filter(entry => entry.note.type === 2), entry => entry.start, entry => entry.end);
       draft.staticNotes = draft.notes.filter(entry => (entry.note.speed ?? 1) === 0);
+      draft.staticIndex = new IntervalIndex(draft.staticNotes, entry => entry.start - (entry.note.visibleTime ?? 999999), entry => entry.end);
       draft.index = new IntervalIndex(draft.notes.filter(entry => (entry.note.speed ?? 1) !== 0), entry => Math.min(entry.floor, entry.tail), entry => Math.max(entry.floor, entry.tail));
       const runtime = Object.create(base);
       runtime.visibleNotes = (...args) => base.visibleNotes(...args).filter(entry => !replaced.has(entry.index)).concat(draft.visibleNotes(...args));

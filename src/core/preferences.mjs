@@ -14,6 +14,7 @@ export const DEFAULT_HOTKEYS = {
   StartView: 'I', EndView: 'O', JumpView: 'P', ReplayView: 'LEFTBRACKET', StartView_HOLD: 'T', JumpView_HOLD: 'U',
   SwitchUI: 'LEFTALT&N', ResetCamera: 'LEFTCTRL&M', CurveBegin: 'LEFTCTRL&F', CurveEnd: 'LEFTCTRL&G',
   ToggleMultiLine: 'J', SwitchMultiLineMode: 'K', DirectPlacement: 'LEFTALT&D',
+  PerformanceMonitor: 'F10',
   ShowLineInfo: 'TAB', PageLeft: 'LEFTARROW', PageRight: 'RIGHTARROW', PageUp: 'UPARROW', PageDown: 'DOWNARROW',
 };
 export const SUPPORTED_SETTINGS = ['CutRho', 'MusicVolume', 'maxHistorySize', 'AutoSave', 'AutoSaveGap', 'AutoSaveLimit', 'FpsLimit', 'showHotkey', 'SEVolume', 'NoteSize', 'LineScale', 'GridlineCount', 'ScrollSpeed', 'Alpha', 'RealTimeAlpha', 'ScrollAcc', 'ratioWidth', 'ratioHeight', 'BarWidth', 'BarAlpha', 'HighLight', 'autoplayT', 'showViewUI'];

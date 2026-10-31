@@ -1,4 +1,5 @@
 const { contextBridge, ipcRenderer } = require('electron');
+contextBridge.exposeInMainWorld('rpenPerformance', { version: 1, call: action => ipcRenderer.invoke('rpen-performance', action) });
 contextBridge.exposeInMainWorld('rpenAppUpdates', {
   version: 1,
   call: (action, value) => ipcRenderer.invoke('rpen-app-update', { action, value }),

@@ -7,11 +7,14 @@ export class EventTrack {
     this.fallback = fallback;
     this.events = (events ?? []).map(event => ({ event, start: tempo.seconds(event.startTime, factor), end: tempo.seconds(event.endTime, factor) }))
       .sort((left, right) => left.start - right.start);
+    this.cursor = 0;
   }
 
   value(seconds) {
     if (!this.events.length) return this.fallback;
-    const entry = this.events[Math.max(0, upperBound(this.events, seconds, item => item.start) - 1)];
+    const current = this.events[this.cursor], next = this.events[this.cursor + 1];
+    if (!Number.isFinite(seconds) || (!current || seconds < current.start && this.cursor !== 0) || next && seconds >= next.start) this.cursor = Math.max(0, upperBound(this.events, seconds, item => item.start) - 1);
+    const entry = this.events[this.cursor];
     return this.sample(entry, seconds);
   }
 

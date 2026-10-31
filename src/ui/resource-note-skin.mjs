@@ -34,6 +34,7 @@ export class ResourceNoteSkin {
   source(name,color) {const picture=this.images.get(name);return this.tintSource(`${this.id}:${name}`,picture,tint(color));}
   get hitLifetime() {return this.info.hitFxDuration;}
   get hitBatchCompatible() {return this.drawHit === nativeHitDraw;}
+  get noteBatchCompatible() {return this.head === nativeHeadDraw && this.hold === nativeHoldDraw && !this.info.holdRepeat;}
   hitRadius(size) {
     const sheet = dimensions(this.images.get('hit_fx.png')), width = size * this.info.hitFxScale, height = width * sheet.height / this.info.hitFx[1] / (sheet.width / this.info.hitFx[0]);
     return Math.max(Math.hypot(width, height) / 2, this.info.hideParticles ? 0 : width / 1.4 * 1.175);
@@ -52,10 +53,10 @@ export class ResourceNoteSkin {
     const size=dimensions(picture);const height=heightWidth*size.height/size.width;
     context.drawImage(picture,x-width/2,y-height/2,width,height);return true;
   }
-  hold(context,x,head,tail,width,highlight=false,showHead=true,color,heightWidth=width) {
+  hold(context,x,head,tail,width,highlight=false,showHead=true,color,heightWidth=width,zeroDirection=1) {
     const scale=this.noteScale(highlight);width*=scale;heightWidth*=scale;
     const name='hold'+(highlight?'_mh':'')+'.png';const picture=this.source(name,color);if(!picture)return false;
-    const size=dimensions(picture);const layout=holdSkinLayout(this.info,size,highlight,head,tail,width,heightWidth);
+    const size=dimensions(picture);const layout=holdSkinLayout(this.info,size,highlight,head,tail,width,heightWidth,zeroDirection);
     context.save();context.translate(x,head);context.scale(1,layout.direction);
     if(this.info.holdRepeat&&layout.length>0) {
       const key=name+':'+layout.tailPixels+':'+layout.headPixels+':'+tint(color).join(',');
@@ -66,7 +67,7 @@ export class ResourceNoteSkin {
       if(pattern) {const unit=width/body.width,unitY=heightWidth/body.width;context.save();context.translate(-width/2,-layout.length);context.scale(unit,unitY);context.fillStyle=pattern;context.fillRect(0,0,body.width,layout.length/unitY);context.restore();}
     } else if(layout.length>0) context.drawImage(picture,0,layout.tailPixels,size.width,layout.bodyPixels,-width/2,layout.bodyTop,width,layout.bodyHeight);
     if(layout.tailPixels) context.drawImage(picture,0,0,size.width,layout.tailPixels,-width/2,layout.tailY,width,layout.tailHeight);
-    if((showHead||this.info.holdKeepHead)&&layout.headPixels) context.drawImage(picture,0,size.height-layout.headPixels,size.width,layout.headPixels,-width/2,layout.headY,width,layout.headHeight);
+    if((showHead||this.info.holdKeepHead&&layout.length>0)&&layout.headPixels) context.drawImage(picture,0,size.height-layout.headPixels,size.width,layout.headPixels,-width/2,layout.headY,width,layout.headHeight);
     context.restore();return true;
   }
   drawHit(context,{age,x,y,size,rotation=0,color,seed=0,good=false}) {
@@ -108,3 +109,4 @@ export class ResourceNoteSkin {
 }
 
 const nativeHitDraw = ResourceNoteSkin.prototype.drawHit;
+const nativeHeadDraw = ResourceNoteSkin.prototype.head, nativeHoldDraw = ResourceNoteSkin.prototype.hold;

@@ -90,7 +90,7 @@ const catalogue = {
   hide: { maxSelectors: 300, selectors: 'CSS selectors and @component aliases', behavior: 'Presentation only; preserves functional nodes, values, application visibility state and hotkeys.' },
   panels: [...html.matchAll(/<section data-panel="([^"]+)"/g)].map(match => match[1]),
   staticIds: [...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]),
-  runtimeRoots: ['#settings-modal', '#language-settings', '#ui-language', '#dictation-settings', '.dictation-indicator', '.dictation-candidate', '.dictation-permission-dialog', '#editor-skin-settings', '#note-skin-settings', '#note-skin-modal', '#mod-manager', '#mod-import-warning', '.line-switcher', '.batch-controls', '.collaboration-chat', '.event-sample-panel', '.noise-sample-bar', '.skin-control-group', '[data-skin-decoration]'],
+  runtimeRoots: ['#performance-monitor', '#settings-modal', '#language-settings', '#ui-language', '#about-settings', '#app-update-badge', '#update-dialog', '#update-release-dialog', '#dictation-settings', '.dictation-indicator', '.dictation-candidate', '.dictation-permission-dialog', '#editor-skin-settings', '#note-skin-settings', '#note-skin-modal', '#mod-manager', '#mod-import-warning', '.line-switcher', '.batch-controls', '.collaboration-chat', '.event-sample-panel', '.noise-sample-bar', '.skin-control-group', '[data-skin-decoration]'],
   notes: ['Aliases, slots, tokens, canvas roles and listed state attributes are the API 3 contract; existing entries retain their meaning. Static IDs and unlisted classes are implementation details.', 'Do not use generated input order or translated label text to identify controls.'],
 };
 const root = new URL('../schemas/', import.meta.url); await mkdir(root, { recursive: true });

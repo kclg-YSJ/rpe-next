@@ -1,4 +1,5 @@
 import { SceneRuntime } from '../core/scene.mjs';
+import { noteIsAbove } from '../core/chart.mjs';
 import { NotePreview } from '../core/note-preview.mjs';
 import { prepareCanvas, NOTE_COLORS } from './timeline.mjs';
 import { DEFAULT_LINE_WIDTH, DEFAULT_LINE_HEIGHT, HIT_DURATION, hitFrame } from '../core/visual-constants.mjs';
@@ -14,6 +15,7 @@ import { NoisePreview } from './noise-preview.mjs';
 import { noiseRenderingLayers } from '../core/noise-skin.mjs';
 import { DEFAULT_EDITOR_PREFERENCES } from '../core/default-settings.mjs';
 import { HitEffectBatch } from './hit-effect-batch.mjs';
+import { NoteSpriteBatch, holdBatchWithinBudget } from './note-sprite-batch.mjs';
 
 const clamp = value => Math.max(0, Math.min(1, value));
 
@@ -27,13 +29,15 @@ export class Preview {
     this.noteDraft = new NotePreview(); this.simultaneousCounts = new Map();
     this.hitGeometry = new HitGeometryCache();
     this.hitBatch = new HitEffectBatch();
+    this.noteBatch = new NoteSpriteBatch();
     this.viewportOverflow = DEFAULT_EDITOR_PREFERENCES.viewportOverflow;
     this.overflowBlur = DEFAULT_EDITOR_PREFERENCES.overflowBlur;
     this.overflowDarken = DEFAULT_EDITOR_PREFERENCES.overflowDarken;
     this.overflowRevision = 0;
     this.invalidateOverflow = () => { this.overflowRevision++; this.invalidate?.(); };
     this.lineTextLayouts = new Map();
-    if (typeof document !== 'undefined') document.fonts?.addEventListener('loadingdone', () => { this.lineTextLayouts.clear(); this.invalidateOverflow(); });
+    this.guideTextCache = new Map();
+    if (typeof document !== 'undefined') document.fonts?.addEventListener('loadingdone', () => { this.lineTextLayouts.clear(); this.guideTextCache.clear(); this.invalidateOverflow(); });
     if (typeof document === 'undefined') { this.overlayCanvas = null; this.shaderCanvas = null; return; }
     this.overlayCanvas = document.createElement('canvas'); this.shaderCanvas = document.createElement('canvas');
     for (const [layer, canvasLayer] of [['shader', this.shaderCanvas], ['overlay', this.overlayCanvas]]) {
@@ -336,7 +340,9 @@ export class Preview {
     this.noteHitAreas = [];
     this.noteCenters?.clear();
     const noteOpacity = clamp(this.noteOpacity ?? 1);
-    for (const pass of this.passes) for (const index of pass.kind === 'line' ? [pass.index] : order) {
+    let holdCount = 0, noteCount = 0;
+    for (const entries of visibleNotes.values()) for (const entry of entries) { if (entry.note.type === 2) holdCount++; else noteCount++; }
+    const drawPass = (context, pass) => { for (const index of pass.kind === 'line' ? [pass.index] : order) {
       if (pass.kind === 'line' && ((!this.allLines && index !== selectedLine) || !this.forceLineOpacity && (chart.judgeLineList[index].attachUI || states[index].alpha <= 0) || states[index].scaleX === 0 || states[index].scaleY === 0)) continue;
       const runtime = this.noteDraft.runtime(this.scene, index);
       const state = states[index];
@@ -350,7 +356,8 @@ export class Preview {
       }
       context.save();
       context.translate(originX + state.x * scale, originY - state.y * scale);
-      context.rotate(state.rotation * Math.PI / 180);
+      const rotation = state.rotation * Math.PI / 180, cosine = Math.cos(rotation), sine = Math.sin(rotation);
+      context.rotate(rotation);
       if (pass.kind === 'line') {
         const packColor = this.skin?.resourcePack?.perfectColor;
         const usePackColor = packColor && (!runtime.line.Texture || runtime.line.Texture === 'line.png') && !runtime.line.attachUI && !runtime.line.extended?.textEvents?.length && !runtime.line.extended?.colorEvents?.length;
@@ -366,14 +373,13 @@ export class Preview {
         const baseNoteWidth = this.noteSize * scale * position.size, baseHeightWidth = this.noteSize * scale * position.sizeY;
         const noteWidth = baseNoteWidth * textureScale, heightWidth = baseHeightWidth * textureScale;
         const horizontal = position.x * scale;
-        const rotation = state.rotation * Math.PI / 180;
-        const worldX = state.x + position.x * Math.cos(rotation) + position.y * Math.sin(rotation);
-        const worldY = -state.y + position.x * Math.sin(rotation) - position.y * Math.cos(rotation);
+        const worldX = state.x + position.x * cosine + position.y * sine;
+        const worldY = -state.y + position.x * sine - position.y * cosine;
         const screenX = originX + worldX * scale;
         const screenY = originY + worldY * scale;
         const tail = note.type === 2 && Number.isFinite(position.tail) ? position.tail : position.y;
-        const tailWorldX = state.x + position.x * Math.cos(rotation) + tail * Math.sin(rotation);
-        const tailWorldY = -state.y + position.x * Math.sin(rotation) - tail * Math.cos(rotation);
+        const tailWorldX = state.x + position.x * cosine + tail * sine;
+        const tailWorldY = -state.y + position.x * sine - tail * cosine;
         const tailX = originX + tailWorldX * scale, tailY = originY + tailWorldY * scale;
         if (cullNotes) {
           const aspectKey = note.type * 2 + Number(highlight);
@@ -398,7 +404,7 @@ export class Preview {
         const tint = note.tint ?? note.color;
         context.fillStyle = Array.isArray(tint) ? `rgb(${tint.join(',')})` : NOTE_COLORS[note.type];
         let drawnHold = false;
-        if (note.type === 2) drawnHold = this.skin?.hold(context, horizontal, -position.y * scale, -position.tail * scale, baseNoteWidth, highlight, position.showHead, tint, baseHeightWidth);
+        if (note.type === 2) drawnHold = this.skin?.hold(context, horizontal, -position.y * scale, -position.tail * scale, baseNoteWidth, highlight, position.showHead, tint, baseHeightWidth, noteIsAbove(note) ? 1 : -1);
         if (note.type === 2 && !drawnHold) {
           context.globalAlpha *= 0.55;
           context.fillRect(horizontal - noteWidth / 2, -position.tail * scale, noteWidth, (position.tail - position.y) * scale);
@@ -412,6 +418,17 @@ export class Preview {
         context.restore();
       }
       context.restore();
+    } };
+    for (const pass of this.passes) {
+      const compatible = !this.noteBatch.failed && this.skin?.noteBatchCompatible;
+      const dense = compatible && (pass.kind === 'hold' ? holdCount > 512 && holdBatchWithinBudget(visibleNotes, states, seconds, this.noteSize, scale, width, height, this.skin) : pass.kind === 'note' && noteCount > 512);
+      const firstHit = this.noteHitAreas.length;
+      let batched = false;
+      try {
+        const target = dense ? this.noteBatch.begin(context, width, height, this.skin) : null;
+        if (target) { drawPass(target, pass); batched = this.noteBatch.end(); }
+      } catch { this.noteBatch.failed = true; }
+      if (!batched) { this.noteHitAreas.length = firstHit; drawPass(context, pass); }
     }
     if (this.showHitEffects) this.drawHits(context, seconds, order, originX, originY, scale, positionScale, renderViewport, width, height);
   }
@@ -506,14 +523,37 @@ export class Preview {
 
   drawGuides(context, scale, selectedLine) {
     if (!this.lineNumbers && !this.lineArrows) return;
+    if (this.guideChart !== this.chart || this.guideScale !== scale) { this.guideTextCache.clear(); this.guideChart = this.chart; this.guideScale = scale; }
+    const matrix = context.getTransform?.(), bounded = matrix && Number.isFinite(matrix.a) && context.canvas?.width > 0 && context.canvas?.height > 0 &&
+      !context.shadowBlur && !context.shadowOffsetX && !context.shadowOffsetY && (!context.filter || context.filter === 'none');
+    context.save();
+    if (this.lineNumbers) { context.font = `${30 * scale}px RPEGame, sans-serif`; context.textAlign = 'center'; context.textBaseline = 'top'; }
     for (const group of mergeGuides(this.guides, scale, this.mergeLineNumbers)) {
-      context.save(); context.translate(group.x, group.y); context.rotate(group.rotation * Math.PI / 180);
       const selected = group.indices.includes(selectedLine);
+      if (!this.lineNumbers && !(this.lineArrows && selected)) continue;
+      let label;
+      if (this.lineNumbers) {
+        const key = group.indices.join(','); label = this.guideTextCache.get(key);
+        if (!label || bounded && !label.measured) {
+          const text = formatLineNumbers(group.indices, this.chart.judgeLineList), metrics = bounded ? context.measureText(text) : null, fontSize = 30 * scale;
+          label = { text, measured: Boolean(bounded), left: -Math.max(metrics?.width / 2 || 0, metrics?.actualBoundingBoxLeft || 0) - 2, right: Math.max(metrics?.width / 2 || 0, metrics?.actualBoundingBoxRight || 0) + 2,
+            top: 4 * scale - Math.max(fontSize, metrics?.actualBoundingBoxAscent || 0) - 2, bottom: 4 * scale + Math.max(fontSize * 2, metrics?.actualBoundingBoxDescent || 0) + 2 };
+          if (this.guideTextCache.size >= 2048) this.guideTextCache.delete(this.guideTextCache.keys().next().value);
+          this.guideTextCache.set(key, label);
+        }
+      }
+      const angle = group.rotation * Math.PI / 180;
+      if (bounded) {
+        const arrow = this.lineArrows && selected ? 50 * scale : 0, left = Math.min(label?.left ?? 0, -arrow), right = Math.max(label?.right ?? 0, arrow), top = Math.min(label?.top ?? 0, -arrow), bottom = Math.max(label?.bottom ?? 0, arrow);
+        const cosine = Math.cos(angle), sine = Math.sin(angle), a = matrix.a * cosine + matrix.c * sine, b = matrix.b * cosine + matrix.d * sine,
+          c = matrix.c * cosine - matrix.a * sine, d = matrix.d * cosine - matrix.b * sine, x = matrix.a * group.x + matrix.c * group.y + matrix.e, y = matrix.b * group.x + matrix.d * group.y + matrix.f;
+        if (x + Math.max(left * a, right * a) + Math.max(top * c, bottom * c) < -1 || x + Math.min(left * a, right * a) + Math.min(top * c, bottom * c) > context.canvas.width + 1 ||
+            y + Math.max(left * b, right * b) + Math.max(top * d, bottom * d) < -1 || y + Math.min(left * b, right * b) + Math.min(top * d, bottom * d) > context.canvas.height + 1) continue;
+      }
+      context.save(); context.translate(group.x, group.y); context.rotate(angle);
       context.fillStyle = selected ? '#00c800' : '#fff';
       if (this.lineNumbers) {
-        context.font = `${30 * scale}px RPEGame, sans-serif`; context.textAlign = 'center'; context.textBaseline = 'top';
-        const text = formatLineNumbers(group.indices, this.chart.judgeLineList);
-        context.fillText(text, 0, 4 * scale);
+        context.fillText(label.text, 0, 4 * scale);
       }
       if (this.lineArrows && selected) {
         const arrow = this.skin?.images.get('Arrow2');
@@ -525,6 +565,7 @@ export class Preview {
       }
       context.restore();
     }
+    context.restore();
   }
 
   drawLine(context, line, state, scale) {

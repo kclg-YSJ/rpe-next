@@ -22,15 +22,17 @@ async function atomic(path, data) {
   finally { await rm(tmp, { force: true }).catch(() => {}); }
 }
 export async function trustedUpdateFetch(fetcher, address, options = {}, asset = false) {
-  let url = officialUpdateUrl(address, { asset });
+  const validate = (url, options) => { try { return officialUpdateUrl(url, options); } catch { throw fail('UPDATE_ADDRESS'); } };
+  let url = validate(address, { asset });
   for (let i = 0; i < 6; i++) {
     const response = await fetcher(url, { ...options, redirect: 'manual', credentials: 'omit' });
     if (![301, 302, 303, 307, 308].includes(response.status)) return response;
     const location = response.headers.get('location'); await response.body?.cancel();
-    if (!asset || !location) throw fail('UPDATE_NETWORK');
-    url = officialUpdateUrl(new URL(location, url), { asset: true, redirect: true });
+    if (!asset || !location) throw fail('UPDATE_REDIRECT');
+    let destination; try { destination = new URL(location, url); } catch { throw fail('UPDATE_ADDRESS'); }
+    url = validate(destination, { asset: true, redirect: true });
   }
-  throw fail('UPDATE_NETWORK');
+  throw fail('UPDATE_REDIRECT');
 }
 function backgroundTask(data, progress) {
   return new Promise((accept, reject) => {
@@ -67,7 +69,9 @@ export class DesktopUpdates {
     this.writing = (this.writing ?? Promise.resolve()).catch(() => {}).then(() => atomic(this.statePath, this.state)); return this.writing;
   }
   info() {
+    const startupNotes = this.state.releaseNotes;
     return { ...this.checker.info(), platform: this.platform, arch: this.arch, desktop: true, canInstall: this.supported, phase: this.phase, transfer: this.transfer, error: this.error ?? null,
+      startupNotes: startupNotes?.version === this.version && startupNotes.shown !== true && typeof startupNotes.notes === 'string' ? { version: startupNotes.version, notes: startupNotes.notes.slice(0, 100000) } : null,
       packages: this.state.packages.map(({ id, version, name, size, ready }) => ({ id, version, name, size, ready: Boolean(ready) })) };
   }
   emit() { this.progress(this.info()); }
@@ -254,9 +258,22 @@ export class DesktopUpdates {
       if (!record || job.directory !== dirname(resolve(path)) || job.target !== this.target || job.version !== this.version || job.version !== record.version) return;
       await this.packageRecord(record.id); await assertUpdateJob(job);
       const approved = await json(join(job.directory, 'install-approved.json'));
-      if (approved.token !== job.token) return;
+      const canceled = await json(join(job.directory, 'install-canceled.json')).catch(() => null);
+      if (approved.token !== job.token || canceled?.token === job.token) return;
+      if (this.state.releaseNotes?.job !== job.id) {
+        const downloaded = await this.packageRecord(record.id);
+        this.state.releaseNotes = { job: job.id, version: job.version, notes: String(downloaded.metadata.release?.notes ?? '').slice(0, 100000), shown: false };
+        await this.persist();
+      }
       await atomic(join(job.directory, 'app-ready.json'), { token: job.token });
     } catch { /* Invalid or foreign launch receipts have no filesystem effects. */ }
+  }
+  async notesSeen(version) {
+    const notes = this.state.releaseNotes;
+    if (notes?.version === this.version && version === this.version && notes.shown !== true) {
+      notes.shown = true; await this.persist(); this.emit();
+    }
+    return this.info();
   }
 }
 
@@ -274,6 +291,7 @@ export function installDesktopUpdates({ ipcMain, service, window, origin, dialog
       else if (action === 'install') result = await service.install(value);
       else if (action === 'delete') result = await service.deletePackage(value);
       else if (action === 'ready') { await service.acknowledge(startupJob); result = service.info(); }
+      else if (action === 'notes-seen') result = await service.notesSeen(value);
       else if (action === 'location') {
         const selected = await dialog.showOpenDialog(win, { properties: ['openDirectory', 'createDirectory'] });
         result = selected.canceled ? service.info() : await service.chooseCache(selected.filePaths[0]);

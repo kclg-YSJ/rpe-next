@@ -723,7 +723,7 @@ export class Timeline {
         if (renderedHorizontal == null) continue;
         context.globalAlpha = note.isFake ? 0.45 : noteIsAbove(note) ? 1 : 0.7;
         context.fillStyle = NOTE_COLORS[note.type];
-        const textured = note.type === 2 ? this.skin?.hold(context, renderedHorizontal, vertical, endVertical, baseWidth, highlight, true, note.tint ?? note.color, 68 * this.renderNoteScale) : this.skin?.head(context, note.type, renderedHorizontal, vertical, baseWidth, highlight, note.tint ?? note.color, 5 * this.renderNoteScale, 68 * this.renderNoteScale);
+        const textured = note.type === 2 ? this.skin?.hold(context, renderedHorizontal, vertical, endVertical, baseWidth, highlight, true, note.tint ?? note.color, 68 * this.renderNoteScale, direct ? side : 1) : this.skin?.head(context, note.type, renderedHorizontal, vertical, baseWidth, highlight, note.tint ?? note.color, 5 * this.renderNoteScale, 68 * this.renderNoteScale);
         if (!textured && note.type === 2) {
           context.globalAlpha *= 0.45;
           const top = Math.max(-10, Math.min(vertical, endVertical)), bottom = Math.min(height + 10, Math.max(vertical, endVertical));
@@ -752,7 +752,7 @@ export class Timeline {
       const pendingHorizontal = this.noteHorizontal(this.pendingHold.positionX, lineIndex);
       const noteWidth = this.noteBaseWidth({ size: this.getSession().noteDefaults.size });
       context.globalAlpha = 0.65;
-      if (!this.skin?.hold(context, pendingHorizontal, head, tail, noteWidth)) context.fillRect(pendingHorizontal - noteWidth / 2, Math.min(head, tail), noteWidth, Math.abs(tail - head));
+      if (!this.skin?.hold(context, pendingHorizontal, head, tail, noteWidth, false, true, undefined, noteWidth, direct ? side : 1)) context.fillRect(pendingHorizontal - noteWidth / 2, Math.min(head, tail), noteWidth, Math.abs(tail - head));
       context.globalAlpha = 1;
       if (direct) context.restore();
     } else if (this.cursor && this.tool) {

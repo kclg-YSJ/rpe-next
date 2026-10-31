@@ -9,7 +9,7 @@ function setText(element, value) { if (element.textContent !== value) element.te
 function bytes(value) { return (value / 1024 ** 2).toFixed(1) + ' MB'; }
 
 export class AboutUpdates {
-  constructor(settings, { client = new AppUpdateClient(), dirty = () => false, beforeRestart = async () => {}, reload = () => location.reload() } = {}) {
+  constructor(settings, { client = new AppUpdateClient(), dirty = () => false, beforeRestart = async () => {}, reload = () => location.reload(), startupReady = async () => {} } = {}) {
     Object.assign(this, { settings, client, dirty, beforeRestart, reload }); this.root = settings.querySelector('#about-settings');
     const heading = node('div', 'about-heading'); const emblem = node('div', 'about-emblem', 'RN'); emblem.setAttribute('aria-hidden', 'true');
     const name = node('div'); name.append(node('h3', null, 'Re:PhiEdit Next'), node('span', 'about-subtitle', t('update.current'))); this.version = node('strong', 'about-version', APP_VERSION); name.append(this.version); heading.append(emblem, name);
@@ -30,13 +30,41 @@ export class AboutUpdates {
     this.progressLabel = node('span');
     this.cancel = button(t('update.cancelDownload'), () => this.client.action('cancel').catch(error => this.showError(error)));
     this.progressRow = node('div', 'about-progress'); this.progressRow.hidden = true; this.progressRow.append(this.progress, this.progressLabel, this.cancel);
-    this.notes = node('details', 'about-notes'); this.notes.id = 'update-notes'; this.notes.append(node('summary', null, t('update.notes'))); this.notesBody = node('div', 'agent-markdown'); this.notes.append(this.notesBody);
+    this.notes = node('details', 'about-notes'); this.notes.id = 'update-notes'; this.notesSummary = node('summary', null, t('update.notes')); this.notes.append(this.notesSummary); this.notesBody = node('div', 'agent-markdown'); this.notes.append(this.notesBody);
     this.packages = node('div', 'about-packages'); this.packages.id = 'update-packages';
     this.root.append(heading, info, auto, actions, this.progressRow, this.status, this.notes, this.packages);
     this.dialog = node('dialog', 'update-dialog'); this.dialog.id = 'update-dialog'; this.dialog.setAttribute('aria-labelledby', 'update-dialog-title'); document.body.append(this.dialog);
     this.footer = document.querySelector('#app-version'); this.footer.onclick = () => this.open();
+    this.footerVersion = node('span', 'app-version-text'); this.footerSeparator = document.createTextNode('');
+    this.footerBadge = node('span', 'app-update-badge', t('update.available')); this.footerBadge.id = 'app-update-badge'; this.footerBadge.hidden = true;
+    this.footer.replaceChildren(this.footerVersion, this.footerSeparator, this.footerBadge);
     client.addEventListener('change', () => this.render()); this.render();
-    this.ready = client.initialize().catch(error => { this.showError(error); });
+    this.ready = client.initialize().then(async () => { await startupReady(); this.showStartupNotes(); }).catch(error => { this.showError(error); });
+  }
+  showStartupNotes() {
+    const release = this.client.state.startupNotes;
+    if (!release || release.version !== this.client.state.version || this.startupNotesOffered) return;
+    this.startupNotesOffered = true;
+    const dialog = node('dialog', 'update-release-dialog'); dialog.id = 'update-release-dialog'; dialog.setAttribute('aria-labelledby', 'update-release-title');
+    const header = node('div', 'update-release-heading'), title = node('h2', null, t('update.notesForVersion', { version: release.version })); title.id = 'update-release-title';
+    const dismiss = button('×', () => dialog.close(), 'update-release-dismiss'); dismiss.setAttribute('aria-label', t('update.close'));
+    header.append(title, dismiss);
+    const content = node('div', 'update-release-content agent-markdown'); content.tabIndex = 0; content.setAttribute('aria-label', t('update.notes'));
+    renderAgentMarkdown(content, release.notes || t('update.noNotes'));
+    const actions = node('div', 'update-release-actions'); actions.append(button(t('update.close'), () => dialog.close(), 'primary'));
+    dialog.append(header, content, actions); document.body.append(dialog);
+    const cleanup = () => { observer.disconnect(); document.removeEventListener('visibilitychange', tryShow); };
+    const tryShow = () => {
+      if (document.visibilityState === 'hidden' || document.querySelector('dialog[open]')) return;
+      cleanup(); dialog.showModal(); content.scrollTop = 0;
+      // A normal restart must not repeat this window, even if the user quits
+      // while it is open. Only an acknowledged installation creates the record.
+      this.client.action('notes-seen', release.version).catch(() => {});
+    };
+    const observer = new MutationObserver(tryShow); observer.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['open'] });
+    document.addEventListener('visibilitychange', tryShow);
+    dialog.addEventListener('close', () => { cleanup(); dialog.remove(); }, { once: true });
+    tryShow();
   }
   open() {
     const search = this.settings.querySelector('#settings-search'); search.value = ''; search.dispatchEvent(new Event('input'));
@@ -84,7 +112,8 @@ export class AboutUpdates {
     const system = { win32: 'Windows', darwin: 'macOS', linux: 'Linux', web: t('update.web') }[state.platform] ?? state.platform;
     setText(this.platform, system + (state.arch ? ' · ' + state.arch : '') + (state.desktop && !state.canInstall ? ' · ' + t('update.development') : ''));
     setText(this.latest, state.latest ? state.latest.version + (available ? ' · ' + t('update.available') : ' · ' + t('update.upToDate')) : t(state.checked ? 'update.noRelease' : 'update.notChecked'));
-    setText(this.footer, 'Re:PhiEdit Next · ' + state.version + (available ? ' · ' + t('update.available') : '')); this.footer.classList.toggle('has-update', Boolean(available));
+    setText(this.footerVersion, 'Re:PhiEdit Next · ' + state.version); this.footerSeparator.data = available ? ' · ' : '';
+    setText(this.footerBadge, t('update.available')); this.footerBadge.hidden = !available; this.footer.classList.toggle('has-update', Boolean(available));
     this.auto.checked = state.autoCheck; this.auto.disabled = false; this.check.disabled = busy;
     const ready = state.packages?.find(p => p.version === state.latest?.version && p.ready);
     this.download.hidden = !state.desktop; this.download.disabled = busy || !available || !state.canInstall;
@@ -103,6 +132,7 @@ export class AboutUpdates {
     this.status.classList.toggle('is-error', Boolean(code));
     setText(this.status, code ? t(`update.error.${code}`) : phase !== 'idle' ? t(`update.phase.${phase}`) : state.checked ? t('update.checked', { time: new Date(state.checked).toLocaleString(undefined, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) }) : '');
     const notes = state.latest?.notes ?? ''; this.notes.hidden = !notes;
+    setText(this.notesSummary, state.latest?.version ? t('update.notesForVersion', { version: state.latest.version }) : t('update.notes'));
     if (this.lastNotes !== notes) { this.lastNotes = notes; renderAgentMarkdown(this.notesBody, notes); }
     const signature = JSON.stringify([state.packages, state.version, busy]);
     if (signature !== this.packagesSignature) {

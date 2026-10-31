@@ -3,6 +3,7 @@
 import '../platform/locale-bootstrap.mjs';
 import { EditorSession } from '../application/session.mjs';
 import { FrameLimiter, validFpsLimit } from '../core/frame-timing.mjs';
+import { PerformanceMonitor } from './performance-monitor.mjs';
 import { assertChart, createChart, EVENT_TYPES, previewLimitations } from '../core/chart.mjs';
 import { beatValue, parseBeat, formatBeat, fromNumber, upperBound } from '../core/beat.mjs';
 import { TempoMap } from '../core/tempo.mjs';
@@ -632,6 +633,34 @@ const playback = new EditorPlayback(audio, hitSounds, () => {
   preview.effectsSince = realtimePreview.effectsSince = chartSeconds();
   invalidate();
 });
+let performanceMonitor = null, monitorLoop = null;
+function togglePerformanceMonitor() {
+  performanceMonitor ??= new PerformanceMonitor({
+    state: () => ({ canRun: hasDocument && !atHome && !dialogOpen() && !mods?.runtime.locks.size && Boolean(audio.buffer || audio.media), project: versionRepoId,
+      name: session.chart.META.name || chartName, duration: audio.duration, rate: audio.rate, time: audio.time, playing: audio.playing, preview: preview.visible }),
+    startPlayback: async begin => {
+      directPlacement.close();
+      if (eventSampler.active) eventSampler.finish(false);
+      if (noiseEditor.sampleMode) noiseEditor.endSample(false);
+      if (noteTrackingPanel.sampling) noteTrackingPanel.endSample();
+      if (noiseTrackingPanel.sampling) noiseTrackingPanel.endSample();
+      monitorLoop = loop; loop = null; element('#loop-enabled').checked = false;
+      playback.pause(); togglePreview(true, true, false, { autoplay: false }); playback.seek(0);
+      await hitSounds.prepare();
+      if (!begin()) return;
+      await togglePlayback();
+    },
+    stopPlayback: () => { playback.pause(); loop = monitorLoop; monitorLoop = null; element('#loop-enabled').checked = Boolean(loop); invalidate(); },
+    notify: message => notify(message, 'info', 3500),
+  });
+  performanceMonitor.toggle();
+}
+window.addEventListener('keydown', event => {
+  if (!shortcutMatches(event, preferences.hotkeys.PerformanceMonitor ?? DEFAULT_HOTKEYS.PerformanceMonitor) || event.isComposing || isTextEntry(event.target)) return;
+  if (document.querySelector('dialog.hotkey-dialog[open]')) return;
+  event.preventDefault(); event.stopImmediatePropagation();
+  if (!event.repeat) togglePerformanceMonitor();
+}, true);
 timeline.onDragScroll = seconds => playback.seek(audio.time + seconds);
 const autoSave = new AutoSaveClock(async () => {
   const current = session; const document = current.chart; const snapshot = { ...document }; delete snapshot.chartTime;
@@ -781,6 +810,7 @@ subscribeLibrary(change => {
 });
 
 function setHome(visible) {
+  if (visible) performanceMonitor?.finish('interrupted');
   if (visible) diagnosticHighlight.clear();
   if (visible) { placementDefaultsPanel.hide(); session.noteDefaults = normalizeNoteDefaults(); diagnostics.reset(); lastDiagnosticSignature = null; }
   if (visible) quickCurve.cancel();
@@ -948,6 +978,7 @@ for (const form of document.querySelectorAll('#properties, #event-properties')) 
 for (const button of document.querySelectorAll('[data-icon]')) button.style.setProperty('--icon', `url('${assetUrl(`rpe/Texture/icon/${button.dataset.icon}.png`)}')`);
 function togglePreview(force, stay = false, replay = false, { autoplay = true } = {}) {
   const visible = force ?? !preview.visible;
+  if (!visible) performanceMonitor?.finish('interrupted');
   linePicker.hide();
   if (!visible) directPlacement.close();
   if (visible) clearNoteSourceToast();
@@ -1171,6 +1202,7 @@ function renderSession() {
 session.addEventListener('change', renderSession);
 
 function replaceChart(chart, name, nextAssets = new Map(), nextFolders = [], options = {}) {
+  performanceMonitor?.finish('interrupted');
   diagnosticHighlight.clear();
   diagnostics.reset(); lastDiagnosticSignature = null;
   placementDefaultsPanel.hide();
@@ -2050,7 +2082,7 @@ function frame(timestamp) {
     autoSave.tick(timestamp, editorPreferences.autoSave ?? preferences.settings.autoSave, interval, session.history.dirty && session.chart !== lastDraftDocument || mediaDirty);
   }
   if (audio.playing && !mods?.runtime.locks.size && loop && currentBeat() >= loop.end) seekBeat(loop.start, false);
-  if (audio.playing && audio.time >= audio.duration) { audio.pause(); invalidate(); }
+  if (audio.playing && audio.time >= audio.duration) { audio.pause(); if (performanceMonitor?.run) performanceMonitor.finish('complete'); invalidate(); }
   hitSounds.tick(session.chart, tempo, session.lineIndex);
   if (!atHome && (audio.playing || dirtyFrame || eventSampler.looping || trajectoryPanel.active || noteTrackingPanel.active && noteTrackingPanel.animating || noiseTrackingPanel.active && noiseTrackingPanel.animating || noiseFitPanel.active && noiseFitPanel.options.animate && noiseFitPanel.options.show && noiseFitPanel.previewChart && !noiseFitPanel.fullPreview) && frameLimiter.shouldRender(timestamp, editorPreferences.fpsLimit ?? preferences.settings.fpsLimit)) {
     frameSampleCount++;
@@ -2082,9 +2114,9 @@ function frame(timestamp) {
     const trackingView = noteTrackingPanel.tick(timestamp, chartSeconds(), audio.playing) ?? noiseTrackingPanel.tick(timestamp, chartSeconds(), audio.playing);
     const quickCurveView = quickCurve.view();
     const modView=emitModHook('preview:before',{chart:trackingView?.chart ?? noiseView?.chart ?? eventSampleView?.chart ?? noiseFitView?.chart ?? textView?.chart ?? trajectoryView?.chart ?? (multiEdit.active && multiEdit.previewHovered && multiEdit.previewEnabled.checked && multiEdit.result ? multiEdit.result.chart : viewSession.chart),seconds:trackingView?.seconds ?? noiseView?.seconds ?? eventSampleView?.seconds ?? noiseFitView?.seconds ?? textView?.seconds ?? trajectoryView?.seconds ?? chartSeconds(),lineIndex:viewSession.lineIndex});
-    const viewChart = quickCurveView ?? modView.chart;
+    const viewChart = performanceMonitor?.run ? session.chart : quickCurveView ?? modView.chart;
     preview.noteOverrides = realtimePreview.noteOverrides = viewChart === session.chart ? noteOverrides : null;
-    const viewSeconds = modView.seconds;
+    const viewSeconds = performanceMonitor?.run ? chartSeconds() : modView.seconds;
     const previewAllLines = preview.allLines; const previewEffects = preview.showHitEffects;
     const previewNumbers = preview.lineNumbers; const previewArrows = preview.lineArrows;
     const forcedLineOpacity = preview.forceLineOpacity;
@@ -2141,6 +2173,7 @@ function frame(timestamp) {
       lastPaint = timestamp;
     }
     dirtyFrame = false;
+    if (performanceMonitor?.enabled) { const end = performance.now(); performanceMonitor.frame(end, end - start); }
   }
   requestAnimationFrame(frame);
 }
@@ -2387,6 +2420,7 @@ agentPanel = new AgentPanel(modEditor, { activate: activatePane, notify, prepend
 });
 mods=new ModManager(modEditor,{notify,invalidate});
 const aboutUpdates = new AboutUpdates(settingsDialog, {
+  startupReady: () => Promise.all([editorSkins.ready, noteSkins.ready, mods.ready]),
   dirty: () => hasDocument && (session.history.dirty || assetDirty),
   beforeRestart: async () => {
     playback.pause(); noiseEditor.flush(); await agentPanel?.stopAndFlush();

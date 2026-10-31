@@ -10,10 +10,46 @@ export function lineGuides(states, lines, order, width, height, scale) {
 
 export function mergeGuides(guides, scale, enabled = true) {
   const groups = [];
+  const radius = 10 * scale, indexable = enabled && guides.length >= 64 && Number.isFinite(radius) && radius > 0;
+  let grid = null;
+  const insert = (guide, index) => {
+    if (!Number.isFinite(guide.x) || !Number.isFinite(guide.y) || !Number.isFinite(guide.rotation)) return;
+    const x = Math.floor(guide.x / radius), y = Math.floor(guide.y / radius), rotation = Math.floor(guide.rotation / .01);
+    let column = grid.get(x); if (!column) { column = new Map(); grid.set(x, column); }
+    let cell = column.get(y); if (!cell) { cell = new Map(); column.set(y, cell); }
+    let bucket = cell.get(rotation); if (!bucket) { bucket = []; cell.set(rotation, bucket); } bucket.push(index);
+  };
   for (const guide of guides) {
-    const group = enabled && groups.find(candidate => Math.hypot(candidate.x - guide.x, candidate.y - guide.y) < 10 * scale && Math.abs(candidate.rotation - guide.rotation) < 0.01);
+    let group;
+    // A handful of shared anchors is cheaper to scan directly; only build the
+    // index when the number of distinct groups actually grows.
+    if (!grid && indexable && groups.length >= 32) { grid = new Map(); groups.forEach(insert); }
+    const indexed = grid && Number.isFinite(guide.x) && Number.isFinite(guide.y) && Number.isFinite(guide.rotation);
+    let x, y, rotation;
+    if (indexed) {
+      x = Math.floor(guide.x / radius); y = Math.floor(guide.y / radius); rotation = Math.floor(guide.rotation / .01);
+      let first = Infinity;
+      for (let dx = -1; dx <= 1; dx++) {
+        const column = grid.get(x + dx); if (!column) continue;
+        for (let dy = -1; dy <= 1; dy++) {
+          const cell = column.get(y + dy); if (!cell) continue;
+          for (let dr = -1; dr <= 1; dr++) {
+            const bucket = cell.get(rotation + dr); if (!bucket) continue;
+            for (const index of bucket) {
+              const candidate = groups[index];
+              // Preserve the first matching anchor, not a transitive cluster or
+              // the nearest point, so labels and selected arrows are unchanged.
+              if (index < first && Math.abs(candidate.rotation - guide.rotation) < .01 && Math.hypot(candidate.x - guide.x, candidate.y - guide.y) < radius) { group = candidate; first = index; }
+            }
+          }
+        }
+      }
+    } else if (enabled) group = groups.find(candidate => Math.hypot(candidate.x - guide.x, candidate.y - guide.y) < radius && Math.abs(candidate.rotation - guide.rotation) < 0.01);
     if (group) group.indices.push(guide.index);
-    else groups.push({ ...guide, indices: [guide.index] });
+    else {
+      if (indexed) insert(guide, groups.length);
+      groups.push({ ...guide, indices: [guide.index] });
+    }
   }
   return groups;
 }

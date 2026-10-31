@@ -103,12 +103,15 @@ export function noteSkinFrame(info, age) {
   return {index,column:index%info.hitFx[0],row:Math.floor(index/info.hitFx[0])};
 }
 
-export function holdSkinLayout(info, image, highlighted, head, tail, width, heightWidth = width) {
+export function holdSkinLayout(info, image, highlighted, head, tail, width, heightWidth = width, zeroDirection = 1) {
   const [tailPixels,headPixels] = info[highlighted ? 'holdAtlasMH' : 'holdAtlas'];
   const scale = heightWidth / image.width; const headHeight = headPixels * scale; const tailHeight = tailPixels * scale;
-  const length = Math.abs(tail-head); const direction = tail <= head ? 1 : -1;
+  // Coincident endpoints cannot tell above from below, so retain the caller's side.
+  const length = Math.abs(tail-head); const direction = length === 0 ? zeroDirection : tail < head ? 1 : -1;
+  // Separate the caps when the body collapses so neither texture covers the other.
+  const compact = info.holdCompact && length > 0;
   return {direction,length,scale,headHeight,tailHeight,bodyPixels:image.height-tailPixels-headPixels,
-    headY:info.holdCompact ? -headHeight/2 : 0,
-    tailY:-length-(info.holdCompact ? tailHeight/2 : tailHeight),
+    headY:compact ? -headHeight/2 : 0,
+    tailY:-length-(compact ? tailHeight/2 : tailHeight),
     bodyTop:-length,bodyHeight:length,tailPixels,headPixels};
 }

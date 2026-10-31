@@ -23,12 +23,12 @@ void main() {
 }`;
 
 export class HitEffectBatch {
-  constructor() { this.vertices = new Float32Array(9 * 6 * 4096); this.images = new WeakMap(); this.failed = false; }
+  constructor({ antialias = false, fragment = FRAGMENT } = {}) { this.antialias = antialias; this.fragment = fragment; this.vertices = new Float32Array(9 * 6 * 4096); this.images = new WeakMap(); this.failed = false; }
   initialize() {
     if (this.gl || this.failed) return;
     try {
       this.canvas = document.createElement('canvas');
-      const gl = this.canvas.getContext('webgl2', { alpha: true, premultipliedAlpha: true, antialias: false, depth: false, stencil: false });
+      const gl = this.canvas.getContext('webgl2', { alpha: true, premultipliedAlpha: true, antialias: this.antialias, depth: false, stencil: false });
       if (!gl) throw Error('WebGL2 unavailable');
       this.canvas.addEventListener('webglcontextlost', event => { event.preventDefault(); this.failed = true; });
       const shader = (type, source) => {
@@ -36,7 +36,7 @@ export class HitEffectBatch {
         if (!gl.getShaderParameter(result, gl.COMPILE_STATUS)) throw Error(gl.getShaderInfoLog(result));
         return result;
       };
-      const vertex = shader(gl.VERTEX_SHADER, VERTEX), fragment = shader(gl.FRAGMENT_SHADER, FRAGMENT), program = gl.createProgram();
+      const vertex = shader(gl.VERTEX_SHADER, VERTEX), fragment = shader(gl.FRAGMENT_SHADER, this.fragment), program = gl.createProgram();
       gl.attachShader(program, vertex); gl.attachShader(program, fragment); gl.linkProgram(program); gl.deleteShader(vertex); gl.deleteShader(fragment);
       if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw Error(gl.getProgramInfoLog(program));
       this.gl = gl; this.program = program; this.resolution = gl.getUniformLocation(program, 'resolution'); this.buffer = gl.createBuffer();

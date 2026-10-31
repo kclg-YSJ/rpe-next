@@ -544,7 +544,7 @@ footer .chart-info { font-size: 12px; max-width: min(900px, 70vw); }
 footer .chart-info dd { color: #ddd; }
 footer #chart-info-toggle { padding: 3px 8px; color: var(--accent); }
 footer #app-version { border: 0; background: transparent; color: inherit; font: inherit; padding: 2px 0; white-space: nowrap; }
-footer #app-version.has-update { color: var(--accent); }
+footer #app-update-badge { color: var(--rpen-info, #8dd6ee); font-weight: 600; }
 #about-settings .about-heading { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
 #about-settings .about-heading h3 { margin: 0 0 9px; font-size: 20px; }
 .about-emblem { display: grid; place-items: center; flex: none; width: 56px; height: 56px; border-radius: 14px; background: color-mix(in srgb, var(--accent), transparent 86%); color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent), transparent 60%); font-size: 21px; font-weight: 700; letter-spacing: -2px; }
@@ -560,6 +560,14 @@ footer #app-version.has-update { color: var(--accent); }
 .about-packages { margin-top: 20px; border-top: 1px solid var(--line); }.about-packages h4 { font-size: 13px; font-weight: 500; margin: 14px 0 4px; }
 .about-package { display: flex; align-items: center; gap: 8px; padding: 12px 0; border-bottom: 1px solid color-mix(in srgb, var(--line), transparent 55%); }.about-package-label { flex: 1; display: flex; align-items: baseline; gap: 12px; }.about-package-label small { color: var(--muted, #aaa); }
 .update-dialog { width: min(400px, calc(100vw - 48px)); padding: 24px; border-radius: 12px; color: var(--rpen-text, #eee); background: var(--rpen-surface, #303030); border: 1px solid var(--line); }.update-dialog h2 { font-size: 16px; line-height: 1.6; margin: 0 0 24px; }.update-dialog .modal-actions { flex-wrap: wrap; }.update-dialog::backdrop { background: #0008; }
+.update-release-dialog { box-sizing: border-box; width: min(680px, calc(100vw - 40px)); max-height: min(740px, calc(100dvh - 64px)); padding: 0; overflow: hidden; border-radius: 12px; border: 1px solid var(--line, #666); background: var(--rpen-surface, #303030); color: var(--rpen-text, #eee); }
+.update-release-dialog[open] { display: flex; flex-direction: column; }
+.update-release-heading { display: flex; align-items: center; justify-content: space-between; flex: none; gap: 16px; padding: 18px 22px; border-bottom: 1px solid var(--line, #555); }
+.update-release-heading h2 { margin: 0; font-size: 18px; font-weight: 600; line-height: 1.5; }
+.update-release-dismiss { flex: none; border: 0; background: transparent; color: var(--rpen-muted, #aaa); font: 24px/1 sans-serif; padding: 4px 7px; }
+.update-release-content { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 14px 24px 22px; font-size: 13px; line-height: 1.7; }
+.update-release-actions { flex: none; display: flex; justify-content: flex-end; gap: 8px; padding: 12px 22px; border-top: 1px solid var(--line, #555); }
+.update-release-dialog::backdrop { background: #0009; }
 #tips { max-width: 42%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #c6b477; }
 #status { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 dialog { color: #eee; background: #303030; border: 1px solid #aaa; width: min(850px, 88vw); max-height: 90vh; padding: 22px; }

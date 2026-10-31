@@ -25,6 +25,7 @@ else {
   let mainWindow;
   const cancelAgentNetwork = require('./agent-network.cjs').installAgentNetwork({ ipcMain, net, origin, window: () => mainWindow });
   require('./agent-capture.cjs').installAgentCapture({ ipcMain, origin, window: () => mainWindow });
+  const stopPerformanceMonitor = require('./performance-monitor.cjs').installPerformanceMonitor({ app, ipcMain, origin, window: () => mainWindow });
   app.on('before-quit', cancelAgentNetwork);
   let native, closing = false, relocating = false;
   app.on('before-quit', event => {
@@ -42,10 +43,11 @@ else {
   app.whenReady().then(async () => {
     const root = await realpath(resolve(__dirname, '..'));
     const { DesktopUpdates, installDesktopUpdates } = await import(pathToFileURL(resolve(__dirname, 'app-update.mjs')).href);
+    const { createUpdateFetcher } = await import(pathToFileURL(resolve(__dirname, 'update-network.mjs')).href);
     const updateTarget = process.platform === 'darwin' ? resolve(dirname(process.execPath), '../..') : dirname(process.execPath);
     const updater = await new DesktopUpdates({ statePath: resolve(app.getPath('userData'), 'app-updates.json'), target: updateTarget,
       version: JSON.parse(await readFile(resolve(root, 'package.json'), 'utf8')).version, packaged: app.isPackaged,
-      fetcher: (...args) => net.fetch(...args), restart: () => app.quit(),
+      fetcher: createUpdateFetcher(net), restart: () => app.quit(),
       protectedPaths: () => [app.getPath('userData'), nativeRoot, dictation.root, audioSeparation.root, audioOnsets.root, audioMapper.root, audioSeparation.dataRoot, audioOnsets.dataRoot, audioMapper.dataRoot],
       progress: value => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('rpen-app-update-progress', value); },
     }).initialize();
@@ -189,6 +191,9 @@ else {
     microphone.install(mainWindow.webContents.session);
     mainWindow.webContents.on('did-start-loading', () => dictation.closeWorker());
     mainWindow.webContents.on('did-start-loading', cancelAgentNetwork);
+    mainWindow.webContents.on('did-start-loading', stopPerformanceMonitor);
+    mainWindow.webContents.on('render-process-gone', stopPerformanceMonitor);
+    mainWindow.webContents.on('destroyed', stopPerformanceMonitor);
     mainWindow.webContents.on('did-start-loading', () => audioSeparation.close());
     mainWindow.webContents.on('did-start-loading', () => audioOnsets.close());
     mainWindow.webContents.on('did-start-loading', () => audioMapper.close());

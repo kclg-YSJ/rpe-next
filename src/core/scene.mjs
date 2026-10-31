@@ -43,6 +43,7 @@ export class LineRuntime {
     this.hitTimes = [...this.notes].sort((left, right) => left.start - right.start);
     this.holdIndex = new IntervalIndex(this.notes.filter(entry => entry.note.type === 2), entry => entry.start, entry => entry.end);
     this.staticNotes = this.notes.filter(entry => (entry.note.speed ?? 1) === 0);
+    this.staticIndex = new IntervalIndex(this.staticNotes, entry => entry.start - (entry.note.visibleTime ?? 999999), entry => entry.end);
     this.index = new IntervalIndex(this.notes.filter(entry => (entry.note.speed ?? 1) !== 0), entry => Math.min(entry.floor, entry.tail), entry => Math.max(entry.floor, entry.tail));
     this.hasYControl = line.yControl?.length > 1 && line.yControl.some(point => point.y !== 1);
   }
@@ -50,7 +51,8 @@ export class LineRuntime {
   floor(seconds) { return this.speeds.reduce((sum, speed) => sum + speed.distance(seconds), 0); }
   noteEntry(note, index, tempo) {
     const factor = this.line.bpmfactor ?? 1, start = tempo.seconds(note.startTime, factor), end = tempo.seconds(note.endTime, factor);
-    return { note, index, start, end, floor: this.floor(start) + (note.yOffset ?? 0), tail: this.floor(end) + (note.yOffset ?? 0) };
+    const startFloor = this.floor(start), endFloor = this.floor(end), offset = note.yOffset ?? 0;
+    return { note, index, start, end, startFloor, endFloor, floor: startFloor + offset, tail: endFloor + offset };
   }
   value(type, seconds) { return this.tracks[type].reduce((sum, track) => sum + Number(track.value(seconds)), 0); }
 
@@ -65,18 +67,21 @@ export class LineRuntime {
   visibleNotes(seconds, state, radius = 1600) {
     if (state.alpha < 0) return [];
     const range = radius / this.minSpeed;
-    const entries = this.hasYControl ? this.notes : [...this.index.query(state.floor - range, state.floor + range).map(entry => entry.item), ...this.staticNotes];
+    const entries = this.hasYControl ? this.notes : [...this.index.query(state.floor - range, state.floor + range).map(entry => entry.item), ...this.staticIndex.query(seconds, seconds).sort((a, b) => a.index - b.index).map(entry => entry.item)];
     return entries.filter(entry => {
       if (entry.end < seconds || entry.start - seconds > (entry.note.visibleTime ?? 999999)) return false;
-      if (this.line.isCover === 1 && (entry.note.type === 2 ? entry.tail : entry.floor) < state.floor) return false;
+      if (this.line.isCover === 1 && (entry.note.speed ?? 1) !== 0 && (entry.note.type === 2 ? entry.tail : entry.floor) < state.floor) return false;
       return true;
     });
   }
 
   noteState(entry, state, seconds) {
     const note = entry.note;
-    const activeHold = note.type === 2 && entry.start < seconds;
-    const distance = activeHold ? note.yOffset ?? 0 : entry.floor - state.floor;
+    const activeHold = note.type === 2 && entry.start <= seconds;
+    const offset = note.yOffset ?? 0;
+    // Subtract cumulative floors before adding the local offset. Adding it to a
+    // large floor first creates tiny false Hold lengths with alternating signs.
+    const distance = activeHold ? offset : entry.startFloor - state.floor + offset;
     const speed = note.speed ?? 1;
     const side = noteIsAbove(note) ? 1 : -1;
     const isHold = note.type === 2;
@@ -84,7 +89,7 @@ export class LineRuntime {
     let horizontal = note.positionX * (isHold ? 1 : this.controls.pos.value(distance));
     const vertical = distance * speed * side * (isHold ? 1 : this.controls.y.value(distance));
     if (!isHold && Math.abs(state.incline) > 0.01) horizontal -= Math.tan(note.positionX / 675 * state.incline * Math.PI / 180) * distance * speed * side;
-    return { x: horizontal, y: vertical, tail: (entry.tail - state.floor) * speed * side,
+    return { x: horizontal, y: vertical, tail: (entry.endFloor - state.floor + offset) * speed * side,
       size: (note.size ?? 1) * sizeY, sizeY,
       alpha: (note.alpha ?? 255) / 255 * this.controls.alpha.value(distance),
       skew: isHold ? 0 : note.positionX * this.controls.skew.value(distance), showHead: !activeHold };
@@ -125,9 +130,10 @@ export class SceneRuntime {
         const ancestor = states[parent];
         const local = states[index];
         const angle = -ancestor.rotation * Math.PI / 180;
-        states[index] = { ...local, x: ancestor.x + local.x * Math.cos(angle) - local.y * Math.sin(angle),
-          y: ancestor.y + local.x * Math.sin(angle) + local.y * Math.cos(angle),
-          rotation: local.rotation + (line.rotateWithFather === undefined ? ((this.chart.META.RPEVersion ?? 0) >= 163 ? ancestor.rotation : 0) : (line.rotateWithFather ? ancestor.rotation : 0)) };
+        const x = local.x, y = local.y, cosine = Math.cos(angle), sine = Math.sin(angle);
+        local.x = ancestor.x + x * cosine - y * sine;
+        local.y = ancestor.y + x * sine + y * cosine;
+        local.rotation += line.rotateWithFather === undefined ? ((this.chart.META.RPEVersion ?? 0) >= 163 ? ancestor.rotation : 0) : (line.rotateWithFather ? ancestor.rotation : 0);
       }
       resolving.delete(index);
       done.add(index);

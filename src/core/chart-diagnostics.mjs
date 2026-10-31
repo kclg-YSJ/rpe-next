@@ -139,7 +139,7 @@ function inspectLine(line, index, tempo, options) {
     const emit = (code, severity = 'error') => issues.push(diagnostic(code, severity, where));
     if (!Number.isFinite(start) || !Number.isFinite(end)) { emit('beat'); continue; }
     if (end < start) issues.push(diagnostic('noteTime', 'error', where));
-    if (note.type === 2 && end === start) issues.push(diagnostic('holdZero', 'error', where));
+    if (note.type === 2 && end === start) issues.push(diagnostic('holdZero', 'warning', where));
     if (seconds && outside(seconds(start), seconds(end), options)) emit('timeRange');
     if (!fake(note) && Math.abs(note.positionX) > 700) issues.push(diagnostic('xRange', 'info', where));
     if (![1, 2, 3, 4].includes(note.type) || !Number.isFinite(note.positionX) || ['speed', 'size', 'alpha', 'yOffset', 'visibleTime', 'judgeArea'].some(key => note[key] !== undefined && !Number.isFinite(note[key]))) emit('value');
