@@ -9,6 +9,7 @@ export function clipboardBeat(timeline) {
 
 export function drawClipboard(timeline, context, width, height, area) {
   const session = timeline.getSession();
+  if (session.multiLineActive && !session.multiLineIndices.length) return;
   if (session.clipboardVisible === false || timeline.bulkPreview || timeline.pendingHold || timeline.eventInteraction.pending) return;
   const pointer = timeline.clipboardPointer;
   const targetLineIndex = pointer && typeof timeline.lineIndexAt === 'function'

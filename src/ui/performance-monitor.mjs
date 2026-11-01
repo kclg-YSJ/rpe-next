@@ -22,7 +22,24 @@ export class PerformanceMonitor {
     if (this.host) return;
     this.host = document.createElement('div'); this.host.id = 'performance-monitor'; this.host.setAttribute('popover', 'manual');
     const shadow = this.host.attachShadow({ mode: 'open' });
-    shadow.innerHTML = `<style>${css}</style><section class="panel" aria-label="${t('perf.title')}"><header><span>${t('perf.title')}</span><button class="close" title="${t('perf.close')}">×</button></header><h1><b>—</b><small>FPS</small></h1><canvas class="graph"></canvas><div class="meta"><span class="frame-time">— ms</span><span class="render-time">— ms</span></div><div class="metrics live"></div><div class="actions"><button class="run">${t('perf.start')}</button><button class="overview" hidden>${t('perf.overview')}</button></div><div class="progress"></div><div class="error" hidden></div><section class="result" hidden></section></section>`;
+    const create = (tag, className, text) => {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      if (text !== undefined) node.textContent = text;
+      if (tag === 'button') node.type = 'button';
+      return node;
+    };
+    const style = create('style', '', css), panel = create('section', 'panel');
+    panel.setAttribute('aria-label', t('perf.title'));
+    const heading = create('header'), close = create('button', 'close', '×');
+    close.setAttribute('title', t('perf.close')); heading.append(create('span', '', t('perf.title')), close);
+    const fps = create('h1'); fps.append(create('b', '', '—'), create('small', '', 'FPS'));
+    const meta = create('div', 'meta'); meta.append(create('span', 'frame-time', '— ms'), create('span', 'render-time', '— ms'));
+    const actions = create('div', 'actions'), overview = create('button', 'overview', t('perf.overview'));
+    overview.hidden = true; actions.append(create('button', 'run', t('perf.start')), overview);
+    const error = create('div', 'error'), result = create('section', 'result'); error.hidden = result.hidden = true;
+    panel.append(heading, fps, create('canvas', 'graph'), meta, create('div', 'metrics live'), actions, create('div', 'progress'), error, result);
+    shadow.append(style, panel);
     this.root = shadow; this.fpsText = shadow.querySelector('h1 b'); this.canvas = shadow.querySelector('canvas');
     this.runButton = shadow.querySelector('.run'); this.errorText = shadow.querySelector('.error');
     this.liveRows = new Map();

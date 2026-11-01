@@ -70,7 +70,8 @@ export class DirectPlacement {
     if (session !== this.session || !preview.visible || session.lineIndex !== this.lineIndex || !session.line) { this.close(); return false; }
     const canvas = preview.canvas.getBoundingClientRect(); if (!canvas.width || !canvas.height) return false;
     const viewport = previewViewport(canvas.width, canvas.height, preview.aspectRatio ?? 1.5);
-    preview.scene.compile(session.chart, tempo);
+    if (preview.largeChartView) preview.largeChartView.prepare(preview, session.chart, tempo);
+    else preview.scene.compile(session.chart, tempo);
     const positionScale = previewPositionScale(preview.aspectRatio ?? 1.5), state = preview.scene.sampler(seconds, positionScale)(this.lineIndex), scale = viewport.scale / (preview.viewDivisor ?? 1);
     const guide = { x: canvas.width / 2 + state.x * scale, y: canvas.height / 2 - state.y * scale, rotation: state.rotation };
     const local = previewNotePosition({ x: 1, y: 1, tail: 1 }, session.line, positionScale), localX = local.x;

@@ -1,5 +1,5 @@
 import { t } from '../i18n.mjs';
-export const reservedLineGroupName = name => String(name ?? '').trim().toLowerCase() === 'all';
+export const reservedLineGroupName = name => ['all', '@notes', '@events'].includes(String(name ?? '').trim().toLowerCase());
 export function normalizeLineGroups(chart) {
   if (!Array.isArray(chart?.judgeLineGroup) || !chart.judgeLineGroup.some(reservedLineGroupName)) return chart;
   const occupied = new Set(chart.judgeLineGroup.map(name => String(name).trim().toLowerCase()));

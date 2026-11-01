@@ -5,10 +5,11 @@ import { AgentCommands } from '../src/core/agent-commands.mjs';
 import { createAgentEditorCommands } from '../src/application/agent-editor.mjs';
 import { AGENT_CHART_TOOLS } from '../src/application/agent-chart-tools.mjs';
 import { EditorSession } from '../src/application/session.mjs';
-import { createEvent } from '../src/core/chart.mjs';
+import { createEvent, createNote } from '../src/core/chart.mjs';
 import { compileTrajectory } from '../src/core/curve-trajectory.mjs';
 import { SceneRuntime } from '../src/core/scene.mjs';
 import { TempoMap } from '../src/core/tempo.mjs';
+import { Timeline } from '../src/ui/timeline.mjs';
 import { noiseRuntime } from '../src/core/noise-areas.mjs';
 import { GlobalEventRegistry, registerPlaceholderGlobalEvent } from '../src/core/global-events.mjs';
 import { GlobalEventDocument } from '../src/application/global-events.mjs';
@@ -34,6 +35,15 @@ test('谱面工具目录覆盖所有原生入口且列出的直接命令均可�
   await assert.rejects(execute('multi_line', { lines: '0:999999999999' }), /超出/);
 });
 
+test('多线命令保留动态表达式和空结果，静态改选结束动态筛选且拒绝超大线号范围', async () => {
+  const {editor,session,execute}=fixture();const canvas={clientWidth:600,clientHeight:600,style:{},addEventListener(){}};
+  editor.timeline=new Timeline(canvas,canvas,()=>session,()=>{},()=>{});
+  await assert.rejects(execute('multi_line',{lines:'0:999999999999'}),/超出/);
+  await execute('multi_line',{lines:'@notes',mode:'events'});assert.equal(session.multiLineActive,true);assert.deepEqual(session.multiLineIndices,[]);assert.equal(session.multiLineExpression,'@notes');
+  await execute('multi_line',{mode:'notes'});assert.equal(session.multiLineExpression,'@notes');
+  await execute('multi_line',{lines:[0]});assert.equal(session.multiLineExpression,'');assert.deepEqual(session.multiLineIndices,[0]);
+});
+
 test('原生参数方程和极坐标轨迹可生成、编辑、拆分并撤销；已有事件默认不覆盖，替换需批准', async () => {
   const { session, execute, adapter } = fixture(), original = session.chart;
   const listed = await execute('trajectory_presets', { query: '螺线' }); assert.ok(listed.result.some(entry => entry.id === 'spiral'));
@@ -57,6 +67,26 @@ test('曲线音符沿用原生缓动与端点规则，追踪噪域与真实父�
   const area = session.chart.blockAreaList[0], tempo = new TempoMap(session.chart.BPMList), runtime = noiseRuntime(area, tempo), scene = new SceneRuntime(); scene.compile(session.chart, tempo);
   for (const beat of [1, 1.5, 2.75]) { const seconds = tempo.seconds(beat), expected = scene.sample(seconds)[0], actual = runtime.sample(seconds).center; assert.ok(Math.abs(actual.x - expected.x) < .21); assert.ok(Math.abs(actual.y - expected.y) < .21); }
   session.travel('undo'); assert.equal(session.chart, source); assert.equal(session.chart.blockAreaList?.length ?? 0, 0);
+});
+
+test('音符追踪命令使用同一拟合和原子提交，覆盖已有事件属于危险编辑', async () => {
+  const { session, adapter, execute } = fixture(); session.insertNotes([createNote(1, 4, 135)]);
+  const args = { revision: adapter.revision(), start: 0, end: 4, target: { lineIndex: 0, noteIndex: 0 }, line: -1, rotation: false };
+  const before = session.chart; const denied = await execute('note_track', args, { permission: 'ask', approve: () => false }); assert.equal(denied.denied, true); assert.equal(session.chart, before);
+  const generated = await execute('note_track', args); assert.equal(generated.ok, true); assert.equal(session.chart.judgeLineList.length, 2);
+  assert.equal(session.chart.judgeLineList[1].eventLayers[0].rotateEvents.length, 1);
+  let access; await execute('note_track', { ...args, revision: adapter.revision(), line: 0, replace: true }, { permission: 'dangerous', approve: plan => { access = plan.access; return false; } }); assert.equal(access, 'dangerous');
+  session.travel('undo'); assert.equal(session.chart, before);
+});
+
+test('音符追踪省略目标时使用当前判定线和当前事件层，不新增判定线', async () => {
+  const { session, editor, adapter, execute } = fixture(); session.addLine(); session.selectLine(1); editor.timeline.layer = 2;
+  session.insertNotes([createNote(1, 4, 135)]);
+  const before = session.chart, generated = await execute('note_track', { revision: adapter.revision(), start: 0, end: 4, target: { lineIndex: 1, noteIndex: 0 } });
+  assert.equal(generated.ok, true); assert.equal(session.chart.judgeLineList.length, 2); assert.equal(generated.result.line, 1); assert.equal(generated.result.layer, 2);
+  assert.ok(session.chart.judgeLineList[1].eventLayers[2].moveXEvents.length > 0); assert.ok(session.chart.judgeLineList[1].eventLayers[2].rotateEvents.length > 0);
+  assert.equal(session.chart.judgeLineList[0], before.judgeLineList[0]); assert.equal(session.chart.judgeLineList[1].eventLayers[0], before.judgeLineList[1].eventLayers[0]);
+  session.travel('undo'); assert.equal(session.chart, before);
 });
 
 test('图案拟合走分析/批准/原子提交，文字未达标不写谱，异步计算期间的修改使旧计划失效', async () => {

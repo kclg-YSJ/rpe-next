@@ -1,7 +1,7 @@
 import { assignChartImportFiles, chartImportAccept, chartImportFiles, isChartImportFile } from '../platform/chart-import.mjs';
 import { t } from '../i18n.mjs';
 
-export function showImportDialog({ readFiles, onOpen, onError }) {
+export function showImportDialog({ readFiles, onOpen, onError, onLargePreview }) {
   const existing = document.querySelector('#chart-import-dialog');
   if (existing?.open) return existing;
   const dialog = document.createElement('dialog'); dialog.id = 'chart-import-dialog'; dialog.className = 'chart-import-dialog';
@@ -16,6 +16,10 @@ export function showImportDialog({ readFiles, onOpen, onError }) {
   const cancel = document.createElement('button'); cancel.type = 'button'; cancel.textContent = t('chart-import.cancel'); cancel.onclick = () => dialog.close();
   const open = document.createElement('button'); open.id = 'chart-import-open'; open.type = 'button'; open.className = 'primary'; open.textContent = t('chart-import.open'); open.setAttribute('aria-describedby', status.id);
   actions.append(cancel, open);
+  if (globalThis.rpenLargePreview?.platform === 'win32' && onLargePreview) {
+    const large = document.createElement('button'); large.type = 'button'; large.id = 'chart-import-large-preview'; large.textContent = '超大谱 · 查看与编辑';
+    large.onclick = () => { if (busy) return; dialog.close(); onLargePreview(); }; actions.prepend(large);
+  }
   dialog.append(heading, description);
   let mode = 'pez', busy = false;
   const selected = {}, groups = new Map(), slots = new Map();

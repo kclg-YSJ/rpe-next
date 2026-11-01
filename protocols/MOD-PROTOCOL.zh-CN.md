@@ -239,6 +239,8 @@ export function activate(api) {
 
 `editor.raw` 提供更底层入口：实时 `session/chart/assets/tempo`、`renderSession/replaceChart/activatePane/togglePlayback/togglePreview/save/applyDisplaySettings/persistEditor/setHome`。`raw.chart=` 直接替换历史当前文档并通知，**不增加撤销记录**；`raw.tempo=` 更新时间轴 TempoMap。其他内部一致性由作者负责，优先使用普通 commit。可以通过任意 DOM/Web API、内部 ES 模块、类原型与这些入口继续扩展，宿主不限制为本节列出的功能。
 
+多线表达式可包含 `all`、`@notes`、`@events`（不区分大小写），后两者按当前编辑时间视野筛选音符或当前层事件，包含跨屏 Hold 和 BPM 倍率；空格分隔词元取并集。这些词元不能作为组名。`editor.timeline.setMultiLineExpression(text)` 解析并设置表达式，之后启用多线即可动态刷新；`session.multiLineExpression` 保留表达式，`multiLineIndices` 是当前解析结果，可能为空，此时多线模式仍保持开启。手动改选线号会结束动态表达式；拖拽、框选或放置过程中保持列不变。`timeline.multiLineEventVisibility` 是按事件类型名索引的展示布尔值映射，未设置视为展示；仅影响多线事件模式，`timeline.eventTypes` 与 `eventColumnBounds()` 返回当前可见栏及坐标，隐藏栏不参与取样命中、框选和放置，不改动谱面数据。
+
 `editor.directPlacement` 是直接放置面板实例，属于进阶实现接口：`active` 表示是否展开，`open(lineIndex)` 在预览中展开当前线的音符编辑区，`close()` 关闭。它复用原 `editor.timeline` 与音符画布，通过 `timeline.noteView` 映射指针和绘制坐标，临时停用多线编辑，关闭后恢复；扩展交互应调用时间轴的 `point/noteHorizontal/notePositionAt/vertical`，不要直接用旋转后的 DOM 外接矩形换算。音符横坐标不限制在 −675～675。`beginPreviewSession()` 会先关闭直接放置和重合线列表。
 
 `editor.quickCurve` 与 `editor.noteTrackingPanel` 是进阶实现入口。单选音符长按中键进入曲线填充时，数字键和 Q/W/E/R/Esc 由临时交互消费，Shift+中键及短按仍保留框选；生成前只使用临时预览，不增加历史。音符追踪通过 `note_track` 命令或原生临时页面生成普通事件，默认使用当前线和当前事件层，不新增谱面字段。`timeline.noteSpacing` 为持久化横向间距比例，默认 1；扩展拖拽应调用 `horizontalScale/notePositionAt/noteHorizontal`，不要假设可见横坐标固定为 −675～675，也不要用此比例调整贴图大小。`timeline.notesOnlyNoteScale` 为单线仅音符视图的视觉缩放，默认 0.9；`referenceNoteScale` 保持坐标布局基准，实际音符宽高使用 `renderNoteScale`。

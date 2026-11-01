@@ -1,6 +1,6 @@
 import { localPreferences } from '../platform/local-preferences.mjs';
 import { captureSelection, commitSelectionEdit } from '../application/batch-edit.mjs';
-import { previewMultiEdit, previewEventClones, NOTE_BATCH_FIELDS, EVENT_BATCH_FIELDS, EVENT_BATCH_TYPES, BATCH_OPERATIONS } from '../application/multi-edit.mjs';
+import { previewMultiEdit, previewEventClones, noteBatchModifier, NOTE_BATCH_FIELDS, EVENT_BATCH_FIELDS, EVENT_BATCH_TYPES, BATCH_OPERATIONS } from '../application/multi-edit.mjs';
 import { beatValue } from '../core/beat.mjs';
 import { easing, bezier } from '../core/easing.mjs';
 import { createEasingPicker, EASING_NAMES } from './easing-picker.mjs';
@@ -148,12 +148,14 @@ export class MultiEditPanel {
       updateMode(); this.parameters.update(kind, this.read());
       this.refresh();
     };
-    this.apply.onclick = () => {
+    this.apply.onclick = async () => {
       this.refresh(); if (!this.result) return;
-      const result = this.result; const amount = result.changes.length;
+      const result = this.result; let amount = result.changes.length;
       this.committing = true;
       try {
-        commitSelectionEdit(this.getSession(), result, mode.value === 'clone' ? t('multi-edit.s7b5795d') : t('multi-edit.s57c5445', { p0: kind === 'notes' ? t('multi-edit.s7ac3289') : t('multi-edit.s550e328') }));
+        const session=this.getSession(),label=mode.value === 'clone' ? t('multi-edit.s7b5795d') : t('multi-edit.s57c5445', { p0: kind === 'notes' ? t('multi-edit.s7ac3289') : t('multi-edit.s550e328') });
+        if(kind==='notes'&&session.largeDocument?.logicalSelection){session.largeDocument.transformSelected(label,noteBatchModifier(this.read(),session.largeDocument.logicalSelection.groups,session.chart));await session.largeDocument.flush();amount=session.largeDocument.summary.changedNotes;}
+        else commitSelectionEdit(session, result, label);
         const position = this.parameters.remember(kind, this.read()); this.updateHistory(); history.value = position;
         this.result = null; this.chart = this.getSession().chart; this.signature = this.selectionSignature();
         this.summary.textContent = t('multi-edit.s60014d9', { p0: amount });
@@ -179,8 +181,9 @@ export class MultiEditPanel {
 
   selectionSignature() {
     const session = this.getSession();
+    const multiNotes = [...(session.multiLineSelection ?? new Map())].map(([line, values]) => `${line}:${[...values].sort((a, b) => a - b).join(',')}`).sort().join('|');
     const multiEvents = [...(session.multiEventSelection ?? new Map())].map(([line, values]) => `${line}:${[...values].sort().join(',')}`).sort().join('|');
-    return `${session.lineIndex}:${session.eventLayer}:${this.timeline.division}:${[...session.selection]}:${[...session.eventSelection]}:${multiEvents}`;
+    return `${session.lineIndex}:${session.eventLayer}:${this.timeline.division}:${session.multiLineActive}:${session.multiLineMode}:${[...session.selection]}:${[...session.eventSelection]}:${multiNotes}:${multiEvents}`;
   }
 
   refresh() {
@@ -189,6 +192,7 @@ export class MultiEditPanel {
       const snapshot = captureSelection(this.getSession()); const options = this.read();
       this.result = options.mode === 'clone' ? previewEventClones(snapshot, options) : previewMultiEdit(snapshot, this.kind, options);
       this.summary.textContent = t('multi-edit.s72fa7cc', { p0: this.result.changes.length, p1: new Set(this.result.changes.map(change => change.lineIndex)).size });
+      if(this.kind==='notes'&&this.getSession().largeDocument?.logicalSelection)this.summary.textContent=t('large-chart.previewSelection',{groups:this.result.changes.length,total:this.getSession().largeDocument.selectedCount});
       this.summary.classList.remove('batch-error');
     } catch (error) { this.summary.textContent = error.message; this.summary.classList.add('batch-error'); }
     this.apply.disabled = !this.result;

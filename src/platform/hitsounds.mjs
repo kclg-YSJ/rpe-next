@@ -86,7 +86,7 @@ export class HitSounds {
     this.stop(); this.delays = next; this.compiled = null;
   }
   setSoundPack(buffers = new Map()) { this.stop(); this.skinBuffers = new Map(buffers); }
-  stop() { for (const source of this.sources) { source.stop(); source.disconnect(); } this.sources.clear(); for (const mixer of this.mixers.values()) { mixer.generator.port.postMessage('stop'); mixer.generator.disconnect(); mixer.disconnect(); } this.mixers.clear(); this.streamsStarted = false; this.revision = -1; }
+  stop() { this.stopRevision = (this.stopRevision ?? 0) + 1; for (const source of this.sources) { source.stop(); source.disconnect(); } this.sources.clear(); for (const mixer of this.mixers.values()) { mixer.generator.port.postMessage('stop'); mixer.generator.disconnect(); mixer.disconnect(); } this.mixers.clear(); this.streamsStarted = false; this.revision = -1; }
 
   startStreams(time, now, rate) {
     if (this.streamsStarted) return; this.streamsStarted = true;
@@ -106,7 +106,7 @@ export class HitSounds {
     }
   }
 
-  scheduleMixed(buffer, times, time, now, rate) {
+  scheduleMixed(buffer, times, time, now, rate, weights) {
     const context = this.transport.context;
     const delay = Math.max(0, times[0] - time) / rate;
     const startFrame = Math.floor((now + delay) * context.sampleRate);
@@ -114,9 +114,10 @@ export class HitSounds {
     const mixed = context.createBuffer(buffer.numberOfChannels, Math.ceil(offsets.at(-1)) + buffer.length + 1, context.sampleRate);
     for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
       const samples = mixed.getChannelData(channel), original = buffer.getChannelData(channel);
-      for (const offset of offsets) {
+      for (const [position, offset] of offsets.entries()) {
         const first = Math.floor(offset), fraction = offset - first;
-        for (let index = 0; index < original.length; index++) { samples[first + index] += original[index] * (1 - fraction); if (fraction) samples[first + index + 1] += original[index] * fraction; }
+        const weight = weights?.[position] ?? 1;
+        for (let index = 0; index < original.length; index++) { samples[first + index] += original[index] * (1 - fraction) * weight; if (fraction) samples[first + index + 1] += original[index] * fraction * weight; }
       }
     }
     const source = context.createBufferSource(); source.buffer = mixed; source.connect(this.gain);

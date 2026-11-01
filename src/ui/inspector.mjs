@@ -32,13 +32,18 @@ export function renderProperties(session, reportError, resources = {}) {
   const previous = propertyState.get(container); previous?.controls.dispose();
   container.replaceChildren();
   const entries = selectedNoteEntries(session);
-  document.querySelector('#property-count').textContent = t('inspector.s50000b6', { p0: entries.length });
+  document.querySelector('#property-count').textContent = t('inspector.s50000b6', { p0: session.largeDocument?.selectedCount ?? entries.length });
   const selectedEntry = entries[0];
   const selectedIndex = selectedEntry?.index;
   const selectedLineIndex = selectedEntry?.lineIndex ?? session.lineIndex;
   const note = selectedEntry?.note;
   if (!note) {
     const hint = document.createElement('p'); hint.className = 'hint'; hint.textContent = t('inspector.s11dc018'); container.append(hint); return;
+  }
+  if (session.largeDocument && note._rpenLargeRef?.count > 1) {
+    const hint = document.createElement('p'); hint.className = 'hint';
+    hint.textContent = t('large-chart.groupCount',{total:note._rpenLargeRef.count.toLocaleString(),selected:session.largeDocument.quantity(note).toLocaleString()});
+    container.append(hint);
   }
   const scope = selectedLineIndex + ':' + selectedIndex;
   const controls = new NotePropertyControls(session, container, { volume: resources.volume, reportError });

@@ -1,4 +1,11 @@
 const { contextBridge, ipcRenderer } = require('electron');
+contextBridge.exposeInMainWorld('rpenLargePreview', {
+  version: 1,
+  platform: process.platform,
+  call: (action, id, value) => ipcRenderer.invoke('rpen-large-preview', { action, id, value }),
+  onProgress: callback => { const handler = (event, value) => callback(value); ipcRenderer.on('rpen-large-preview-progress', handler); return () => ipcRenderer.removeListener('rpen-large-preview-progress', handler); },
+});
+contextBridge.exposeInMainWorld('rpenGraphics', { version: 1, call: (action, value) => ipcRenderer.invoke('rpen-graphics', { action, value }) });
 contextBridge.exposeInMainWorld('rpenPerformance', { version: 1, call: action => ipcRenderer.invoke('rpen-performance', action) });
 contextBridge.exposeInMainWorld('rpenAppUpdates', {
   version: 1,

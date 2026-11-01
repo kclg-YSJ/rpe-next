@@ -16,6 +16,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - run: npm ci --ignore-scripts
       - run: npm test
       - run: npm ci --prefix collaboration-server --ignore-scripts
       - run: npm run test:collaboration-server

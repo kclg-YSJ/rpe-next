@@ -2,6 +2,9 @@ import { localPreferences } from './local-preferences.mjs';
 import { validFpsLimit } from '../core/frame-timing.mjs';
 import { validSelectionInterval } from '../core/selection-interval.mjs';
 import { normalizeLineDefaults } from '../core/placement-defaults.mjs';
+import { EVENT_TYPES } from '../core/chart.mjs';
+
+const multiLineEventTypes = [...EVENT_TYPES, 'scaleXEvents', 'scaleYEvents', 'colorEvents', 'paintEvents', 'textEvents'];
 
 const ranges = { scale: [20, 2000], division: [1, 100], gridCount: [2, 100], noteSize: [10, 500], volume: [0, 1], hitVolume: [0, 1], realtimeAlpha: [0, 1], ratioWidth: [1, 100], ratioHeight: [1, 100], barWidth: [0.5, 10], barAlpha: [0.1, 2], judgementOffset: [42, 240], eventValueSize: [8, 28], eventValueThreshold: [10, 180], eventCurveThreshold: [8, 180], eventOpacity: [0.05, 1], eventBarWidth: [0.35, 1], multiLineWidth: [30, 2400], multiLineEventWidth: [30, 2400], scrollSpeed: [0.1, 100], autoSaveSeconds: [1, 3600], autoSaveLimit: [1, 100], dragSensitivity: [0.1, 8] };
 Object.assign(ranges, { cameraX: [-1000000, 1000000], viewDivisor: [0.1, 100], backgroundBlur: [0, 30], overflowBlur: [0, 80], overflowDarken: [0, 1], cutDensity: [0.1, 128] });
@@ -13,6 +16,7 @@ const flags = ['snapX', 'realtime', 'hitEnabled', 'allLines', 'preservePitch', '
 export function normalizeEditorPreferences(value) {
   const result = {};
   if (!value || typeof value !== 'object') return result;
+  if (value.multiLineEventVisibility && typeof value.multiLineEventVisibility === 'object') result.multiLineEventVisibility = Object.fromEntries(multiLineEventTypes.filter(type => typeof value.multiLineEventVisibility[type] === 'boolean').map(type => [type, value.multiLineEventVisibility[type]]));
   if (value.lineEventDefaults && typeof value.lineEventDefaults === 'object' && !Array.isArray(value.lineEventDefaults)) result.lineEventDefaults = normalizeLineDefaults(value.lineEventDefaults);
   if (validFpsLimit(value.fpsLimit)) result.fpsLimit = value.fpsLimit;
   if (validSelectionInterval(value.selectionInterval)) result.selectionInterval = value.selectionInterval;

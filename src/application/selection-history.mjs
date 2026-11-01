@@ -5,12 +5,13 @@ export function selectionState(session) {
     selection: [...session.selection].sort((left, right) => left - right), eventSelection: [...session.eventSelection].sort(),
     multiLineSelection: [...(session.multiLineSelection ?? new Map())].map(([line, values]) => [line, [...values].sort((left, right) => left - right)]).sort((left, right) => left[0] - right[0]),
     multiEventSelection: [...(session.multiEventSelection ?? new Map())].map(([line, values]) => [line, [...values].sort()]).sort((left, right) => left[0] - right[0]),
-    multiLineEnabled: session.multiLineEnabled, multiLineMode: session.multiLineMode, multiLineMerge: session.multiLineMerge, multiLineIndices: [...(session.multiLineIndices ?? [])] };
+    multiLineEnabled: session.multiLineEnabled, multiLineMode: session.multiLineMode, multiLineMerge: session.multiLineMerge, multiLineExpression: session.multiLineExpression ?? '', multiLineIndices: [...(session.multiLineIndices ?? [])] };
 }
 
 export function sameSelection(left, right) {
   return Boolean(right && left.lineIndex === right.lineIndex && left.eventLayer === right.eventLayer && left.focus === right.focus
     && left.multiLineEnabled === right.multiLineEnabled && left.multiLineMode === right.multiLineMode && left.multiLineMerge === right.multiLineMerge
+    && (left.multiLineExpression ?? '') === (right.multiLineExpression ?? '')
     && JSON.stringify(left.multiLineIndices ?? []) === JSON.stringify(right.multiLineIndices ?? [])
     && JSON.stringify(left.multiLineSelection ?? []) === JSON.stringify(right.multiLineSelection ?? [])
     && JSON.stringify(left.multiEventSelection ?? []) === JSON.stringify(right.multiEventSelection ?? [])
@@ -91,5 +92,7 @@ export function restoreSelection(session, state) {
   session.multiLineMode = state.multiLineMode === 'events' ? 'events' : 'notes';
   session.multiLineMerge = state.multiLineMerge ?? true;
   session.multiLineIndices = [...(state.multiLineIndices ?? [])];
+  session.multiLineExpression = state.multiLineExpression ?? '';
+  if (session.multiLineExpression) session.multiLineResolvedIndices = session.multiLineIndices;
   session.normalizeMultiLine();
 }

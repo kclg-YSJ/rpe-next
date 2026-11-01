@@ -30,6 +30,7 @@ export function gameUiBindings(chart, states) {
 }
 
 export function scoreAt(completionTimes, seconds, completionDelta = 0) {
+  if (typeof completionTimes?.scoreAt === 'function') return completionTimes.scoreAt(seconds, completionDelta);
   let low = 0; let high = completionTimes.length;
   while (low < high) {
     const middle = Math.floor((low + high) / 2);

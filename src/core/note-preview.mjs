@@ -13,16 +13,18 @@ export class NotePreview {
     if (!overrides?.size) return;
     for (const [lineIndex, notes] of overrides) {
       const base = scene.lines[lineIndex]; if (!base) continue;
-      const replaced = new Set(), draft = Object.create(base); draft.notes = [];
+      const replaced = new Set(), remaining = new Map(), draft = Object.create(base); draft.notes = [];
       for (const [index, note] of notes) {
         const source = base.notes[index]; if (!source) continue;
-        const entry = { ...base.noteEntry(note, index, scene.tempo), sourceNote: source.note, sourceStart: source.start };
+        const count = source.multiplicity ? scene.largeOwner?.owner.quantity(source.note) ?? 1 : 1;
+        const entry = { ...base.noteEntry(note, index, scene.tempo), sourceNote: source.note, sourceStart: source.start, ...(source.multiplicity ? { multiplicity: count } : {}) };
+        if (source.multiplicity > count) remaining.set(index, { ...source, multiplicity: source.multiplicity - count });
         replaced.add(index); draft.notes.push(entry);
-        for (const [time, delta] of [[source.start, -1], [entry.start, 1]]) {
+        for (const [time, delta] of [[source.start, -count], [entry.start, count]]) {
           const key = Math.round(time * 1000000); this.timeDeltas.set(key, (this.timeDeltas.get(key) ?? 0) + delta);
         }
-        if (!source.note.isFake) this.completions.push([source.note.type === 2 ? source.end : source.start, -1]);
-        if (!note.isFake) this.completions.push([note.type === 2 ? entry.end : entry.start, 1]);
+        if (!source.note.isFake) this.completions.push([source.note.type === 2 ? source.end : source.start, -count]);
+        if (!note.isFake) this.completions.push([note.type === 2 ? entry.end : entry.start, count]);
       }
       draft.minSpeed = draft.notes.reduce((minimum, entry) => Math.min(minimum, Math.abs(entry.note.speed ?? 1) || 1), base.minSpeed);
       draft.hitTimes = [...draft.notes].sort((left, right) => left.start - right.start);
@@ -31,8 +33,8 @@ export class NotePreview {
       draft.staticIndex = new IntervalIndex(draft.staticNotes, entry => entry.start - (entry.note.visibleTime ?? 999999), entry => entry.end);
       draft.index = new IntervalIndex(draft.notes.filter(entry => (entry.note.speed ?? 1) !== 0), entry => Math.min(entry.floor, entry.tail), entry => Math.max(entry.floor, entry.tail));
       const runtime = Object.create(base);
-      runtime.visibleNotes = (...args) => base.visibleNotes(...args).filter(entry => !replaced.has(entry.index)).concat(draft.visibleNotes(...args));
-      runtime.previewHits = (...args) => recentHits(base, ...args).filter(hit => !replaced.has(hit.entry.index)).concat(recentHits(draft, ...args));
+      runtime.visibleNotes = (...args) => base.visibleNotes(...args).flatMap(entry => !replaced.has(entry.index) ? [entry] : remaining.has(entry.index) ? [remaining.get(entry.index)] : []).concat(draft.visibleNotes(...args));
+      runtime.previewHits = (...args) => recentHits(base, ...args).flatMap(hit => !replaced.has(hit.entry.index) ? [hit] : remaining.has(hit.entry.index) ? [{ ...hit, entry: remaining.get(hit.entry.index) }] : []).concat(recentHits(draft, ...args));
       this.runtimes.set(lineIndex, runtime);
     }
     for (const [key, delta] of this.timeDeltas) if (!delta) this.timeDeltas.delete(key);

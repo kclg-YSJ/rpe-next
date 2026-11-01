@@ -91,7 +91,19 @@ export class AudioTransport {
   }
 
   releaseMedia() { if (this.media) { this.media.pause(); this.media.removeAttribute('src'); this.media.load(); this.mediaSource?.disconnect(); URL.revokeObjectURL(this.mediaUrl); this.media = null; } }
-  clear() { this.loadRevision++; this.pause(); this.resetPlaybackBuffer({ clearCache: true }); this.releaseMedia(); this.buffer = null; this.position = 0; }
+  async loadStream(url, duration = 600) {
+    this.clear(); this.streamDuration = duration;
+    if (!url) return;
+    const revision = this.loadRevision, media = new Audio(); media.preload = 'metadata';
+    try {
+      await loadMediaSource(media, url, '超大谱音乐');
+      if (revision !== this.loadRevision) { media.removeAttribute('src'); media.load(); return; }
+      this.media = media; this.mediaUrl = url;
+      this.mediaSource = this.ensureContext().createMediaElementSource(media); this.mediaSource.connect(this.gain);
+      media.playbackRate = this.rate; media.preservesPitch = this.preservePitch;
+    } catch (error) { media.removeAttribute('src'); media.load(); throw error; }
+  }
+  clear() { this.loadRevision++; this.pause(); this.resetPlaybackBuffer({ clearCache: true }); this.releaseMedia(); this.buffer = null; this.position = 0; this.streamDuration = null; }
   get playbackBuffer() { return this.playbackOverride?.buffer ?? this.buffer; }
   get playbackMedia() { return this.playbackOverride ? this.playbackOverride.media : this.media; }
   disposePlaybackOverride(override) { if (!override) return; override.media?.pause(); override.media?.removeAttribute('src'); override.media?.load(); override.source?.disconnect(); if (override.url) URL.revokeObjectURL(override.url); }
@@ -125,7 +137,7 @@ export class AudioTransport {
       this.applyPlaybackOverride(override);
     } catch (error) { this.disposePlaybackOverride(override); throw error; }
   }
-  get duration() { return this.buffer?.duration || this.media?.duration || 600; }
+  get duration() { return this.buffer?.duration || this.media?.duration || this.streamDuration || 600; }
   get usesMedia() { return Boolean(this.playbackMedia && (!this.playbackBuffer || this.preservePitch && this.rate !== 1)); }
   get clockReady() {
     const media = this.playbackMedia;

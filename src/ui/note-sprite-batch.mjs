@@ -46,8 +46,8 @@ void main() {
 // Reuse the bounded texture/vertex buffers and ordered premultiplied blending.
 // Unlike hit effects, Hold sprites need atlas crops, reflections and edge AA.
 export class NoteSpriteBatch extends HitEffectBatch {
-  constructor() {
-    super({ antialias: true, fragment: FRAGMENT });
+  constructor({ fragment = FRAGMENT } = {}) {
+    super({ antialias: true, fragment });
     this.vertices = new Float32Array(54 * 8192);
     this.saved = new Float64Array(8 * 16); this.styles = []; this.depth = 0;
   }

@@ -5,10 +5,11 @@ import { captureSelection, commitSelectionEdit, shiftedTime } from './batch-edit
 import { t } from '../i18n.mjs';
 
 export function copyObjects(session) {
+  if (session.largeDocument?.logicalSelection && session.focus === 'notes') return session.largeDocument.copySelected();
   const snapshot = captureSelection(session);
-  const count = snapshot.notes.length + snapshot.events.length;
+  const count = snapshot.notes.reduce((sum,entry)=>sum+(session.largeDocument?session.largeDocument.quantity(entry.note):1),0) + snapshot.events.length;
   if (!count) return 0;
-  session.clipboard = structuredClone(snapshot.notes.map(entry => entry.note));
+  session.clipboard = structuredClone(snapshot.notes.map(entry => session.largeDocument ? session.largeDocument.copyNote(entry.note) : entry.note));
   session.clipboardNoteLines = snapshot.notes.map(entry => Number.isInteger(entry.lineIndex) ? entry.lineIndex : session.lineIndex);
   session.eventClipboard = structuredClone(snapshot.events.map(({ type, event }) => ({ type, event })));
   session.eventClipboardLines = snapshot.events.map(entry => Number.isInteger(entry.lineIndex) ? entry.lineIndex : session.lineIndex);
@@ -17,6 +18,7 @@ export function copyObjects(session) {
 }
 
 export function cutObjects(session) {
+  if (session.largeDocument?.logicalSelection && session.focus === 'notes') return session.largeDocument.copySelected().then(count => { if (count) { session.largeDocument.transformSelected(t('clipboard.s67ac29d'), null, { remove: true }); return session.largeDocument.flush().then(() => count); } return 0; });
   const count = copyObjects(session);
   if (!count) return 0;
   deleteObjects(session, t('clipboard.s67ac29d'));
@@ -24,6 +26,7 @@ export function cutObjects(session) {
 }
 
 export function deleteObjects(session, label = t('clipboard.s324b30a')) {
+  if (session.largeDocument?.logicalSelection && session.focus === 'notes') return session.largeDocument.transformSelected(label, null, { remove: true });
   const snapshot = captureSelection(session);
   const count = snapshot.notes.length + snapshot.events.length;
   if (!count) return 0;
@@ -69,6 +72,7 @@ export function clipboardStart(session) {
 }
 
 export function projectClipboard(session, beat, { mirror = false, keepTime = false, targetLineIndex } = {}) {
+  if (session.multiLineActive && session.multiLineIndices?.length === 0) return { notes: [], events: [] };
   const earliest = clipboardStart(session);
   if (!Number.isFinite(earliest)) return { notes: [], events: [] };
   const delta = keepTime ? 0 : beat - earliest;
@@ -94,7 +98,15 @@ export function projectClipboard(session, beat, { mirror = false, keepTime = fal
 }
 
 export function pasteObjects(session, beat, options) {
+  if (session.clipboard.some(note => note._rpenLargeClipboard)) {
+    if (!session.largeDocument) throw Error('请在原超大谱工程中粘贴此选区');
+    return session.largeDocument.pasteSelected(beat, options);
+  }
   const projected = structuredClone(projectClipboard(session, beat, options));
+  if (!session.largeDocument) for (const note of projected.notes) {
+    if (note._rpenLargeCopies > 1) throw Error('普通谱面暂不支持粘贴重合音符组。请在超大谱工程中粘贴，或将处理数量设为 1 后重新复制。');
+    delete note._rpenLargeRef; delete note._rpenLargeCopies;
+  }
   if (!projected.notes.length && !projected.events.length) return false;
   let chart = session.chart;
   const selection = new Set(); const eventSelection = new Set(); const updates = new Map();

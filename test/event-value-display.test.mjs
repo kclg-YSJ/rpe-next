@@ -149,3 +149,37 @@ test('多线事件只绘制可见面板，横向滚动后的框选仍选中框�
   timeline.eventInteraction.up({});
   for (const lineIndex of [0,1,2]) assert.ok(session.multiEventSelection.get(lineIndex)?.has('moveXEvents:0'),`line ${lineIndex} is still selectable across horizontal scrolling`);
 });
+
+test('all 窄事件栏的网格、拍数和事件绘制开销不随屏幕外列数增长', () => {
+  const chart=createChart(); chart.judgeLineList=Array.from({length:1000},()=>createLine());
+  const session=new EditorSession(chart);session.multiLineEnabled=true;session.multiLineMode='events';session.multiLineIndices=chart.judgeLineList.map((_,i)=>i);
+  const output=surface(),timeline=new Timeline(surface().canvas,output.canvas,()=>session,()=>{},()=>{});
+  timeline.multiLineEventWidth=30;timeline.multiLineEventWidthExplicit=true;timeline.multiLineScroll.events=9000.25;
+  const grids=[];timeline.gridForLine=(context,left,width,height,beat,lineIndex)=>grids.push(lineIndex);
+  timeline.drawMultiLineGrid(output.context,600,600,0);
+  assert.ok(grids.length<20);assert.ok(grids.every(index=>index>200 && index<240));
+  timeline.drawMultiLineBeatLabels(output.context,600,600,'events');
+  assert.ok(output.context.calls.filter(call=>call.method==='fillText').length<200);
+  const visible=timeline.multiLineLayout(600,'events');
+  for(const curves of [false,true]){
+    timeline.drawEventCurves=curves;timeline.drawMultiLineEvents(0);
+    assert.ok(timeline.eventRects.length>0);
+    assert.ok(timeline.eventRects.every(rect=>rect.lineIndex>=visible.first && rect.lineIndex<visible.last));
+  }
+});
+
+test('多线隐藏事件栏后标题、命中、放置和框选使用同一列映射，全部关闭安全', () => {
+  const chart=createChart();chart.judgeLineList.push(createLine());const session=new EditorSession(chart);
+  session.multiLineIndices=[0,1];session.setMultiLineEnabled(true,'events');
+  const output=surface(),timeline=new Timeline(surface().canvas,output.canvas,()=>session,()=>{},()=>{});
+  timeline.multiLineEventVisibility={moveXEvents:false,moveYEvents:false,alphaEvents:false};
+  assert.deepEqual(timeline.eventTypes,['rotateEvents','speedEvents']);timeline.drawMultiLineEvents(0);
+  assert.ok(timeline.eventRects.length>0);assert.ok(timeline.eventRects.every(rect=>['rotateEvents','speedEvents'].includes(rect.type)));
+  assert.equal(timeline.eventColumnBounds(1,600).x>300,true);
+  timeline.eventCursor={x:450,y:300};assert.equal(timeline.eventInteraction.place(),true);assert.equal(timeline.eventInteraction.pending.type,'speedEvents');timeline.cancelPlacement();
+  timeline.point=()=>({x:599,y:100});timeline.rectangleTimes=()=>[0,2];timeline.eventInteraction.drag={kind:'rectangle',finished:true,area:'events',start:{x:0,y:500},startWorldX:0,current:{x:599,y:100},append:false};
+  timeline.eventInteraction.up({});assert.deepEqual([...session.multiEventSelection.get(0)].sort(),['rotateEvents:0','speedEvents:0']);
+  timeline.multiLineEventVisibility=Object.fromEntries(timeline.eventTypes.map(type=>[type,false]).concat(Object.entries(timeline.multiLineEventVisibility)));
+  timeline.drawEvents(0);assert.deepEqual(timeline.eventRects,[]);assert.equal(timeline.eventInteraction.place(),false);
+  session.setMultiLineEnabled(false);assert.equal(timeline.eventTypes.length,5);
+});

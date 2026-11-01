@@ -44,9 +44,11 @@ test('音符和事件编辑底部判定线均在横竖网格之后绘制', () =>
 test('多线判定线只绘制事件栏和音符栏，不跨越栏间空隙', () => {
   const chart = createChart(); chart.judgeLineList.push(createLine()); const session = new EditorSession(chart), output = surface('events');
   const timeline = new Timeline(surface('notes').canvas, output.canvas, () => session, () => {}, () => {});
-  session.setMultiLineEnabled(true, 'events'); session.multiLineIndices = [0, 1]; timeline.multiLineEventWidth = 200;
+  session.setMultiLineEnabled(true, 'events'); session.multiLineIndices = [0, 1]; timeline.multiLineEventWidth = 200; timeline.multiLineEventWidthExplicit = true;
   const segments = timeline.judgementSegments(600, 600, 0, 'events'); assert.equal(segments.length, 2); assert.ok(segments[0].right < segments[1].left);
   drawEditorJudgement(output.context, segments, '#19a0cc'); assert.equal(output.strokes[0].path.length, 4);
+  timeline.multiLineEventWidth = 600;
+  assert.equal(timeline.judgementSegments(600, 600, 0, 'events').length, 1, 'fully offscreen judgement segments are culled');
 });
 
 test('判定线宽度和不透明度独立于节拍网格与皮肤，数值可保存并限制在有效范围', () => {

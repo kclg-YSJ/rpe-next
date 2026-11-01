@@ -16,6 +16,7 @@ import { IntervalIndex } from '../core/interval-index.mjs';
 import { drawEditorJudgement, editorJudgementWidth } from './editor-judgement.mjs';
 import { dragEventEndpoint } from '../core/event-drag.mjs';
 import { t } from '../i18n.mjs';
+import { selectionCounts } from '../application/selection-count.mjs';
 
 function button(text, title, run) {
   const control = document.createElement('button'); control.type = 'button'; control.textContent = text; control.title = title; control.onclick = run; return control;
@@ -92,7 +93,8 @@ export class NoiseAreaEditor {
     setProperty(document.querySelector('#mirror'), 'disabled', this.active);
     setProperty(document.querySelector('#batch-run'), 'disabled', this.active || !this.context.session.selection.size);
     setProperty(document.querySelector('#notes-only'), 'disabled', this.active || this.context.session.multiLineActive);
-    setProperty(document.querySelector('#selection-info'), 'textContent', this.active ? t('noise-area.s9b7b953', { p0: this.selection.size, p1: this.event || [...this.selection].some(key => !key.startsWith('area:')) ? t('noise-area.s02d2cee') : '' }) : this.context.session.focus === 'events' ? t('noise-area.sdd39156', { p0: this.context.session.eventSelection.size }) : t('noise-area.s94b23eb', { p0: this.context.session.selection.size }));
+    const selected = selectionCounts(this.context.session);
+    setProperty(document.querySelector('#selection-info'), 'textContent', this.active ? t('noise-area.s9b7b953', { p0: this.selection.size, p1: this.event || [...this.selection].some(key => !key.startsWith('area:')) ? t('noise-area.s02d2cee') : '' }) : this.context.session.focus === 'events' ? t('noise-area.sdd39156', { p0: selected.events }) : t('noise-area.s94b23eb', { p0: selected.notes }));
     if (!this.sampleMode) setProperty(document.querySelector('#realtime-preview'), 'hidden', !this.context.realtimePreview.visible);
   }
   report(error) { this.notify(error.message, 'error'); }

@@ -2192,7 +2192,7 @@
       }
     },
     {
-      "selector": ".line-texture-library,.multi-line-list,.asset-tree,.asset-details,.batch-parameters,.noise-layer-panel,.diagnose-group,.curve-presets details,.trajectory-preset-editor,.line-list-group,.multi-line-group",
+      "selector": ".line-texture-library,.multi-line-list,.multi-line-event-columns,.asset-tree,.asset-details,.batch-parameters,.noise-layer-panel,.diagnose-group,.curve-presets details,.trajectory-preset-editor,.line-list-group,.multi-line-group",
       "set": {
         "border": "1px solid var(--rpen-ink-line-soft)",
         "border-radius": "8px",
@@ -2212,7 +2212,7 @@
       }
     },
     {
-      "selector": ".line-list-group summary,.multi-line-group summary",
+      "selector": ".line-list-group summary,.multi-line-group summary,.multi-line-event-columns summary",
       "set": {
         "padding": "8px 12px",
         "background": "transparent",

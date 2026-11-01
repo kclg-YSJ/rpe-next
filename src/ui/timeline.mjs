@@ -1,5 +1,5 @@
 import { beatValue, fromNumber } from '../core/beat.mjs';
-import { IntervalIndex } from '../core/interval-index.mjs';
+import { NoteDisplayIndex } from '../core/note-display-index.mjs';
 import { noteIsAbove, EVENT_TYPES, EXTENDED_TYPES } from '../core/chart.mjs';
 import { eventKey, eventList, eventListAt } from '../application/event-commands.mjs';
 import { shaderIdentity, shaderEventLanes } from '../core/shader-events.mjs';
@@ -11,16 +11,22 @@ import { SPECIAL_TRACKS, simultaneousNotes, strokeIntersects } from '../core/edi
 import { captureSelection, editCapturedSelection, commitSelectionEdit } from '../application/batch-edit.mjs';
 import { lineDisplayLabel } from '../core/line-groups.mjs';
 import { trajectoryEventValue } from '../core/curve-trajectory.mjs';
-import { editorSkinContext } from './editor-skin-canvas.mjs';
+import { editorSkinContext, editorCanvasRevision } from './editor-skin-canvas.mjs';
+import { EditorNotePainter } from './editor-note-painter.mjs';
 import { drawEditorJudgement, editorJudgementWidth } from './editor-judgement.mjs';
 import { drawEventCurve, drawEventCurveBatch } from './event-curve.mjs';
 import { eventDisplayIndex, selectedEventGroups } from './event-display-index.mjs';
 import { intervalSelection, extendIntervalSelection } from '../core/selection-interval.mjs';
 import { t } from '../i18n.mjs';
 import { DEFAULT_EDITOR_PREFERENCES } from '../core/default-settings.mjs';
+import { LineActivityIndex } from '../core/line-activity.mjs';
+import { compileLineExpression } from '../application/multi-line-edit.mjs';
 
 export const NOTE_COLORS = { 1: '#8acbff', 2: '#8acbff', 3: '#f596ac', 4: '#f1ce76' };
 const isHookedEvent = event => event?.inst === true || Number(event?.inst) === 1;
+const EMPTY_EVENTS = Object.freeze([]);
+const EMPTY_SELECTION = new Set();
+const SPECIAL_EVENT_TYPES = SPECIAL_TRACKS.map(track => track.key);
 const sameNoteGeometry = (left, right) => left && right && left.positionX === right.positionX && beatValue(left.startTime) === beatValue(right.startTime) && beatValue(left.endTime) === beatValue(right.endTime);
 // Resolved per frame so the columns follow the active language.
 const labels = () => ['X', 'Y', t('timeline.sa69e51e'), t('timeline.sb1a302e'), t('timeline.sf2fdffb')];
@@ -133,10 +139,64 @@ export class Timeline {
     return true;
   }
 
-  get eventTypes() { return this.extended ? SPECIAL_TRACKS.map(track => track.key) : EVENT_TYPES; }
+  get eventTypes() {
+    const types = this.extended ? SPECIAL_EVENT_TYPES : EVENT_TYPES;
+    if (!this.getSession().multiLineActive || this.getSession().multiLineMode !== 'events') return types;
+    let mask = 0; for (let index = 0; index < types.length; index++) if (this.multiLineEventVisibility?.[types[index]] !== false) mask |= 1 << index;
+    const cacheKey = mask | (this.extended ? 1 << types.length : 0);
+    if (this.visibleEventTypesKey !== cacheKey) { this.visibleEventTypesKey = cacheKey; this.visibleEventTypes = types.filter((type, index) => mask & (1 << index)); }
+    return this.visibleEventTypes;
+  }
+
+  eventLabel(type) {
+    const types = this.extended ? SPECIAL_EVENT_TYPES : EVENT_TYPES;
+    return (this.extended ? extendedLabels() : labels())[types.indexOf(type)] ?? '';
+  }
+
+  currentLineActivity() {
+    return { chart: this.getSession().chart, tempo: this.tempo, start: this.timeAt(this.viewHeight()), end: this.timeAt(0), layer: this.layer, extended: this.extended };
+  }
+
+  resolveMultiLineExpression(text) {
+    const context = this.currentLineActivity();
+    const compiled = compileLineExpression(text, context.chart.judgeLineList?.length ?? 0, context.chart);
+    this.lineActivity ??= new LineActivityIndex();
+    const values = new Set(compiled.indices);
+    for (const kind of compiled.dynamic) for (const index of this.lineActivity.query(context.chart, context.tempo, context.start, context.end, kind, context.layer, context.extended)) values.add(index);
+    return { indices: [...values].sort((a, b) => a - b), dynamic: compiled.dynamic.length > 0 };
+  }
+
+  setMultiLineExpression(text) {
+    const session = this.getSession(), result = this.resolveMultiLineExpression(text);
+    session.multiLineIndices = result.indices;
+    session.multiLineExpression = result.dynamic ? String(text).trim() : '';
+    session.multiLineResolvedIndices = result.indices;
+    this.multiLineExpressionCache = null;
+    return result;
+  }
+
+  refreshMultiLineExpression() {
+    const session = this.getSession(), text = session.multiLineExpression;
+    if (text && session.multiLineResolvedIndices !== session.multiLineIndices) { session.multiLineExpression = ''; return false; }
+    if (!session.multiLineEnabled || !text || this.drag || this.eventInteraction.drag || this.eventInteraction.pending || this.pendingHold) return false;
+    const context = this.currentLineActivity();
+    const cache = this.multiLineExpressionCache;
+    if (!cache || cache.text !== text || cache.chart !== context.chart || cache.tempo !== context.tempo) {
+      this.multiLineExpressionCache = { text, chart: context.chart, tempo: context.tempo, compiled: compileLineExpression(text, context.chart.judgeLineList?.length ?? 0, context.chart) };
+    }
+    const current = this.multiLineExpressionCache, lists = [];
+    this.lineActivity ??= new LineActivityIndex();
+    for (const kind of current.compiled.dynamic) lists.push(this.lineActivity.query(context.chart, context.tempo, context.start, context.end, kind, context.layer, context.extended));
+    if (current.lists?.length === lists.length && lists.every((list, i) => list === current.lists[i])) return false;
+    current.lists = lists;
+    const indices = [...new Set([...current.compiled.indices, ...lists.flat()])].sort((a, b) => a - b);
+    if (indices.length === session.multiLineIndices.length && indices.every((index, i) => index === session.multiLineIndices[i])) return false;
+    session.multiLineIndices = indices; session.multiLineExpression = text; session.multiLineResolvedIndices = indices;
+    return true;
+  }
 
   eventColumnBounds(channel, width) {
-    const channelWidth = width / this.eventTypes.length;
+    const channelWidth = width / Math.max(1, this.eventTypes.length);
     const barWidth = channelWidth * Math.max(0.35, Math.min(1, this.eventBarWidth ?? 0.82));
     return { channelWidth, left: channel * channelWidth, x: channel * channelWidth + (channelWidth - barWidth) / 2, width: barWidth };
   }
@@ -156,8 +216,9 @@ export class Timeline {
   panelCount(area = 'notes') {
     const session = this.getSession();
     if (!session.multiLineActive) return 1;
+    if (!session.multiLineIndices.length) return 0;
     if (area === 'notes' && session.multiLineMode === 'notes' && session.multiLineMerge) return 1;
-    return Math.max(1, session.multiLineIndices.length);
+    return session.multiLineIndices.length;
   }
   panelIndex(lineIndex, area = 'notes') {
     const session = this.getSession(); const index = session.targetLineIndices.indexOf(lineIndex);
@@ -184,8 +245,20 @@ export class Timeline {
     else this.multiLineScroll[area] = value;
     return value;
   }
+  multiLineLayout(width, area, padding = 8) {
+    const session = this.getSession();
+    // Read the selected indices once, without copying or searching them per column.
+    const indices = session.multiLineActive ? session.multiLineIndices : [session.lineIndex];
+    const count = this.panelCount(area), panelWidth = this.panelWidth(width, area), gap = this.panelGap(width, area);
+    const stride = panelWidth + gap, offset = this.multiLineViewportOffset(width, area);
+    const first = Math.max(0, Math.ceil((offset - panelWidth - padding) / stride));
+    const last = Math.min(indices.length, count, Math.floor((offset + width + padding) / stride) + 1);
+    return { indices, count, panelWidth, gap, stride, offset, first, last };
+  }
   lineIndexAt(horizontal, width, area = 'notes') {
-    const session = this.getSession(); if (!session.multiLineActive || this.panelCount(area) === 1) return session.lineIndex;
+    const session = this.getSession(); if (!session.multiLineActive) return session.lineIndex;
+    if (!session.multiLineIndices.length) return -1;
+    if (this.panelCount(area) === 1) return area === 'notes' && session.multiLineMode === 'notes' && session.multiLineMerge ? session.lineIndex : session.multiLineIndices[0] ?? session.lineIndex;
     const offset = this.multiLineViewportOffset(width, area);
     const stride = this.panelStride(width, area); const panelWidth = this.panelWidth(width, area);
     const slot = Math.max(0, Math.min(this.panelCount(area) - 1, Math.floor((horizontal + offset) / stride)));
@@ -264,24 +337,40 @@ export class Timeline {
   }
 
   syncMultiLineChrome(area, width) {
-    const session = this.getSession(); const showLabels = session.multiLineActive && session.multiLineMode === area; const active = showLabels && this.panelCount(area) > 1;
+    const session = this.getSession();
+    // Both canvases draw in the same frame; only the active area owns the shared chrome.
+    if (session.multiLineActive && session.multiLineMode !== area) return;
+    const showLabels = session.multiLineActive; const layout = this.multiLineLayout(width, area);
+    const { indices, count, panelWidth, stride, offset, first, last } = layout;
+    const active = showLabels && count > 1;
     const editor = this.notesCanvas.closest?.('.editor');
-    editor?.classList.toggle('multi-scroll-visible', active);
+    if (editor && editor.classList.contains('multi-scroll-visible') !== active) editor.classList.toggle('multi-scroll-visible', active);
     if (this.multiLineScrollElement) {
-      const total = this.panelCount(area) * this.panelWidth(width, area) + Math.max(0, this.panelCount(area) - 1) * this.panelGap(width, area);
+      const total = count * panelWidth + Math.max(0, count - 1) * layout.gap;
       const maximum = Math.max(0, total - width);
-      this.multiLineScrollElement.hidden = !active;
-      this.multiLineScrollElement.max = String(maximum);
-      const scroll = typeof this.multiLineScroll === 'number' ? this.multiLineScroll : this.multiLineScroll?.[area] ?? 0;
-      this.multiLineScrollElement.value = String(Math.min(maximum, Math.max(0, scroll)));
+      if (this.multiLineScrollElement.hidden !== !active) this.multiLineScrollElement.hidden = !active;
+      if (this.multiLineScrollElement.max !== String(maximum)) this.multiLineScrollElement.max = String(maximum);
+      if (this.multiLineScrollElement.value !== String(offset)) this.multiLineScrollElement.value = String(offset);
     }
     if (!this.multiLineLabels) return;
-    this.multiLineLabels.hidden = !showLabels;
-    this.multiLineLabels.replaceChildren();
+    if (this.multiLineLabels.hidden !== !showLabels) this.multiLineLabels.hidden = !showLabels;
+    if (this.multiLineLabelHost !== this.multiLineLabels) {
+      this.multiLineLabelHost = this.multiLineLabels; this.multiLineLabelNodes = new Map(); this.multiLineLabels.replaceChildren();
+    }
+    const nodes = this.multiLineLabelNodes;
+    for (const [panel, node] of nodes) if (!showLabels || panel < first || panel >= last) { node.remove(); nodes.delete(panel); }
     if (!showLabels) return;
-    const panelWidth = this.panelWidth(width, area); const stride = this.panelStride(width, area); const offset = this.multiLineViewportOffset(width, area);
-    const lines = this.panelCount(area) === 1 ? [{ index: session.targetLineIndices[0], text: session.multiLineMerge && area === 'notes' ? t('timeline.s8137e64', { p0: session.targetLineIndices.map(index => lineDisplayLabel(session.chart, index)).join(' / ') }) : session.targetLineIndices.map(index => lineDisplayLabel(session.chart, index)).join(' · ') }] : session.targetLineIndices.map(index => ({ index, text: lineDisplayLabel(session.chart, index) }));
-    for (const [panel, line] of lines.entries()) { const label = document.createElement('span'); label.textContent = line.text; label.style.width = `${panelWidth}px`; label.style.transform = `translateX(${panel * stride - offset}px)`; this.multiLineLabels.append(label); }
+    for (let panel = first; panel < last; panel++) {
+      let label = nodes.get(panel);
+      if (!label) { label = document.createElement('span'); nodes.set(panel, label); this.multiLineLabels.append(label); }
+      const text = count === 1
+        ? session.multiLineMerge && area === 'notes' ? t('timeline.s8137e64', { p0: indices.map(index => lineDisplayLabel(session.chart, index)).join(' / ') }) : indices.map(index => lineDisplayLabel(session.chart, index)).join(' · ')
+        : lineDisplayLabel(session.chart, indices[panel]);
+      if (label.textContent !== text) label.textContent = text;
+      const size = `${panelWidth}px`, transform = `translateX(${panel * stride - offset}px)`;
+      if (label.style.width !== size) label.style.width = size;
+      if (label.style.transform !== transform) label.style.transform = transform;
+    }
   }
 
   cancelPlacement() { this.pendingHold = null; this.eventInteraction.pending = null; this.drag = null; this.eventInteraction.drag = null; this.changed(); }
@@ -347,9 +436,15 @@ export class Timeline {
 
   refreshIndex(lineIndex = this.getSession().lineIndex) {
     if (!this.noteIndexes) this.noteIndexes = new Map();
-    const notes = this.getSession().chart.judgeLineList?.[lineIndex]?.notes ?? [];
-    if (this.noteIndexes.get(lineIndex)?.notes === notes) return;
-    this.noteIndexes.set(lineIndex, { notes, index: new IntervalIndex(notes, note => beatValue(note.startTime), note => Math.max(beatValue(note.startTime), beatValue(note.endTime))) });
+    const lines = this.getSession().chart.judgeLineList;
+    if (this.noteIndexLines !== lines) {
+      for (const [index, cached] of this.noteIndexes) if (cached.notes !== (lines?.[index]?.notes ?? EMPTY_EVENTS)) this.noteIndexes.delete(index);
+      this.noteIndexLines = lines;
+    }
+    const notes = lines?.[lineIndex]?.notes ?? EMPTY_EVENTS;
+    const cached = this.noteIndexes.get(lineIndex);
+    if (cached?.notes === notes && cached.length === notes.length) return;
+    this.noteIndexes.set(lineIndex, { notes, length: notes.length, index: new NoteDisplayIndex(notes) });
   }
 
   visible(lineIndex = this.getSession().lineIndex) {
@@ -396,6 +491,15 @@ export class Timeline {
         this.drag.tracing = true;
         this.getSession().multiSelectionIntent = 'notes';
         this.drag.points.push(this.cursor);
+        if(this.getSession().largeDocument){
+          const first=this.drag.largePreviousSeconds??this.timeAt(previous.y),last=this.timeAt(this.cursor.y);
+          this.drag.largePreviousSeconds=last;this.drag.largeRegions??=[];
+          const indices=this.getSession().multiLineActive&&this.panelCount('notes')===1?this.getSession().targetLineIndices:[this.cursorLineIndex];
+          for(const line of indices){
+            const factor=this.factorForLine(line),width=this.noteBaseWidth({size:1})/2,center=this.noteHorizontal(0,line),scale=this.horizontalScale();
+            this.drag.largeRegions.push({line,start:this.tempo.beat(Math.min(first,last),factor)-.02,end:this.tempo.beat(Math.max(first,last),factor)+.02,left:(Math.min(previous.x,this.cursor.x)-width-center)/scale,right:(Math.max(previous.x,this.cursor.x)+width-center)/scale});
+          }
+        }
         const candidates = [];
         for (const entry of this.visible(this.cursorLineIndex)) if (strokeIntersects(previous, this.cursor, {
           left: this.noteHorizontal(entry.item.positionX, this.cursorLineIndex) - this.noteWidth(entry.item) / 2, right: this.noteHorizontal(entry.item.positionX, this.cursorLineIndex) + this.noteWidth(entry.item) / 2,
@@ -427,6 +531,10 @@ export class Timeline {
     this.hoverArea = 'notes';
     const hit = this.hit(position);
     const session = this.getSession();
+    if(hit&&event.ctrlKey&&session.largeDocument?.logicalSelection){
+      const selected=(session.multiLineActive?session.multiLineSelection.get(hit.lineIndex):session.selection)?.has(hit.index);
+      session.largeDocument.selectRegions([],{append:true,remove:Boolean(selected),references:[hit.item._rpenLargeRef.id]});this.changed();return;
+    }
     if (event.ctrlKey || event.shiftKey || event.button === 1) session.multiSelectionIntent = 'notes';
     else session.multiSelectionIntent = null;
     if (event.button === 0 && hit && this.curvePick?.(hit.item, hit.index)) return;
@@ -485,11 +593,23 @@ export class Timeline {
     drag.currentWorldX = drag.current.x + this.multiLineViewportOffset(this.notesCanvas.clientWidth, 'notes');
     if (drag.startFactor !== undefined) drag.currentSeconds = this.noteView?.flow ? this.timeAt(drag.current.y) : this.tempo.seconds(this.origin, drag.startFactor) + (this.baseline() - drag.current.y) / this.scale;
     const session = this.getSession();
+    if(drag.kind==='stroke'&&drag.tracing&&session.largeDocument){this.drag=null;session.largeDocument.selectRegions(drag.largeRegions??[],{append:true,remove:drag.remove,interval:this.selectionInterval});this.changed();return;}
     if (drag.kind === 'rectangle') {
       if (!drag.finished) { this.changed(); return; }
       const left = Math.min(drag.startWorldX ?? drag.start.x, drag.currentWorldX ?? drag.current.x);
       const right = Math.max(drag.startWorldX ?? drag.start.x, drag.currentWorldX ?? drag.current.x);
       const [bottom, top] = this.rectangleTimes(drag);
+      if (session.largeDocument) {
+        const indices = session.multiLineActive && session.multiLineMode === 'notes' ? session.targetLineIndices : [session.lineIndex];
+        const scroll = this.multiLineViewportOffset(this.notesCanvas.clientWidth, 'notes');
+        const regions = indices.map(line => {
+          const factor = this.factorForLine(line), first = drag.startSeconds ?? this.timeAt(drag.start.y), last = drag.currentSeconds ?? this.timeAt(drag.current.y);
+          return { line, start: this.noteView?.flow ? bottom : this.tempo.beat(Math.min(first,last),factor)-1e-8, end: this.noteView?.flow ? top : this.tempo.beat(Math.max(first,last),factor)+1e-8,
+            left: this.noteView ? (left-scroll-this.noteView.originX)/this.noteView.pixelsPerUnit : (left-this.panelIndex(line,'notes')*this.panelStride(this.notesCanvas.clientWidth,'notes')-this.panelWidth(this.notesCanvas.clientWidth,'notes')/2)/this.horizontalScale()+(this.cameraX??0),
+            right: this.noteView ? (right-scroll-this.noteView.originX)/this.noteView.pixelsPerUnit : (right-this.panelIndex(line,'notes')*this.panelStride(this.notesCanvas.clientWidth,'notes')-this.panelWidth(this.notesCanvas.clientWidth,'notes')/2)/this.horizontalScale()+(this.cameraX??0), ...(this.noteView?.flow ? { above: drag.side > 0 ? 1 : 0 } : {}) };
+        });
+        this.drag = null; session.largeDocument.selectRegions(regions, { append: drag.append, remove: drag.remove, interval: this.selectionInterval }); this.changed(); return;
+      }
       if (!drag.append) session.selection.clear();
       const lineIndices = session.multiLineActive && session.multiLineMode === 'notes' ? session.targetLineIndices : [session.lineIndex];
       const candidates = [];
@@ -514,7 +634,12 @@ export class Timeline {
       if (session.multiLineActive && session.multiLineMode === 'notes') session.selection = new Set(session.multiLineSelection?.get(session.lineIndex) ?? []);
       session.notify();
     } else if (['move', 'startTime', 'endTime'].includes(drag.kind) && (drag.scrolled || Math.hypot(drag.current.x - drag.start.x, drag.current.y - drag.start.y) > 4)) {
-      if (session.multiLineActive && session.multiLineMode === 'notes') {
+      if (session.largeDocument?.logicalSelection) {
+        // Keep the geometry alive in this closure while the complete logical
+        // selection is read and transformed in bounded batches.
+        const timeline = Object.create(this); Object.assign(timeline,{drag:{...drag},origin:this.origin,scale:this.scale,tempo:this.tempo,noteView:this.noteView?{...this.noteView}:null});
+        this.drag = null; session.largeDocument.transformSelected(drag.kind === 'move' ? t('timeline.s26c47ee') : t('timeline.se10e84d'), note => timeline.movedNote(note));
+      } else if (session.multiLineActive && session.multiLineMode === 'notes') {
         const snapshot = captureSelection(session);
         const result = editCapturedSelection(snapshot, { note: item => this.movedNote(item) });
         this.drag = null;
@@ -533,6 +658,7 @@ export class Timeline {
   addAtCursor(type) {
     if (!this.cursor) return false;
     const session = this.getSession();
+    if (session.multiLineActive && !session.multiLineIndices.length) return false;
     session.focus = 'notes'; session.eventSelection.clear();
     const side = this.noteView?.flow ? this.pendingHold?.side ?? this.noteView.sideAt(this.cursor.y) : 1;
     const beat = this.noteView?.flow ? beatValue(snapTime(this.timeAt(this.cursor.y, side), this.division, this.tempo, this.factor)) : this.snappedBeat(this.cursor.y);
@@ -605,11 +731,17 @@ export class Timeline {
 
   judgementSegments(width, height, playBeat, area) {
     const session = this.getSession();
+    if (session.multiLineActive && !session.multiLineIndices.length) return [];
     if (!session.multiLineActive || session.multiLineMode !== area || this.panelCount(area) < 2) return [{ left: 0, right: width, y: this.vertical(playBeat, height) }];
-    const panelWidth = this.panelWidth(width, area), stride = this.panelStride(width, area), offset = this.multiLineViewportOffset(width, area);
+    const padding = editorJudgementWidth(this, this.gridReferenceWidth ?? this.panelWidth(width, area));
+    const { indices, panelWidth, stride, offset, first, last } = this.multiLineLayout(width, area, padding);
     const seconds = this.tempo.seconds(playBeat, this.factor);
-    return session.targetLineIndices.map((lineIndex, panel) => ({ left: panel * stride - offset, right: panel * stride - offset + panelWidth,
-      y: this.verticalForLine(this.tempo.beat(seconds, this.factorForLine(lineIndex)), lineIndex, height) }));
+    const segments = [];
+    for (let panel = first; panel < last; panel++) {
+      const lineIndex = indices[panel], left = panel * stride - offset;
+      segments.push({ left, right: left + panelWidth, y: this.verticalForLine(this.tempo.beat(seconds, this.factorForLine(lineIndex)), lineIndex, height) });
+    }
+    return segments;
   }
 
   drawJudgement(context, width, height, playBeat, area) {
@@ -618,21 +750,27 @@ export class Timeline {
   }
 
   drawMultiLineGrid(context, width, height, playBeat, area = 'events') {
-    const panelWidth = this.panelWidth(width, area);
-    const stride = this.panelStride(width, area);
-    const offset = this.multiLineViewportOffset(width, area);
-    const multiple = this.panelCount(area) > 1;
-    for (const [panel, lineIndex] of this.getSession().targetLineIndices.entries()) {
-      this.gridForLine(context, panel * stride - offset, panelWidth, height, playBeat, lineIndex, !multiple);
+    const { indices, count, panelWidth, stride, offset, first, last } = this.multiLineLayout(width, area);
+    for (let panel = first; panel < last; panel++) {
+      this.gridForLine(context, panel * stride - offset, panelWidth, height, playBeat, indices[panel], count === 1);
     }
   }
 
   drawMultiLineBeatLabels(context, width, height, area) {
     if (this.panelCount(area) < 2) return;
-    const panelWidth = this.panelWidth(width, area); const stride = this.panelStride(width, area);
-    const offset = this.multiLineViewportOffset(width, area); const gap = this.panelGap(width, area);
-    for (const [panel, lineIndex] of this.getSession().targetLineIndices.entries()) {
-      if (panel >= this.panelCount(area) - 1) continue;
+    // Beat labels are centered in the gaps and can extend beyond their column.
+    const gap = this.panelGap(width, area), font = `${gap < 20 ? 10 : 12}px RPE, sans-serif`;
+    context.save(); context.font = font;
+    const revision = editorCanvasRevision(), fontStatus = globalThis.document?.fonts?.status;
+    if (this.beatLabelFont !== context.font || this.beatLabelRevision !== revision || this.beatLabelFontStatus !== fontStatus) {
+      this.beatLabelFont = context.font; this.beatLabelRevision = revision; this.beatLabelFontStatus = fontStatus;
+      const glyphWidth = Math.max(...[...'0123456789e+-'].map(character => { const metrics = context.measureText(character); return Math.max(metrics.width, Math.abs(metrics.actualBoundingBoxLeft ?? 0), Math.abs(metrics.actualBoundingBoxRight ?? 0)); }));
+      this.beatLabelPadding = glyphWidth * 16 + 4;
+    }
+    context.restore();
+    const { indices, count, panelWidth, stride, offset, first, last } = this.multiLineLayout(width, area, gap + this.beatLabelPadding);
+    for (let panel = first; panel < Math.min(last, count - 1); panel++) {
+      const lineIndex = indices[panel];
       const factor = this.factorForLine(lineIndex); const originSeconds = this.tempo.seconds(this.origin, factor);
       const secondsAt = vertical => originSeconds + (height - this.judgementOffset - vertical) / this.scale;
       const beatAt = vertical => this.tempo.beat(secondsAt(vertical), factor);
@@ -642,7 +780,7 @@ export class Timeline {
       const labelStride = Math.max(this.division, Math.ceil(tickStride / this.division) * this.division);
       const labelFirst = Math.ceil(first / this.division) * this.division;
       const x = panel * stride - offset + panelWidth + gap / 2;
-      context.save(); context.font = `${gap < 20 ? 10 : 12}px RPE, sans-serif`; context.textAlign = 'center'; context.fillStyle = '#dddddd';
+      context.save(); context.font = font; context.textAlign = 'center'; context.fillStyle = '#dddddd';
       for (let tick = labelFirst; tick <= last; tick += labelStride) {
         const beat = tick / this.division; const vertical = this.verticalForLine(beat, lineIndex, height);
         if (vertical >= 0 && vertical <= height) context.fillText(String(beat), x, vertical - 4);
@@ -652,6 +790,7 @@ export class Timeline {
   }
 
   draw(playBeat) {
+    if (this.refreshMultiLineExpression()) this.onMultiLineChange?.();
     const session = this.getSession();
     this.syncMultiLineChrome('notes', this.notesCanvas.clientWidth);
     const { context, width, height } = prepareCanvas(this.notesCanvas, this.noteView ? { width: this.notesCanvas.clientWidth, height: this.notesCanvas.clientHeight } : undefined);
@@ -659,12 +798,13 @@ export class Timeline {
       context.save(); context.globalAlpha = this.noteView.panelOpacity; context.fillStyle = '#20262e'; context.fillRect(0, 0, width, height);
     }
     const multiNotes = session.multiLineActive && session.multiLineMode === 'notes';
-    if (session.multiLineActive && this.panelCount('notes') > 1) {
-      const panelWidth = this.panelWidth(width, 'notes'); const gap = this.panelGap(width, 'notes'); const offset = this.multiLineViewportOffset(width, 'notes');
+    const noteLayout = this.multiLineLayout(width, 'notes');
+    if (session.multiLineActive && noteLayout.count > 1) {
+      const { panelWidth, gap, stride, offset, first, last } = this.multiLineLayout(width, 'notes', noteLayout.gap);
       context.fillStyle = '#242424';
-      for (let panel = 0; panel < this.panelCount('notes') - 1; panel++) context.fillRect(panel * (panelWidth + gap) + panelWidth - offset, 0, gap, height);
+      for (let panel = first; panel < Math.min(last, noteLayout.count - 1); panel++) context.fillRect(panel * stride + panelWidth - offset, 0, gap, height);
     }
-    if (multiNotes && this.panelCount('notes') > 1) this.drawMultiLineGrid(context, width, height, playBeat, 'notes'); else this.grid(context, width, height, playBeat);
+    if (multiNotes && this.panelCount('notes') !== 1) this.drawMultiLineGrid(context, width, height, playBeat, 'notes'); else this.grid(context, width, height, playBeat);
     context.strokeStyle = '#555555';
     const grid = verticalGrid(this.gridCount);
     const extent = 675;
@@ -677,30 +817,35 @@ export class Timeline {
     const lanes = new Set();
     for (let index = firstGrid; index <= lastGrid; index++) lanes.add((index + grid.first) * grid.spacing);
     for (const reference of [-extent, 0, extent]) if (reference >= startX && reference <= endX) lanes.add(reference);
-    for (const lineIndex of this.getSession().targetLineIndices.slice(0, this.panelCount('notes'))) {
+    const horizontalScale = this.horizontalScale();
+    for (let panel = noteLayout.first; panel < noteLayout.last; panel++) {
+      const lineIndex = noteLayout.indices[panel];
       for (const lane of lanes) {
         const center = Math.abs(lane) < 1e-7;
         const boundary = Math.abs(Math.abs(lane) - extent) < 1e-7;
         context.strokeStyle = center ? '#9ba5b0' : boundary ? '#737d88' : '#555555'; context.lineWidth = center ? 2 : boundary ? 1.5 : 1;
-        context.beginPath(); context.moveTo(this.noteHorizontal(lane, lineIndex), 0); context.lineTo(this.noteHorizontal(lane, lineIndex), height); context.stroke();
+        const x = this.noteView ? this.noteHorizontal(lane, lineIndex) : panel * noteLayout.stride - noteLayout.offset + (noteLayout.panelWidth / 2 + (lane - cameraX) * horizontalScale);
+        context.beginPath(); context.moveTo(x, 0); context.lineTo(x, height); context.stroke();
       }
     }
-    if (this.panelCount('notes') > 1) {
-      const panelWidth = this.panelWidth(width, 'notes'); const offset = this.multiLineViewportOffset(width, 'notes');
+    if (noteLayout.count > 1) {
+      const { panelWidth, stride, offset, first, last } = noteLayout;
       context.strokeStyle = '#333b45'; context.lineWidth = 2;
-      for (let panel = 0; panel < this.panelCount('notes') - 1; panel++) { const separator = panel * this.panelStride(width, 'notes') + panelWidth - offset; context.beginPath(); context.moveTo(separator, 0); context.lineTo(separator, height); context.stroke(); }
+      for (let panel = first; panel < Math.min(last, noteLayout.count - 1); panel++) { const separator = panel * stride + panelWidth - offset; context.beginPath(); context.moveTo(separator, 0); context.lineTo(separator, height); context.stroke(); }
     }
     context.lineWidth = 1;
     if (this.noteView?.flow) context.restore();
     this.drawJudgement(context, width, height, playBeat, 'notes');
     if (this.highlightChart !== session.chart || this.highlightTempo !== this.tempo) {
       this.highlightChart = session.chart; this.highlightTempo = this.tempo; this.simultaneous = simultaneousNotes(session.chart, this.tempo);
+      if (session.largeDocument) for (const line of session.chart.judgeLineList) for (const note of line.notes) if (note._rpenLargeRef?.multi) this.simultaneous.add(note);
     }
     if (this.getSession().multiLineActive && this.getSession().multiLineMode === 'notes') this.drawMultiLineNotes(context, width, height);
     this.drawCurveGhost(context);
     drawClipboard(this, context, width, height, 'notes');
 
-    const entries = new Map(this.visible().map(entry => [entry.index, entry]));
+    const entries = new Map(multiNotes ? [] : this.visible().map(entry => [entry.index, entry]));
+    if (session.multiLineActive && !session.multiLineIndices.length) entries.clear();
     if (!multiNotes && ['move', 'startTime', 'endTime'].includes(this.drag?.kind)) for (const index of session.selection) entries.set(index, { item: session.notes[index], index });
     const orderedEntries = multiNotes ? [] : [...entries.values()].sort((left, right) => Number(right.item.type === 2) - Number(left.item.type === 2));
     const direct = Boolean(this.noteView?.flow), draft = direct ? this.previewNotes()?.get(session.lineIndex) : null;
@@ -755,7 +900,7 @@ export class Timeline {
       if (!this.skin?.hold(context, pendingHorizontal, head, tail, noteWidth, false, true, undefined, noteWidth, direct ? side : 1)) context.fillRect(pendingHorizontal - noteWidth / 2, Math.min(head, tail), noteWidth, Math.abs(tail - head));
       context.globalAlpha = 1;
       if (direct) context.restore();
-    } else if (this.cursor && this.tool) {
+    } else if (this.cursor && this.tool && (!multiNotes || session.multiLineIndices.length)) {
       const lineIndex = this.cursorLineIndex ?? this.lineIndexAt(this.cursor.x, width, 'notes');
       const positionX = this.notePositionAt(this.cursor.x, lineIndex);
       context.fillStyle = NOTE_COLORS[this.tool] + '88';
@@ -789,29 +934,78 @@ export class Timeline {
 
   drawMultiLineNotes(context, width, height) {
     const session = this.getSession();
-    context.save();
-    for (const lineIndex of session.targetLineIndices) {
+    const indices = session.targetLineIndices, panelWidth = this.panelWidth(width, 'notes'), stride = this.panelStride(width, 'notes'), offset = this.multiLineViewportOffset(width, 'notes');
+    const notePanelWidth = this.panelWidth(this.notesCanvas.clientWidth, 'notes'), noteStride = this.panelStride(this.notesCanvas.clientWidth, 'notes'), noteOffset = this.multiLineViewportOffset(this.notesCanvas.clientWidth, 'notes');
+    const renderScale = this.renderNoteScale, heightWidth = 68 * renderScale, xScale = this.horizontalScale(), cameraX = this.cameraX ?? 0;
+    const baseGeometry = !this.noteView && this.noteHorizontal === Timeline.prototype.noteHorizontal && this.noteWidth === Timeline.prototype.noteWidth
+      && this.noteBaseWidth === Timeline.prototype.noteBaseWidth && this.clampNoteHorizontal === Timeline.prototype.clampNoteHorizontal && this.verticalForLine === Timeline.prototype.verticalForLine;
+    const baseline = this.baseline(height), merge = session.multiLineMerge && indices.length > 1;
+    const stockSkin = this.skin?.noteBatchCompatible;
+    let geometry;
+    if (baseGeometry && stockSkin) {
+      this.notePainter ??= new EditorNotePainter(); geometry = this.notePainter.begin(this.skin, context, width, height);
+    }
+    const passes = []; let count = 0;
+    for (const [panel, lineIndex] of indices.entries()) {
       const line = session.chart.judgeLineList?.[lineIndex];
       const [bottomBeat, topBeat] = this.beatRangeForLine(lineIndex, height);
-      for (const [index, sourceNote] of (line?.notes ?? []).entries()) {
-        const selectedSet = session.multiLineActive && session.multiLineMode === 'notes'
-          ? (session.multiLineSelection?.get(lineIndex) ?? new Set()) : session.selection;
-        const note = selectedSet.has(index) && this.drag?.lineIndex === lineIndex && !this.bulkPreview ? this.movedNote(sourceNote) : sourceNote;
-        const beat = beatValue(note.startTime); const endBeat = beatValue(note.endTime);
+      this.refreshIndex(lineIndex);
+      const display = this.noteIndexes.get(lineIndex).index;
+      if (!session.multiLineMerge && geometry) {
+        const left = panel * stride - offset, margin = geometry.horizontalPadding(heightWidth * display.maxSize) + 4;
+        if (left + panelWidth + margin < 0 || left - margin > width) continue;
+      }
+      const selectedSet = session.multiLineActive && session.multiLineMode === 'notes' ? session.multiLineSelection?.get(lineIndex) ?? EMPTY_SELECTION : session.selection;
+      const moving = this.drag?.lineIndex === lineIndex && !this.bulkPreview;
+      let entries = display.inSourceOrder(bottomBeat, topBeat);
+      if (moving && selectedSet.size) {
+        const visible = new Map(entries.map(entry => [entry.index, entry]));
+        for (const index of selectedSet) if (!visible.has(index) && line?.notes?.[index]) visible.set(index, { index, item: line.notes[index] });
+        entries = [...visible.values()].sort((left, right) => left.index - right.index);
+      }
+      count += entries.length; passes.push({ panel, lineIndex, bottomBeat, topBeat, selectedSet, moving, entries });
+    }
+    let painter;
+    if (count > 512 && geometry && typeof document !== 'undefined') painter = geometry;
+    context.save();
+    for (const { panel, lineIndex, bottomBeat, topBeat, selectedSet, moving, entries } of passes) {
+      const left = (session.multiLineMerge ? 0 : panel) * stride - offset;
+      const noteLeft = (session.multiLineMerge ? 0 : panel) * noteStride - noteOffset;
+      const factor = this.factorForLine(lineIndex), originSeconds = this.tempo.seconds(this.origin, factor);
+      if (baseGeometry) this.noteIndexes.get(lineIndex).index.timeMapping(this.tempo, factor);
+      const label = String(lineIndex); let labelMetrics;
+      if (merge && painter) { context.font = '14px RPE, sans-serif'; context.textAlign = 'center'; labelMetrics = context.measureText(label); }
+      for (const entry of entries) {
+        const { index, item: sourceNote } = entry;
+        const selected = selectedSet.size > 0 && selectedSet.has(index);
+        const note = selected && moving ? this.movedNote(sourceNote) : sourceNote;
+        const beat = note === sourceNote && entry.beat !== undefined ? entry.beat : beatValue(note.startTime);
+        const endBeat = note === sourceNote && entry.endBeat !== undefined ? entry.endBeat : beatValue(note.endTime);
         if (Math.max(beat, endBeat) < bottomBeat || Math.min(beat, endBeat) > topBeat) continue;
         const highlight = this.highlight !== false && this.simultaneous?.has(sourceNote);
-        const horizontal = this.noteHorizontal(note.positionX, lineIndex); const noteWidth = this.noteWidth(note, highlight), baseWidth = this.noteBaseWidth(note); const rendered = this.clampNoteHorizontal(horizontal, noteWidth, width, lineIndex);
+        const horizontal = baseGeometry ? noteLeft + (notePanelWidth / 2 + (note.positionX - cameraX) * xScale) : this.noteHorizontal(note.positionX, lineIndex);
+        const baseWidth = baseGeometry ? 68 * renderScale * Math.abs(note.size ?? 1) : this.noteBaseWidth(note);
+        const noteWidth = baseGeometry ? baseWidth * (this.skin?.noteScale?.(highlight) ?? 1) : this.noteWidth(note, highlight);
+        const rendered = baseGeometry ? horizontal + noteWidth / 2 < left || horizontal - noteWidth / 2 > left + panelWidth ? null : horizontal : this.clampNoteHorizontal(horizontal, noteWidth, width, lineIndex);
         if (rendered == null) continue;
-        const vertical = this.verticalForLine(beat, lineIndex, height); const endVertical = this.verticalForLine(beatValue(note.endTime), lineIndex, height);
-        const selected = selectedSet.has(index);
+        const vertical = baseGeometry ? baseline - ((note === sourceNote && entry.seconds !== undefined ? entry.seconds : this.tempo.seconds(beat, factor)) - originSeconds) * this.scale : this.verticalForLine(beat, lineIndex, height);
+        const endVertical = baseGeometry ? baseline - ((note === sourceNote && entry.endSeconds !== undefined ? entry.endSeconds : this.tempo.seconds(endBeat, factor)) - originSeconds) * this.scale : this.verticalForLine(endBeat, lineIndex, height);
         context.globalAlpha = note.isFake ? 0.45 : noteIsAbove(note) ? 1 : 0.7;
         context.fillStyle = NOTE_COLORS[note.type] ?? '#b8c8ff';
-        const textured = note.type === 2 ? this.skin?.hold(context, rendered, vertical, endVertical, baseWidth, highlight, true, note.tint ?? note.color, 68 * this.renderNoteScale) : this.skin?.head(context, note.type, rendered, vertical, baseWidth, highlight, note.tint ?? note.color, 5 * this.renderNoteScale, 68 * this.renderNoteScale);
+        const prepared = painter?.draw(context, note.type, rendered, vertical, endVertical, baseWidth, highlight, note.tint ?? note.color, 5 * renderScale, heightWidth);
+        const textured = prepared || (note.type === 2 ? this.skin?.hold(context, rendered, vertical, endVertical, baseWidth, highlight, true, note.tint ?? note.color, heightWidth) : this.skin?.head(context, note.type, rendered, vertical, baseWidth, highlight, note.tint ?? note.color, 5 * renderScale, heightWidth));
         if (!textured && note.type === 2) { const alpha = context.globalAlpha; context.globalAlpha = alpha * 0.45; context.fillRect(rendered - noteWidth / 2, Math.min(vertical, endVertical), noteWidth, Math.abs(vertical - endVertical)); context.globalAlpha = alpha; }
-        if (!textured) context.fillRect(rendered - noteWidth / 2, vertical - 4 * this.renderNoteScale, noteWidth, 8 * this.renderNoteScale);
-        if (selected) { context.strokeStyle = '#fff'; context.lineWidth = 2; context.strokeRect(rendered - noteWidth / 2 - 3, vertical - 4 * this.renderNoteScale - 3, noteWidth + 6, 8 * this.renderNoteScale + 6); context.lineWidth = 1; }
-        if (session.multiLineMerge && session.targetLineIndices.length > 1) { context.fillStyle = '#f0d887'; context.font = '14px RPE, sans-serif'; context.textAlign = 'center'; context.fillText(String(lineIndex), rendered, vertical + 18); context.textAlign = 'left'; }
+        if (!textured) context.fillRect(rendered - noteWidth / 2, vertical - 4 * renderScale, noteWidth, 8 * renderScale);
+        if (selected) { context.strokeStyle = '#fff'; context.lineWidth = 2; context.strokeRect(rendered - noteWidth / 2 - 3, vertical - 4 * renderScale - 3, noteWidth + 6, 8 * renderScale + 6); context.lineWidth = 1; }
+        if (merge) {
+          context.fillStyle = '#f0d887';
+          if (painter) {
+            if (!Number.isFinite(labelMetrics.actualBoundingBoxLeft) || rendered + labelMetrics.actualBoundingBoxRight >= -2 && rendered - labelMetrics.actualBoundingBoxLeft <= width + 2
+              && vertical + 18 + labelMetrics.actualBoundingBoxDescent >= -2 && vertical + 18 - labelMetrics.actualBoundingBoxAscent <= height + 2) context.fillText(label, rendered, vertical + 18);
+          } else { context.font = '14px RPE, sans-serif'; context.textAlign = 'center'; context.fillText(label, rendered, vertical + 18); context.textAlign = 'left'; }
+        }
       }
+      if (merge && painter) context.textAlign = 'left';
     }
     context.globalAlpha = 1;
     context.restore();
@@ -821,39 +1015,48 @@ export class Timeline {
     const session = this.getSession(); const context = editorSkinContext(this.eventsCanvas.getContext('2d')); const width = this.eventsCanvas.clientWidth; const height = this.eventsCanvas.clientHeight;
     this.eventRects = [];
     const baseValueFontSize = this.eventValueFontSize ?? 13;
-    for (const lineIndex of session.targetLineIndices) {
-      const panel = this.panelIndex(lineIndex, 'events'); const panelWidth = this.panelWidth(width, 'events'); const offset = panel * this.panelStride(width, 'events') - this.multiLineViewportOffset(width, 'events');
+    const layout = this.multiLineLayout(width, 'events'), types = this.eventTypes;
+    const { indices, panelWidth, stride, first, last } = layout;
+    const channelWidth = panelWidth / Math.max(1, types.length), barWidth = channelWidth * Math.max(0.35, Math.min(1, this.eventBarWidth ?? 0.82));
+    const canMerge = this.seamlessEvents && channelWidth >= 18;
+    const canDrawCurves = this.drawEventCurves !== false && channelWidth >= (this.eventCurveThreshold ?? 24);
+    const valueThreshold = this.eventValueThreshold ?? 30;
+    const valueFontSize = channelWidth >= valueThreshold * 2.4 ? baseValueFontSize : channelWidth >= valueThreshold * 1.7 ? Math.min(baseValueFontSize, 11) : channelWidth >= valueThreshold * 1.2 ? Math.min(baseValueFontSize, 9) : channelWidth >= valueThreshold ? Math.min(baseValueFontSize, 8) : 0;
+    for (let panel = first; panel < last; panel++) {
+      const lineIndex = indices[panel], offset = panel * stride - layout.offset;
       if (offset + panelWidth < 0 || offset > width) continue;
       const factor = this.factorForLine(lineIndex); const originSeconds = this.tempo.seconds(this.origin, factor);
       const beatAt = y => this.tempo.beat(originSeconds + (height - this.judgementOffset - y) / this.scale, factor);
       const firstBeat = beatAt(height); const lastBeat = beatAt(23);
-      const lineSelection = session.multiEventSelection?.get(lineIndex) ?? (lineIndex === session.lineIndex ? session.eventSelection : new Set());
+      const baseline = this.baseline(height);
+      const vertical = this.noteView?.vertical ? beat => this.vertical(beat, height) : beat => baseline - (this.tempo.seconds(beat, factor) - originSeconds) * this.scale;
+      const lineSelection = session.multiEventSelection?.get(lineIndex) ?? (lineIndex === session.lineIndex ? session.eventSelection : EMPTY_SELECTION);
       const layer = this.extended ? { ...(session.chart.judgeLineList?.[lineIndex]?.extended ?? {}), paintEvents: eventListAt(session, lineIndex, 'paintEvents') } : session.chart.judgeLineList?.[lineIndex]?.eventLayers?.[this.layer] ?? {};
-      this.eventTypes.forEach((type, channel) => {
-        const channelWidth = panelWidth / this.eventTypes.length; const barWidth = channelWidth * Math.max(0.35, Math.min(1, this.eventBarWidth ?? 0.82)); const barX = offset + channel * channelWidth + (channelWidth - barWidth) / 2;
+      types.forEach((type, channel) => {
+        const barX = offset + channel * channelWidth + (channelWidth - barWidth) / 2;
         context.strokeStyle = '#334154'; context.beginPath(); context.moveTo(offset + channel * channelWidth, 0); context.lineTo(offset + channel * channelWidth, height); context.stroke();
-        const events = layer[type] ?? [];
+        const events = layer[type] ?? EMPTY_EVENTS;
         const display = eventDisplayIndex(this, events, session.chart); const { ranges } = display;
         const entries = display.index.query(firstBeat, lastBeat).sort((a, b) => a.index - b.index);
-        const visibleGroups = new Set(entries.map(entry => ranges.get(entry.index)));
-        const selectedGroups = selectedEventGroups(lineSelection, type, ranges);
-        const seamlessGroups = new Set();
-        const curveBatches = new Map();
-        if (this.seamlessEvents && channelWidth >= 18 && type !== 'paintEvents') for (const group of visibleGroups) {
+        const visibleGroups = (canMerge || valueFontSize > 0) && type !== 'paintEvents' ? new Set(entries.map(entry => ranges.get(entry.index))) : null;
+        const selectedGroups = canMerge && lineSelection.size ? selectedEventGroups(lineSelection, type, ranges) : EMPTY_SELECTION;
+        const seamlessGroups = canMerge ? new Set() : EMPTY_SELECTION;
+        const curveBatches = canMerge && canDrawCurves ? new Map() : null;
+        if (canMerge && type !== 'paintEvents') for (const group of visibleGroups) {
           if (!group || group.entries.length < 2) continue;
           if (selectedGroups.has(group) || display.unmergeable.has(group)) continue;
           seamlessGroups.add(group);
           const first = group.entries[0].event; const last = group.entries.at(-1).event;
-          const top = Math.max(23, this.verticalForLine(beatValue(last.endTime), lineIndex, height));
-          const bottom = Math.min(height, this.verticalForLine(beatValue(first.startTime), lineIndex, height));
+          const top = Math.max(23, vertical(beatValue(last.endTime)));
+          const bottom = Math.min(height, vertical(beatValue(first.startTime)));
           if (bottom > top) { context.globalAlpha = this.eventOpacity ?? 0.25; context.fillStyle = '#e58d24'; context.fillRect(barX, top, barWidth, bottom - top); context.globalAlpha = 1; context.strokeStyle = '#ffa334'; context.strokeRect(barX, top, barWidth, bottom - top); }
         }
         for (const { index, item: event, start, end } of entries) {
-          const top = this.verticalForLine(end, lineIndex, height); const bottom = this.verticalForLine(start, lineIndex, height);
+          const top = vertical(end); const bottom = vertical(start);
           if (bottom < 23 || top > height) continue;
           const rectangle = { x: barX, y: Math.max(23, top), width: barWidth, height: Math.max(2, Math.min(height, bottom) - Math.max(23, top)), index, type, lineIndex };
           this.eventRects.push(rectangle);
-          const selected = lineSelection.has(eventKey(type, index));
+          const selected = lineSelection.size > 0 && lineSelection.has(eventKey(type, index));
           const hooked = isHookedEvent(event);
           const seamless = seamlessGroups.has(ranges.get(index));
           if (!seamless) {
@@ -862,7 +1065,7 @@ export class Timeline {
             context.globalAlpha = 1; context.strokeStyle = selected ? '#fff2bd' : type === 'paintEvents' ? '#c6a1ff' : hooked ? '#b8f2ff' : '#ffa334'; context.lineWidth = selected ? 2 : 1; context.strokeRect(rectangle.x, rectangle.y, rectangle.width, rectangle.height);
           }
           if (event.trajectory) this.drawTrajectoryEvent(context, rectangle, event);
-          if (this.drawEventCurves !== false && !event.trajectory && type !== 'paintEvents' && channelWidth >= (this.eventCurveThreshold ?? 24) && Number.isFinite(event.start) && Number.isFinite(event.end)) {
+          if (canDrawCurves && !event.trajectory && type !== 'paintEvents' && Number.isFinite(event.start) && Number.isFinite(event.end)) {
             if (seamless) {
               const range = ranges.get(index); if (!curveBatches.has(range)) curveBatches.set(range, []);
               curveBatches.get(range).push({ event, range, startY: bottom, endY: top });
@@ -873,22 +1076,20 @@ export class Timeline {
           }
         }
         context.strokeStyle = '#ffe0a3';
-        for (const [group, entries] of curveBatches) {
-          const top = Math.max(23, this.verticalForLine(beatValue(group.entries.at(-1).event.endTime), lineIndex, height));
-          const bottom = Math.min(height, this.verticalForLine(beatValue(group.entries[0].event.startTime), lineIndex, height));
+        if (curveBatches) for (const [group, entries] of curveBatches) {
+          const top = Math.max(23, vertical(beatValue(group.entries.at(-1).event.endTime)));
+          const bottom = Math.min(height, vertical(beatValue(group.entries[0].event.startTime)));
           drawEventCurveBatch(context, entries, { x: barX, y: top, width: barWidth, height: Math.max(2, bottom - top) }, { steps: 24, padding: 4, lineWidth: 1.5, drawConstant: true });
         }
-         const valueThreshold = this.eventValueThreshold ?? 30;
-         const valueFontSize = channelWidth >= valueThreshold * 2.4 ? baseValueFontSize : channelWidth >= valueThreshold * 1.7 ? Math.min(baseValueFontSize, 11) : channelWidth >= valueThreshold * 1.2 ? Math.min(baseValueFontSize, 9) : channelWidth >= valueThreshold ? Math.min(baseValueFontSize, 8) : 0;
         if (type !== 'paintEvents' && valueFontSize > 0) {
           context.font = `${valueFontSize}px RPE, sans-serif`; context.textAlign = 'center';
-          for (const group of new Set(entries.map(entry => ranges.get(entry.index)))) { if (!group) continue; const first = group.entries[0].event; const last = group.entries.at(-1).event; const top = this.verticalForLine(beatValue(last.endTime), lineIndex, height); const bottom = this.verticalForLine(beatValue(first.startTime), lineIndex, height); const format = value => typeof value === 'number' ? value.toFixed(2) : Array.isArray(value) ? value.join(',') : String(value ?? ''); context.fillStyle = '#f6e5ce'; context.fillText(format(Number.isFinite(group.max) ? group.max : last.end), offset + channel * channelWidth + channelWidth / 2, Math.max(37, top + 13), Math.max(10, channelWidth - 8)); if (bottom - top > 26) context.fillText(format(Number.isFinite(group.min) ? group.min : first.start), offset + channel * channelWidth + channelWidth / 2, Math.min(height - 5, bottom - 5), Math.max(10, channelWidth - 8)); }
+          for (const group of visibleGroups) { if (!group) continue; const first = group.entries[0].event; const last = group.entries.at(-1).event; const top = vertical(beatValue(last.endTime)); const bottom = vertical(beatValue(first.startTime)); const format = value => typeof value === 'number' ? value.toFixed(2) : Array.isArray(value) ? value.join(',') : String(value ?? ''); context.fillStyle = '#f6e5ce'; context.fillText(format(Number.isFinite(group.max) ? group.max : last.end), offset + channel * channelWidth + channelWidth / 2, Math.max(37, top + 13), Math.max(10, channelWidth - 8)); if (bottom - top > 26) context.fillText(format(Number.isFinite(group.min) ? group.min : first.start), offset + channel * channelWidth + channelWidth / 2, Math.min(height - 5, bottom - 5), Math.max(10, channelWidth - 8)); }
           context.textAlign = 'left';
         }
         context.fillStyle = '#303030'; context.fillRect(offset + channel * channelWidth, 0, channelWidth, 23);
-        if (channelWidth >= 48) { context.fillStyle = '#f5f5f5'; context.font = '12px RPE, sans-serif'; context.fillText((this.extended ? extendedLabels() : labels())[channel] ?? '', offset + channel * channelWidth + 6, 16); }
+        if (channelWidth >= 48) { context.fillStyle = '#f5f5f5'; context.font = '12px RPE, sans-serif'; context.fillText(this.eventLabel(type), offset + channel * channelWidth + 6, 16); }
       });
-      if (this.panelCount('events') > 1) { context.strokeStyle = '#333b45'; context.lineWidth = 2; context.beginPath(); context.moveTo(offset + panelWidth, 0); context.lineTo(offset + panelWidth, height); context.stroke(); }
+      if (layout.count > 1) { context.strokeStyle = '#333b45'; context.lineWidth = 2; context.beginPath(); context.moveTo(offset + panelWidth, 0); context.lineTo(offset + panelWidth, height); context.stroke(); }
     }
     const drag = this.eventInteraction.drag;
     if (drag?.kind === 'rectangle') {
@@ -960,9 +1161,9 @@ export class Timeline {
     const multiEvents = this.getSession().multiLineActive && this.getSession().multiLineMode === 'events';
     if (multiEvents) {
       if (this.panelCount('events') > 1) {
-        const panelWidth = this.panelWidth(width, 'events'); const gap = this.panelGap(width, 'events'); const offset = this.multiLineViewportOffset(width, 'events');
+        const { count, panelWidth, gap, stride, offset, first, last } = this.multiLineLayout(width, 'events', this.panelGap(width, 'events'));
         context.fillStyle = '#242424';
-        for (let panel = 0; panel < this.panelCount('events') - 1; panel++) context.fillRect(panel * (panelWidth + gap) + panelWidth - offset, 0, gap, height);
+        for (let panel = first; panel < Math.min(last, count - 1); panel++) context.fillRect(panel * stride + panelWidth - offset, 0, gap, height);
       }
       this.drawMultiLineGrid(context, width, height, playBeat);
       this.drawMultiLineEvents(playBeat);

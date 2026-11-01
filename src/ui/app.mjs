@@ -11,6 +11,8 @@ import { AudioTransport } from '../platform/audio.mjs';
 import { openFiles, assetBytes, resourceReferences, attachExternalEffects, assetPath } from '../platform/files.mjs';
 import { showExportDialog } from './export-dialog.mjs';
 import { showImportDialog } from './import-dialog.mjs';
+import { showLargeChartPreview } from './large-chart-preview.mjs';
+import { LargeChartWorkspace } from './large-chart-workspace.mjs';
 import { readChartImport } from '../platform/chart-import.mjs';
 import { listDrafts, readDraft, saveSnapshot } from '../platform/recovery.mjs';
 import { Timeline, prepareCanvas } from './timeline.mjs';
@@ -101,7 +103,10 @@ import { ModManager } from './mod-manager.mjs';
 import { emitModHook } from '../core/mod-hooks.mjs';
 import { GlobalEventRegistry, registerPlaceholderGlobalEvent } from '../core/global-events.mjs';
 import { GlobalEventsEditor } from './global-events.mjs';
-import { initializeLocalPreferences, flushLocalPreferences } from '../platform/local-preferences.mjs';
+import { initializeLocalPreferences, flushLocalPreferences, localPreferences } from '../platform/local-preferences.mjs';
+import { MultiLineStateStore } from '../platform/multi-line-state.mjs';
+import { multiLineState } from '../application/multi-line-edit.mjs';
+import { selectionCounts } from '../application/selection-count.mjs';
 import { nativeStorage } from '../platform/native.mjs';
 import { DEFAULT_EDITOR_PREFERENCES, DEFAULT_SETTINGS } from '../core/default-settings.mjs';
 import { appendLineShortcutDigit } from '../core/line-switch.mjs';
@@ -112,6 +117,7 @@ import { AudioSources } from '../application/audio-sources.mjs';
 import { AudioOnsets } from '../application/audio-onsets.mjs';
 import { mapperTiming } from '../core/audio-mapper.mjs';
 import { AboutUpdates } from './about-updates.mjs';
+import { GraphicsSettings } from './graphics-settings.mjs';
 
 document.documentElement.lang = currentLocale().locale;
 
@@ -124,7 +130,7 @@ catch (error) {
 }
 if (globalThis.rpenDesktopStorage) {
   globalThis.rpenFlushPreferences = async () => { await agentPanel?.flush(); await flushLocalPreferences(); };
-  globalThis.rpenPrepareClose = async () => { await agentPanel?.stopAndFlush(); await flushLocalPreferences(); };
+  globalThis.rpenPrepareClose = async () => { multiLineStateStore.capture(); await session.largeDocument?.flush(); await agentPanel?.stopAndFlush(); await flushLocalPreferences(); };
 }
 
 const element = selector => document.querySelector(selector);
@@ -197,6 +203,9 @@ const settingsDialog = createSettingsPanel({
 installDomTranslation(() => { document.documentElement.lang = currentLocale().locale; renderSession(); });
 installNumericExpressionInputs();
 let session = new EditorSession();
+const multiLineStateStore = new MultiLineStateStore(localPreferences, error => notify(storageFailure(error), 'warning'));
+let largeChartWorkspace = null;
+let closingLargeChart = Promise.resolve();
 let assets = new Map();
 let assetFolders = new Set();
 let assetDirty = false;
@@ -346,6 +355,13 @@ const noiseFitPanel = new NoiseFitPanel(element('#noise-fit-editor'), element('.
 const noiseTrackingPanel = new NoiseTrackingPanel(element('#noise-tracking-editor'), element('.stage'), () => ({ session, tempo, timeline, preview, realtimePreview, previewVisible: preview.visible, seconds: () => chartSeconds(), wheel: event => previewWheel(event) }), { invalidate, notify, activate: activatePane, pause: () => playback.pause() });
 const noteTrackingPanel = new NoteTrackingPanel(element('#note-tracking-editor'), element('.stage'), () => ({ session, tempo, timeline, preview, realtimePreview, previewVisible: preview.visible, seconds: () => chartSeconds(), wheel: event => previewWheel(event) }), { invalidate, notify, activate: activatePane, pause: () => playback.pause() });
 const multiLinePanel = new MultiLinePanel(element('#multi-line-editor'), () => session, { timeline, render: renderSession, notify, persist: persistEditor });
+timeline.onMultiLineChange = () => {
+  const count = session.multiLineIndices.length;
+  element('#multi-line-count').textContent = count;
+  for (const selector of ['#multi-line-prev-remove', '#multi-line-next-remove']) element(selector).disabled = !count;
+  for (const selector of ['#multi-line-prev-add', '#multi-line-next-add']) element(selector).disabled = !count || count >= session.chart.judgeLineList.length;
+  if (activePaneName === 'multi-line') multiLinePanel.syncSelection();
+};
 const linePanel = new LinePanel(element('#line-panel'), () => session, { render: renderSession, notify, getAssets: () => assets, getChartName: () => chartName, afterTexture: () => images.load(session.chart, assets, chartName) });
 const diagnostics = new ChartDiagnostics(() => ({ chart: session.chart, assets, assetRevision: diagnosticAssetRevision, chartName,
   duration: audio.buffer || audio.media?.src ? audio.duration : undefined, registry: globalEventRegistry, ratio: preview.aspectRatio ?? 1.5,
@@ -663,20 +679,22 @@ window.addEventListener('keydown', event => {
 }, true);
 timeline.onDragScroll = seconds => playback.seek(audio.time + seconds);
 const autoSave = new AutoSaveClock(async () => {
+  if (session.largeDocument) { await session.largeDocument.flush(); return; }
   const current = session; const document = current.chart; const snapshot = { ...document }; delete snapshot.chartTime;
   const media = [...assets], folders = [...assetFolders];
-  await saveSnapshot(libraryProject?.id ?? recoveryId, chartName, snapshot, media, editorPreferences.autoSaveLimit ?? preferences.settings.autoSaveLimit, { lineIndex: current.lineIndex, vcsId: versionRepoId });
+  await saveSnapshot(libraryProject?.id ?? recoveryId, chartName, snapshot, media, editorPreferences.autoSaveLimit ?? preferences.settings.autoSaveLimit, { lineIndex: current.lineIndex, vcsId: versionRepoId, multiLine: multiLineState(current) });
   if (current === session) { lastDraftDocument = document; lastDraftAssets = media; lastDraftFolders = folders; status(t('app.s43755f3')); notify(t('app.s0d49e0d'), 'success'); }
 }, error => { const message = t('app.sf83f150', { p0: storageFailure(error) }); status(message); notify(message, 'error', 7000); });
 timeline.onWheel = event => {
   if (directPlacement.active) { event.stopPropagation(); previewWheel(event); return; }
-  if (event.ctrlKey) {
-    if (event.deltaY) {
-      if (lineSwitcher.enabled) { lineSwitcher.step(event.deltaY); lineSwitcher.show(); }
-      else switchLine(event.deltaY);
-    }
-  } else previewWheel(event);
+  if (event.ctrlKey) switchLineWithWheel(event.deltaY);
+  else previewWheel(event);
 };
+function switchLineWithWheel(direction) {
+  if (!direction) return;
+  if (lineSwitcher.enabled) { lineSwitcher.step(direction); if (!preview.visible) lineSwitcher.show(); }
+  else switchLine(direction);
+}
 function switchLine(direction) {
   const index = stepLine(session.lineIndex, direction, session.chart.judgeLineList?.length ?? 0);
   return selectOverviewLine(index);
@@ -688,6 +706,7 @@ function selectOverviewLine(index) {
 const previewWheel = event => {
   event.preventDefault();
   linePicker.hide();
+  if (preview.visible && event.ctrlKey) { switchLineWithWheel(event.deltaY); return; }
   playback.wheel(event, { ...preferences.settings, scrollSpeed: editorPreferences.scrollSpeed ?? preferences.settings.scrollSpeed, wheelInputMode: editorPreferences.wheelInputMode ?? preferences.settings.wheelInputMode, wheelStopAtAudioStart: editorPreferences.wheelStopAtAudioStart ?? preferences.settings.wheelStopAtAudioStart ?? true }, performance.now() / 1000);
 };
 element('.preview-wrap').addEventListener('wheel', previewWheel, { passive: false });
@@ -907,6 +926,7 @@ element('#timeline-placement-defaults').addEventListener('click', () => {
 
 function persistEditor() {
   editorPreferences = { ...editorPreferences, scale: timeline.scale, division: timeline.division, gridCount: timeline.gridCount, snapX: timeline.snapX, judgementOffset: timeline.judgementOffset, multiLineWidth: timeline.multiLineWidth || undefined, multiLineEventWidth: timeline.multiLineEventWidth || undefined,
+    multiLineEventVisibility: timeline.multiLineEventVisibility,
     realtime: realtimePreview.visible, realtimeAlpha: Number(element('#realtime-alpha').value), volume: audio.volume, hitVolume: hitSounds.volume,
     hitEnabled: hitSounds.enabled, allLines: preview.allLines, toolbarMode: editorPreferences.toolbarMode ?? 'icons',
     analysisEnabled: audioAnalysis.enabled, analysisMode: audioAnalysis.mode, analysisAlpha: audioAnalysis.alpha, analysisWidth: audioAnalysis.width };
@@ -914,6 +934,7 @@ function persistEditor() {
 }
 
 function activatePane(name) {
+  if (session.largeDocument && ['version-control', 'collaboration', 'assets', 'ai', 'diagnose'].includes(name)) { notify('超大谱工程请使用顶部保存或工程另存为；此工具尚未支持完整的磁盘谱面。', 'warning'); return; }
   if (diagnosticNavigation && name !== 'diagnose') return;
   if (activePaneName === 'assets' && name !== 'assets') assetLibrary.disposeUrls();
   if (name !== 'notes') disposeNoteProperties();
@@ -981,7 +1002,7 @@ function togglePreview(force, stay = false, replay = false, { autoplay = true } 
   if (!visible) performanceMonitor?.finish('interrupted');
   linePicker.hide();
   if (!visible) directPlacement.close();
-  if (visible) clearNoteSourceToast();
+  if (visible) { lineSwitcher.hide(); clearNoteSourceToast(); }
   if (visible && (!preview.visible || replay)) {
     previewReturnTime = audio.time; timeline.cancelPlacement();
     if (replay) playback.seek(0);
@@ -1022,7 +1043,7 @@ function updateLineInfo() {
   const overlay = element('#line-info-overlay');
   if (!overlay) return;
   if (!lineInfoVisible || !session.line || atHome) { overlay.hidden = true; return; }
-  lineInfoScene.compile(session.chart, tempo);
+  lineInfoScene.compile(session.largeDocument?.header ?? session.chart, tempo);
   const seconds = chartSeconds();
   const state = lineInfoScene.sampler(seconds)(session.lineIndex) ?? { x: 0, y: 0, rotation: 0, alpha: 255 };
   const runtime = lineInfoScene.lines[session.lineIndex];
@@ -1089,11 +1110,12 @@ function renderSession() {
   session.eventWheelSteps = Object.fromEntries(['moveXEvents', 'moveYEvents', 'rotateEvents', 'alphaEvents', 'speedEvents', 'scaleXEvents', 'scaleYEvents'].flatMap((key, index) => Number.isFinite(preferences.originalSettings.scrollValueIncrement?.[index]) ? [[key, preferences.originalSettings.scrollValueIncrement[index]]] : []));
   timeline.origin = currentBeat();
   element('#document-name').textContent = atHome ? t('doc.home') : `${session.history.dirty ? '● ' : ''}${chartDisplayName(session.chart.META.name || chartName)}`;
+  timeline.refreshMultiLineExpression();
   renderTimelineMarkers();
-  element('#note-count').textContent = `${session.notes.length} notes`;
+  element('#note-count').textContent = `${session.largeDocument?.summary.lines[session.lineIndex] ?? session.notes.length} notes`;
   const countEvents = line => [...(line.eventLayers ?? []), line.extended ?? {}].reduce((total, layer) => total + Object.entries(layer ?? {}).filter(([type, events]) => type !== 'paintEvents' && Array.isArray(events)).reduce((count, [, events]) => count + events.length, 0), 0) + shaderEvents(session.chart, session.chart.judgeLineList?.indexOf(line) ?? -1).length;
   const totalLines = session.chart.judgeLineList?.length ?? 0;
-  const totalNotes = (session.chart.judgeLineList ?? []).reduce((count, line) => count + (line.notes?.length ?? 0), 0);
+  const totalNotes = session.largeDocument?.summary.total ?? (session.chart.judgeLineList ?? []).reduce((count, line) => count + (line.notes?.length ?? 0), 0);
   const totalEvents = (session.chart.judgeLineList ?? []).reduce((count, line) => count + countEvents(line), 0);
   const chartInfo = [[t('app.sd3892f9'), `Notes: ${session.notes.length}  Events: ${countEvents(session.line ?? {})}  TotalLines: ${totalLines}  TotalNotes: ${totalNotes}  TotalEvents: ${totalEvents}  Time: ${formatEditTime(editTimeSeconds)}`]];
   element('#chart-info').replaceChildren(...chartInfo.flatMap(([label, value]) => {
@@ -1105,16 +1127,23 @@ function renderSession() {
   }));
   const songName = session.chart.META?.song;
   const backgroundName = session.chart.META?.background;
-  const missingMedia = [!songName || !assets.has(songName) ? t('app.safb3c40') : '', !backgroundName || !assets.has(backgroundName) ? t('app.sb8bb31e') : ''].filter(Boolean);
+  const largeMedia = session.largeDocument?.summary.media;
+  const missingMedia = [!largeMedia?.music && (!songName || !assets.has(songName)) ? t('app.safb3c40') : '', !largeMedia?.cover && (!backgroundName || !assets.has(backgroundName)) ? t('app.sb8bb31e') : ''].filter(Boolean);
   const materialHint = element('#chart-material-hint');
   if (materialHint) materialHint.textContent = missingMedia.length ? t('app.s1674bb2', { p0: missingMedia.join('、') }) : '';
   const mediaStatus = element('#metadata-media-status');
   if (mediaStatus) mediaStatus.textContent = t('app.s40fd2fc', { p0: songName && assets.has(songName) ? songName : t('app.sab8115f'), p1: backgroundName && assets.has(backgroundName) ? backgroundName : t('app.sab8115f') });
   syncProjectFolderButton();
   if (!session.liveBeatEdit) element('#offset').value = session.chart.META.offset ?? 0;
-  element('#selection-info').textContent = session.focus === 'events' ? t('app.sa922b31', { p0: session.eventSelection.size }) : t('app.s4112683', { p0: session.selection.size });
-  element('#undo').disabled = !session.history.undoStack.length;
-  element('#redo').disabled = !session.history.redoStack.length;
+  const { notes: selectedNoteCount, events: selectedEventCount } = selectionCounts(session);
+  element('#selection-info').textContent = session.focus === 'events' ? t('app.sa922b31', { p0: selectedEventCount }) : t('app.s4112683', { p0: selectedNoteCount });
+  element('#undo').disabled = session.largeDocument?.busy || !session.history.undoStack.length;
+  element('#redo').disabled = session.largeDocument?.busy || !session.history.redoStack.length;
+  for (const [id, label] of [['save', t('large-chart.save')], ['export', t('large-chart.saveAs')]]) {
+    const button = element('#' + id); button.dataset.standardLabel ??= button.textContent;
+    button.textContent = session.largeDocument ? label : button.dataset.standardLabel;
+  }
+  for (const id of ['music', 'background', 'assets', 'audio-leading-silence', 'version-control-tool', 'collaboration-tool', 'ai-tool', 'diagnose']) { const button = element('#' + id); if (button) button.disabled = Boolean(session.largeDocument); }
   element('#batch-run').disabled = !session.selection.size;
   element('#line-select').replaceChildren();
   (session.chart.judgeLineList ?? []).forEach((line, index) => {
@@ -1156,16 +1185,10 @@ function renderSession() {
   }
   const multiEventSignature = [...(session.multiEventSelection ?? new Map())].map(([line, values]) => `${line}:${[...values].sort().join(',')}`).sort().join('|');
   const multiNoteSignature = [...(session.multiLineSelection ?? new Map())].map(([line, values]) => `${line}:${[...values].sort((left, right) => left - right).join(',')}`).sort().join('|');
-  const selectionSignature = `${session.lineIndex}:${session.eventLayer}|${session.focus}|${[...session.selection].sort((left, right) => left - right).join(',')}|${[...session.eventSelection].sort().join(',')}|${multiNoteSignature}|${multiEventSignature}`;
+  const selectionSignature = `${session.lineIndex}:${session.eventLayer}|${session.focus}|${[...session.selection].sort((left, right) => left - right).join(',')}|${[...session.eventSelection].sort().join(',')}|${multiNoteSignature}|${multiEventSignature}|${session.largeDocument?.logicalSelection?.token??''}`;
   if (selectionSignature !== lastSelectionSignature) {
     lastSelectionSignature = selectionSignature;
-    const selectionCount = session.focus === 'events'
-      ? (session.multiLineActive && session.multiLineMode === 'events'
-        ? Math.max(session.eventSelection.size, [...(session.multiEventSelection ?? new Map()).values()].reduce((total, values) => total + values.size, 0))
-        : session.eventSelection.size)
-      : (session.multiLineActive && session.multiLineMode === 'notes'
-        ? [...(session.multiLineSelection ?? new Map()).values()].reduce((total, values) => total + values.size, 0)
-        : session.selection.size);
+    const selectionCount = session.focus === 'events' ? selectedEventCount : selectedNoteCount;
     if (activePaneName === 'diagnose') {}
     else if (globalEvents.active) globalEvents.render();
     else if (noiseEditor.active) noiseEditor.render();
@@ -1202,6 +1225,10 @@ function renderSession() {
 session.addEventListener('change', renderSession);
 
 function replaceChart(chart, name, nextAssets = new Map(), nextFolders = [], options = {}) {
+  if (largeChartWorkspace) {
+    const previous = largeChartWorkspace; largeChartWorkspace = null;
+    previous.dispose(); closingLargeChart = previous.close().catch(reportError);
+  }
   performanceMonitor?.finish('interrupted');
   diagnosticHighlight.clear();
   diagnostics.reset(); lastDiagnosticSignature = null;
@@ -1226,6 +1253,7 @@ function replaceChart(chart, name, nextAssets = new Map(), nextFolders = [], opt
   hitSounds.stop(); hitSounds.onlyCurrentLine = false; element('#mute-current-line').setAttribute('aria-pressed', 'false'); element('#mute-current-line').classList.remove('active'); images.clear(); libraryProject = null;
   session.removeEventListener('change', renderSession);
   session = new EditorSession(chart, { lineEventDefaults: editorPreferences.lineEventDefaults });
+  multiLineStateStore.attach(session, options.viewStateKey ?? versionRepoId, options.multiLineState);
   if (options.dirty) session.history.markUnsaved();
   clipboardHistory.attach(session);
   lastSelectionSignature = '';
@@ -1257,15 +1285,40 @@ function replaceChart(chart, name, nextAssets = new Map(), nextFolders = [], opt
   status(t('app.s5e07c0a', { p0: name }));
 }
 
+async function openLargeChartDocument(summary) {
+  replaceChart(summary.chart, summary.savedPath?.split(/[\\/]/).at(-1) ?? `${summary.chart.META.name || '谱面'}.rpenlarge`);
+  largeChartWorkspace = new LargeChartWorkspace(session, summary, { timeline, previews: [preview, realtimePreview], audio, playback, invalidate, reportError });
+  largeChartWorkspace.document.range = largeChartWorkspace.range();
+  await largeChartWorkspace.document.refresh();
+  await audio.loadStream(summary.media.music, Math.max(1, summary.endTime + offsetSeconds() + 2)).catch(reportError);
+  element('#music-name').textContent = summary.media.music ? '超大谱音乐（流式播放）' : t('app.sbefb963');
+  element('#scrubber').max = String(audio.duration);
+  if (summary.media.cover) {
+    const image = new Image(); image.src = summary.media.cover;
+    try { await image.decode(); if (image.naturalWidth * image.naturalHeight <= 16 * 1024 ** 2) images.background = image; } catch { /* Cover is optional. */ }
+  }
+  await largeChartWorkspace.readPreview(chartSeconds());
+  renderSession();
+}
+
 function guardReplace(action) {
   noiseEditor.flush();
-  if (hasDocument && (session.history.dirty || assetDirty)) confirmAction(t('app.s13472be'), action);
-  else action();
+  if (session.largeDocument?.busy) { session.largeDocument.flush().then(() => guardReplace(action)).catch(reportError); return; }
+  const proceed = () => {
+    if (!largeChartWorkspace) return action();
+    const previous = largeChartWorkspace; largeChartWorkspace = null;
+    hasDocument = false; setHome(true);
+    closingLargeChart = previous.close({ discard: true });
+    closingLargeChart.then(action).catch(reportError);
+  };
+  if (hasDocument && (session.history.dirty || assetDirty)) confirmAction(t('app.s13472be'), proceed);
+  else proceed();
 }
 
 async function loadCandidate(candidate, nextAssets, options = {}) {
   attachExternalEffects([candidate], nextAssets);
-  replaceChart(candidate.chart, candidate.name, nextAssets, options.folders ?? candidate.project?.assetFolders ?? [], { ...options, repoId: candidate.project?.vcsId ?? candidate.project?.id });
+  replaceChart(candidate.chart, candidate.name, nextAssets, options.folders ?? candidate.project?.assetFolders ?? [], { ...options, repoId: candidate.project?.vcsId ?? candidate.project?.id,
+    viewStateKey: candidate.project?.id ?? candidate.project?.vcsId, multiLineState: candidate.project?.viewState?.multiLine });
   libraryProject = candidate.project ?? null;
   if (candidate.project?.vcsId) versionRepoId = candidate.project.vcsId;
   syncProjectFolderButton();
@@ -1370,6 +1423,7 @@ async function togglePlayback() {
 
 function save() {
   noiseEditor.flush();
+  if (session.largeDocument) return session.largeDocument.save().then(summary => { renderSession(); if (summary && !summary.dirty) { status('超大谱工程已保存'); notify('超大谱工程已保存', 'success'); } });
   agentPanel?.flush().catch(reportError);
   if (!persistenceRequested) { persistenceRequested = true; requestPersistence().then(() => storagePanel.refresh()).catch(() => {}); }
   editorSkinSignal('save-started');
@@ -1378,13 +1432,14 @@ function save() {
   return manualSaves.save(savingSession, () => {
     const document = session.chart; const snapshot = { ...document }; delete snapshot.chartTime;
     const project = { ...(libraryProject ?? { id: crypto.randomUUID(), source: t('app.s70d7944'), imported: Date.now() }),
-      chart: snapshot, chartName, vcsId: versionRepoId, assets: [...assets], assetFolders: [...assetFolders], bytes: [...assets.values()].reduce((sum, bytes) => sum + bytes.length, 0), updated: Date.now(), viewState: { lineIndex: session.lineIndex } };
+      chart: snapshot, chartName, vcsId: versionRepoId, assets: [...assets], assetFolders: [...assetFolders], bytes: [...assets.values()].reduce((sum, bytes) => sum + bytes.length, 0), updated: Date.now(), viewState: { lineIndex: session.lineIndex, multiLine: multiLineState(session) } };
     status(t('app.se64da0d'));
     return { document, project };
   }, ({ document, project }) => {
     savingSession.history.markSaved(document);
     if (session !== savingSession) return;
     libraryProject = project;
+    multiLineStateStore.rekey(project.id);
     noteLibrarySave(); storagePanel.refresh().catch(() => {});
     assetDirty = assets.size !== project.assets.length || project.assets.some(([name, bytes]) => assets.get(name) !== bytes)
       || assetFolders.size !== project.assetFolders.length || project.assetFolders.some(folder => !assetFolders.has(folder));
@@ -1432,6 +1487,12 @@ function openImportedCharts(loaded) {
   });
 }
 listen('#open', () => showImportDialog({
+  onLargePreview: () => {
+    guardReplace(async () => {
+      await closingLargeChart; playback.pause();
+      showLargeChartPreview({ skin, settings: { noteSize: preview.noteSize, aspectRatio: preview.aspectRatio, volume: audio.volume }, onEdit: openLargeChartDocument });
+    });
+  },
   readFiles: (mode, selected) => readChartImport(mode, selected, chartImportOptions()),
   onOpen: openImportedCharts,
   onError: reportError,
@@ -1443,7 +1504,7 @@ element('#file-input').addEventListener('change', async event => {
   finally { event.target.value = ''; }
 });
 listen('#save', () => save());
-listen('#export', () => { noiseEditor.flush(); showExportDialog(session.chart, assets, chartName, (name, format) => { status(t('app.s94b8e7e', { p0: name })); if (format === 'pez') { noteExternalBackup(); storagePanel.refresh().catch(() => {}); } }, libraryProject?.identifier ?? libraryProject?.info?.Path, fileOptions()); });
+listen('#export', () => { noiseEditor.flush(); if (session.largeDocument) return session.largeDocument.save(true); showExportDialog(session.chart, assets, chartName, (name, format) => { status(t('app.s94b8e7e', { p0: name })); if (format === 'pez') { noteExternalBackup(); storagePanel.refresh().catch(() => {}); } }, libraryProject?.identifier ?? libraryProject?.info?.Path, fileOptions()); });
 listen('#view-toggle', () => togglePreview());
 listen('#close-preview', () => togglePreview(false, true));
 listen('#background', () => element('#background-input').click());
@@ -1580,7 +1641,8 @@ function travel(direction, silent = false) {
   const stack = direction === 'undo' ? session.history.undoStack : session.history.redoStack;
   const command = stack.at(-1);
   if (!command) { notify(direction === 'undo' ? t('app.s5f3dcc0') : t('app.s89594eb'), 'warning'); return; }
-  session.travel(direction);
+  const result = session.travel(direction);
+  if (session.largeDocument && !result) return;
   if (!silent) notify(t('app.sf1164c8', { p0: direction === 'undo' ? t('app.s9fcefd8') : t('app.s1238f0d'), p1: command.label }), 'success');
 }
 listen('#undo', () => travel('undo'));
@@ -1642,15 +1704,15 @@ element('#toolbar-mode').onclick = () => {
   editorPreferences.toolbarMode = modes[(modes.indexOf(current) + 1) % modes.length];
   applyDisplaySettings(); persistEditor();
 };
-function copySelection() {
+async function copySelection() {
   if (globalEvents.active) { globalEvents.copy(); return; }
   if (noiseEditor.active) { noiseEditor.copy(); return; }
-  const count = copyObjects(session);
+  const count = await copyObjects(session);
   if (count) { clipboardHistory.remember(session); status(t('app.s44cef9c', { p0: count })); }
   invalidate();
 }
 function deleteSelection() { if (globalEvents.active) { globalEvents.safely(() => globalEvents.remove()); return; } if (noiseEditor.active) { noiseEditor.remove(); return; } deleteObjects(session); }
-function cutSelection() { if (globalEvents.active) { globalEvents.safely(() => globalEvents.copy(true)); return; } if (noiseEditor.active) { noiseEditor.copy(true); return; } if (cutObjects(session)) clipboardHistory.remember(session); invalidate(); }
+async function cutSelection() { if (globalEvents.active) { globalEvents.safely(() => globalEvents.copy(true)); return; } if (noiseEditor.active) { noiseEditor.copy(true); return; } if (await cutObjects(session)) clipboardHistory.remember(session); invalidate(); }
 function pasteSelection(mirror = false, keepTime = false) {
   if (globalEvents.active) { globalEvents.safely(() => globalEvents.paste(keepTime)); return; }
   if (noiseEditor.active) { noiseEditor.action(keepTime ? 'KeepTimePaste' : 'Paste'); return; }
@@ -1695,7 +1757,7 @@ function renderHistoryPanel() {
   const entries = [{ label: t('app.sc43a712'), index: 0 }, ...history.undoStack.map((command, index) => ({ label: command.label, index: index + 1 })), ...history.redoStack.toReversed().map((command, index) => ({ label: command.label, index: current + index + 1 }))];
   for (const entry of entries) {
     const button = document.createElement('button'); button.type = 'button'; button.className = entry.index === current ? 'active' : ''; button.textContent = `${entry.index === current ? '● ' : ''}${entry.index} · ${entry.label}`;
-    button.onclick = () => { const direction = entry.index < current ? 'undo' : 'redo'; for (let count = 0; count < Math.abs(entry.index - current); count++) travel(direction, true); renderHistoryPanel(); notify(t('app.sf2d283b', { p0: entry.index }), 'success', 1800); };
+    button.onclick = async () => { try { const direction = entry.index < current ? 'undo' : 'redo'; for (let count = 0; count < Math.abs(entry.index - current); count++) { travel(direction, true); await session.largeDocument?.flush(); } renderHistoryPanel(); notify(t('app.sf2d283b', { p0: entry.index }), 'success', 1800); } catch (error) { reportError(error); } };
     host.append(button);
   }
 }
@@ -1899,7 +1961,7 @@ function lineSwitchModifierMatches(event) {
   return Boolean(event.ctrlKey) === required.has('CTRL') && Boolean(event.shiftKey) === required.has('SHIFT') && Boolean(event.altKey) === required.has('ALT') && !event.metaKey;
 }
 window.addEventListener('keydown', event => {
-  if (mods?.runtime.locks.size || atHome || !hasDocument || preview.visible || dialogOpen() || usesNativeTextShortcut(event) || event.isComposing || !/^\d$/.test(event.key) || !lineSwitchModifierMatches(event)) return;
+  if (mods?.runtime.locks.size || atHome || !hasDocument || dialogOpen() || usesNativeTextShortcut(event) || event.isComposing || !/^\d$/.test(event.key) || !lineSwitchModifierMatches(event)) return;
   if (shortcutMatches(event, preferences.hotkeys.Paste) || shortcutMatches(event, preferences.hotkeys.PasteMirror)) return;
   lineSwitchDigits = appendLineShortcutDigit(lineSwitchDigits, session.chart.judgeLineList?.length ?? 0, Number(event.key));
   event.preventDefault(); event.stopImmediatePropagation();
@@ -1963,15 +2025,16 @@ window.addEventListener('keydown', async event => {
     else if (action === 'Undo') travel('undo');
     else if (action === 'Redo') travel('redo');
     else if (action === 'SelectAll') {
-      if (session.focus === 'events') selectAllEvents(session, timeline.eventTypes);
+      if (session.largeDocument && session.focus === 'notes') { session.largeDocument.selectAll(); await session.largeDocument.flush(); }
+      else if (session.focus === 'events') selectAllEvents(session, timeline.eventTypes);
       else if (session.multiLineActive && session.multiLineMode === 'notes') {
         session.multiLineSelection = new Map(session.targetLineIndices.map(lineIndex => [lineIndex, new Set((session.chart.judgeLineList?.[lineIndex]?.notes ?? []).map((note, index) => index))]));
         session.selection = new Set(session.multiLineSelection.get(session.lineIndex) ?? []);
       } else session.selection = new Set(session.notes.map((note, index) => index));
       session.notify();
     }
-    else if (action === 'Copy') copySelection();
-    else if (action === 'Shear') cutSelection();
+    else if (action === 'Copy') await copySelection();
+    else if (action === 'Shear') await cutSelection();
     else if (action === 'ClipboardHistory') toggleClipboardPanel();
     else if ((!preview.visible || directPlacement.active) && ['NumberMirror', 'NumberFill'].includes(action)) applyNumberShortcut(session, action);
     else if (['Paste', 'PasteMirror', 'KeepTimePaste', 'KeepTimePasteMirror'].includes(action)) pasteSelection(action.endsWith('Mirror'), action.startsWith('KeepTime'));
@@ -2061,6 +2124,7 @@ let lastTick = 0;
 function frame(timestamp) {
   const elapsed = lastTick ? (timestamp - lastTick) / 1000 : 0; lastTick = timestamp;
   audio.update();
+  if (largeChartWorkspace && hasDocument && !atHome) largeChartWorkspace.tick(chartSeconds());
   mods?.runtime.tick({timestamp,elapsed,chartSeconds:chartSeconds(),musicSeconds:audio.time,playing:audio.playing});
   batchControls.sync();
   lineSwitcher.draw(timestamp);
@@ -2083,7 +2147,7 @@ function frame(timestamp) {
   }
   if (audio.playing && !mods?.runtime.locks.size && loop && currentBeat() >= loop.end) seekBeat(loop.start, false);
   if (audio.playing && audio.time >= audio.duration) { audio.pause(); if (performanceMonitor?.run) performanceMonitor.finish('complete'); invalidate(); }
-  hitSounds.tick(session.chart, tempo, session.lineIndex);
+  if (!session.largeDocument) hitSounds.tick(session.chart, tempo, session.lineIndex);
   if (!atHome && (audio.playing || dirtyFrame || eventSampler.looping || trajectoryPanel.active || noteTrackingPanel.active && noteTrackingPanel.animating || noiseTrackingPanel.active && noiseTrackingPanel.animating || noiseFitPanel.active && noiseFitPanel.options.animate && noiseFitPanel.options.show && noiseFitPanel.previewChart && !noiseFitPanel.fullPreview) && frameLimiter.shouldRender(timestamp, editorPreferences.fpsLimit ?? preferences.settings.fpsLimit)) {
     frameSampleCount++;
     const start = performance.now();
@@ -2151,8 +2215,8 @@ function frame(timestamp) {
     }
     noiseEditor.drawSample();
     eventSampler.draw();
-    element('#play').textContent = audio.playing ? t('app.s87aecc9') : t('app.sb410f77');
-    element('#play').dataset.playing = String(audio.playing);
+    element('#play').textContent = audio.playing || playback.buffering ? t('app.s87aecc9') : t('app.sb410f77');
+    element('#play').dataset.playing = String(audio.playing || Boolean(playback.buffering));
     const skinBeat = Math.floor(beat);
     if (audio.playing && document.documentElement.dataset.rpenBeat !== String(skinBeat)) editorSkinSignal('beat');
     editorSkinState({ playing: audio.playing, beat: skinBeat, dirty: session.history.dirty || assetDirty, location: atHome ? 'home' : preview.visible ? 'preview' : 'editor' });
@@ -2198,6 +2262,7 @@ function applyPreferences(next) {
   timeline.snapX = editorPreferences.snapX ?? true;
   timeline.multiLineWidth = editorPreferences.multiLineWidth ?? 0;
   timeline.multiLineEventWidth = editorPreferences.multiLineEventWidth ?? 0;
+  timeline.multiLineEventVisibility = editorPreferences.multiLineEventVisibility ?? {};
   timeline.multiLineWidthExplicit = Number.isFinite(editorPreferences.multiLineWidth);
   timeline.multiLineEventWidthExplicit = Number.isFinite(editorPreferences.multiLineEventWidth);
   element('#grid-count').value = timeline.gridCount; element('#division').value = timeline.division; element('#y-scale').value = timeline.scale; element('#snap-x').checked = timeline.snapX;
@@ -2267,7 +2332,10 @@ listen('#library', () => {
       await save();
       if (session.history.dirty || assetDirty) throw new Error(t('app.sec16507'));
     }
-    else { hasDocument = false; session.history.markSaved(); assetDirty = false; }
+    else {
+      if (largeChartWorkspace) { await largeChartWorkspace.close({ discard: true }); largeChartWorkspace = null; }
+      hasDocument = false; session.history.markSaved(); assetDirty = false;
+    }
     setHome(true);
   });
 });
@@ -2419,6 +2487,7 @@ agentPanel = new AgentPanel(modEditor, { activate: activatePane, notify, prepend
   },
 });
 mods=new ModManager(modEditor,{notify,invalidate});
+new GraphicsSettings(settingsDialog, { notify, startupReady: () => Promise.all([editorSkins.ready, noteSkins.ready, mods.ready]) });
 const aboutUpdates = new AboutUpdates(settingsDialog, {
   startupReady: () => Promise.all([editorSkins.ready, noteSkins.ready, mods.ready]),
   dirty: () => hasDocument && (session.history.dirty || assetDirty),

@@ -560,6 +560,12 @@ footer #app-update-badge { color: var(--rpen-info, #8dd6ee); font-weight: 600; }
 .about-packages { margin-top: 20px; border-top: 1px solid var(--line); }.about-packages h4 { font-size: 13px; font-weight: 500; margin: 14px 0 4px; }
 .about-package { display: flex; align-items: center; gap: 8px; padding: 12px 0; border-bottom: 1px solid color-mix(in srgb, var(--line), transparent 55%); }.about-package-label { flex: 1; display: flex; align-items: baseline; gap: 12px; }.about-package-label small { color: var(--muted, #aaa); }
 .update-dialog { width: min(400px, calc(100vw - 48px)); padding: 24px; border-radius: 12px; color: var(--rpen-text, #eee); background: var(--rpen-surface, #303030); border: 1px solid var(--line); }.update-dialog h2 { font-size: 16px; line-height: 1.6; margin: 0 0 24px; }.update-dialog .modal-actions { flex-wrap: wrap; }.update-dialog::backdrop { background: #0008; }
+.graphics-dialog { width: min(540px, calc(100vw - 48px)); }
+.graphics-devices { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 10px 16px; margin: 16px 0; font-size: 12px; line-height: 1.6; }
+.graphics-devices dt { color: var(--muted); }.graphics-devices dd { margin: 0; overflow-wrap: anywhere; }
+.graphics-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.graphics-dialog > p { font-size: 12px; line-height: 1.7; margin: 18px 0; }
+.graphics-never { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; }
 .update-release-dialog { box-sizing: border-box; width: min(680px, calc(100vw - 40px)); max-height: min(740px, calc(100dvh - 64px)); padding: 0; overflow: hidden; border-radius: 12px; border: 1px solid var(--line, #666); background: var(--rpen-surface, #303030); color: var(--rpen-text, #eee); }
 .update-release-dialog[open] { display: flex; flex-direction: column; }
 .update-release-heading { display: flex; align-items: center; justify-content: space-between; flex: none; gap: 16px; padding: 18px 22px; border-bottom: 1px solid var(--line, #555); }
@@ -707,6 +713,10 @@ html.value-dragging, html.value-dragging * { cursor: none !important; user-selec
 .multi-line-width-controls button { padding: 4px 8px; }
 .multi-line-expression-field { margin: 8px 20px; }
 .multi-line-expression-field input { width: 100%; box-sizing: border-box; font-variant-numeric: tabular-nums; }
+.multi-line-event-columns { margin: 10px 14px; border: 1px solid #505050; border-radius: 4px; }
+.multi-line-event-columns summary { padding: 7px 10px; cursor: pointer; }
+.multi-line-event-options { display: flex; flex-wrap: wrap; gap: 8px 14px; padding: 4px 10px 10px; }
+.multi-line-event-options label { display: inline-flex; align-items: center; gap: 5px; margin: 0; }
 .editor.notes-only .canvases { grid-template-columns: 24px minmax(0, 1fr) 24px; }
 .editor.notes-only #notes { grid-column: 2; }
 .editor.notes-only #events { display: none; }
@@ -1218,3 +1228,27 @@ details.skin-control-group { display: block; }
 .vcs-change-group > summary { padding: 6px 8px; cursor: pointer; font-size: 12px; color: #d9c27c; }
 .vcs-change-group > .vcs-change-list { padding: 0 6px 6px; }
 .vcs-change-group .vcs-change-row { display: block; line-height: 1.6; }
+/* The large-chart experiment owns a bounded canvas and no editor data model. */
+dialog.large-chart-preview { width: min(1440px, 96vw); max-width: 96vw; height: min(940px, 94vh); max-height: 94vh; padding: 18px; overflow: hidden; display: none; flex-direction: column; gap: 12px; color: #edf1f9; background: #171e29; border: 1px solid #3c4a60; border-radius: 12px; }
+dialog.large-chart-preview[open] { display: flex; }
+.large-chart-preview .modal-heading { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
+.large-chart-preview h2 { margin: 0; font-size: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.large-chart-preview .modal-heading > button { margin-left: auto; }
+.large-preview-badge { flex: 0 0 auto; font-size: 11px; color: #edce8a; background: #493b20; padding: 3px 8px; border-radius: 10px; }
+.large-preview-toolbar { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
+.large-preview-toolbar > input[type=range]:first-of-type { flex: 1; min-width: 80px; }
+.large-preview-toolbar > input[type=range]:last-of-type { width: 70px; }
+.large-preview-toolbar .large-preview-time { min-width: 150px; text-align: right; font: 12px monospace; font-variant-numeric: tabular-nums; }
+.large-preview-stage { position: relative; flex: 1; min-height: 0; overflow: hidden; border-radius: 7px; background: #080b10; }
+.large-preview-stage > canvas { width: 100%; height: 100%; display: block; }
+.large-preview-overlay { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 20px; background: #0a0f18db; text-align: center; }
+.large-preview-overlay[hidden] { display: none; }
+.large-preview-overlay progress { width: min(420px, 80%); height: 10px; accent-color: #7dbaee; }
+.large-preview-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 12px; color: #a6b4c9; }
+.large-preview-cache { max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.large-preview-hint { flex: 0 0 auto; margin: 0; font-size: 11px; line-height: 1.5; color: #93a4bc; }
+.large-chart-document-button { flex: none; width:30px; height:29px; padding:4px; white-space:nowrap; color:var(--accent); font-size:18px; line-height:1; }
+.large-chart-options { width: 280px; }
+.large-chart-options .field { margin: 8px 0; gap: 8px; }
+.large-chart-options input[type=number] { width: 90px; }
+.large-chart-options > .hint { overflow-wrap: anywhere; }

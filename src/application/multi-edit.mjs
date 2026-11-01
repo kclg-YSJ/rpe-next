@@ -4,7 +4,7 @@ import { integerAlphaEvent, integerNoteAlpha } from '../core/alpha-values.mjs';
 import { easing } from '../core/easing.mjs';
 import { compileExpression, compileBatchScript } from '../core/batch-script.mjs';
 import { alignShaderParameters } from '../core/shader-events.mjs';
-import { eventList, eventKey, chartWithEventLists } from './event-commands.mjs';
+import { assembleSelectionEdits } from './selection-edits.mjs';
 import { t } from '../i18n.mjs';
 
 export const NOTE_BATCH_FIELDS = [
@@ -104,72 +104,42 @@ function validateChange(change, lineCount, snapshot) {
   if (after.easingType !== undefined && (!Number.isInteger(after.easingType) || after.easingType < 1 || after.easingType > 29)) throw new Error(t('multi-edit.s5aa429b'));
 }
 
+// Uses the ordinary editor's field/expression/validation rules for each bounded
+// batch of a logical disk selection; no full selection is materialized.
+export function noteBatchModifier(options, count, chart) {
+  const field = options.field ?? 'x', operation = options.operation ?? 'By', scriptMode = options.mode === 'script';
+  const fields = NOTE_BATCH_FIELDS.map(([key]) => key).filter(key => key !== 'hitSound').concat(['type','isFake','above']);
+  const script = scriptMode ? compileBatchScript(options.script ?? '',fields) : [];
+  if(scriptMode&&!script.length)throw Error(t('multi-edit.s963208d'));
+  const condition = options.condition?.trim() ? compileExpression(options.condition) : () => 1;
+  const modifier = scriptMode || field === 'hitSound' ? null : distribution(options,randomSource(options.seed??1));
+  return (note, entry) => {
+    if(Number(options.noteType)&&note.type!==Number(options.noteType))return note;
+    const after=structuredClone(note),scope=scopeFor(after,'notes',entry.lineIndex,entry.index,count);
+    if(!condition(scope))return note;
+    const change={kind:'notes',before:note,after,lineIndex:entry.lineIndex};
+    if(scriptMode)for(const statement of script){
+      const value=statement.evaluate(scope),previous=scope[statement.field];
+      const next=statement.operator==='='?value:statement.operator==='+='?previous+value:statement.operator==='-='?previous-value:statement.operator==='*='?previous*value:previous/value;
+      if(!Number.isFinite(next))throw Error(t('multi-edit.sfaa68de',{p0:statement.field}));
+      if(statement.field==='line')change.lineIndex=Math.round(next);else writeField(after,statement.field,next);
+      Object.assign(scope,scopeFor(after,'notes',change.lineIndex,entry.index,count));
+    }
+    else if(field==='hitSound'){
+      if(operation!=='To')throw Error(t('multi-edit.sb1c01c7'));
+      after.hitsound=String(options.lower||options.upper||'');delete after.hitSound;
+    }else{
+      const value=modifier(entry.index,scope.u);if(value===null)return note;
+      if(field==='line')change.lineIndex=Math.round(batchOperation(entry.lineIndex,value,operation));
+      else {if(typeof scope[field]!=='number')throw Error(t('multi-edit.sfe2eaba'));writeField(after,field,batchOperation(scope[field],value,operation));}
+    }
+    validateChange(change,chart.judgeLineList.length,{chart});return {note:change.after,line:change.lineIndex};
+  };
+}
+
 function assemble(snapshot, changes, kind, removeSource = false) {
-  let chart = snapshot.chart;
-  const selection = new Set(kind === 'notes' ? snapshot.notes.map(entry => entry.index) : []);
-  const eventSelection = new Set(kind === 'events' && !removeSource ? snapshot.events.filter(entry => (entry.lineIndex ?? snapshot.lineIndex) === snapshot.lineIndex).map(entry => eventKey(entry.type, entry.index)) : []);
-  const sourceEventLines = new Set(snapshot.events.map(entry => Number.isInteger(entry.lineIndex) ? entry.lineIndex : snapshot.lineIndex));
-  const affected = new Set(changes.flatMap(change => [snapshot.lineIndex, change.lineIndex, ...(kind === 'events' ? sourceEventLines : [])]));
-  const notesByLine = new Map(); const eventsByLine = new Map();
-  const selectedNotes = new Set(snapshot.notes.map(entry => entry.index));
-  const noteUpdates = new Map(changes.filter(change => !change.copy).map(change => [change.index, change]));
-  for (const lineIndex of affected) {
-    const line = chart.judgeLineList[lineIndex];
-    if (kind === 'notes') {
-      const notes = []; if (lineIndex === snapshot.lineIndex) selection.clear();
-      (line.notes ?? []).forEach((note, index) => {
-        const change = lineIndex === snapshot.lineIndex ? noteUpdates.get(index) : null;
-        if (change && change.lineIndex !== lineIndex) return;
-        if (lineIndex === snapshot.lineIndex && selectedNotes.has(index)) selection.add(notes.length);
-        notes.push(change?.after ?? note);
-      });
-      notesByLine.set(lineIndex, notes);
-    } else eventsByLine.set(lineIndex, new Map());
-  }
-  if (removeSource) {
-    const selected = new Map();
-    for (const entry of snapshot.events) {
-      const lineIndex = Number.isInteger(entry.lineIndex) ? entry.lineIndex : snapshot.lineIndex;
-      const key = `${lineIndex}:${entry.type}`;
-      if (!selected.has(key)) selected.set(key, { lineIndex, type: entry.type, indices: new Set() });
-      selected.get(key).indices.add(entry.index);
-    }
-    for (const { lineIndex, type, indices } of selected.values()) {
-      const original = eventList({ chart, lineIndex, line: chart.judgeLineList[lineIndex], eventLayer: snapshot.eventLayer }, type);
-      eventsByLine.get(lineIndex)?.set(type, original.filter((event, index) => !indices.has(index)));
-    }
-  }
-  for (const change of changes) {
-    if (kind === 'notes') {
-      if (change.lineIndex !== snapshot.lineIndex || change.copy) {
-        const notes = notesByLine.get(change.lineIndex);
-        if (change.lineIndex === snapshot.lineIndex) selection.add(notes.length);
-        notes.push(change.after);
-      }
-    } else {
-      const updates = eventsByLine.get(change.lineIndex);
-      if (!updates.has(change.type)) updates.set(change.type, [...eventList({ chart, lineIndex: change.lineIndex, line: chart.judgeLineList[change.lineIndex], eventLayer: snapshot.eventLayer }, change.type)]);
-      const events = updates.get(change.type);
-      if (change.copy) {
-        if (change.lineIndex === snapshot.lineIndex) eventSelection.add(eventKey(change.type, events.length));
-        events.push(change.after);
-      } else events[change.index] = change.after;
-    }
-  }
-  if (notesByLine.size) chart = { ...chart, judgeLineList: chart.judgeLineList.map((line, index) => notesByLine.has(index) ? { ...line, notes: notesByLine.get(index), numOfNotes: notesByLine.get(index).length } : line) };
-  for (const [lineIndex, updates] of eventsByLine) if (updates.size) chart = chartWithEventLists(chart, lineIndex, snapshot.eventLayer, updates);
-  assertChart(chart);
-  const multiEventSelection = new Map();
-  if (kind === 'events' && !removeSource) {
-    for (const change of changes) {
-      if (!change.copy) {
-        const lineIndex = Number.isInteger(change.lineIndex) ? change.lineIndex : snapshot.lineIndex;
-        if (!multiEventSelection.has(lineIndex)) multiEventSelection.set(lineIndex, new Set());
-        multiEventSelection.get(lineIndex).add(eventKey(change.type, change.index));
-      }
-    }
-  }
-  return { chart, lineIndex: snapshot.lineIndex, eventLayer: snapshot.eventLayer, focus: kind, selection, eventSelection, multiEventSelection, changes };
+  const result = assembleSelectionEdits({ ...snapshot, focus: kind, notes: kind === 'notes' ? snapshot.notes : [], events: kind === 'events' ? snapshot.events : [] }, changes, { removeSource });
+  assertChart(result.chart); return result;
 }
 
 export function previewMultiEdit(snapshot, kind, options = {}) {
@@ -201,7 +171,7 @@ export function previewMultiEdit(snapshot, kind, options = {}) {
     filtered.forEach((entry, index) => {
       const sourceLine = Number.isInteger(entry.lineIndex) ? entry.lineIndex : snapshot.lineIndex;
       const after = structuredClone(entry.before); const scope = scopeFor(after, kind, sourceLine, index, filtered.length);
-      const change = { kind, type: entry.type, index: entry.index, before: entry.before, after, lineIndex: sourceLine, copy: false };
+      const change = { kind, type: entry.type, index: entry.index, before: entry.before, after, sourceLineIndex: sourceLine, lineIndex: sourceLine, copy: false };
       if (scriptMode) {
         for (const statement of script) {
           const value = statement.evaluate(scope); const previous = scope[statement.field];
@@ -253,13 +223,13 @@ export function previewEventClones(snapshot, options = {}) {
   const random = randomSource(options.seed ?? 1); const modifiers = new Map();
   for (const type of ['moveXEvents', 'moveYEvents', 'rotateEvents', 'alphaEvents']) modifiers.set(type, distribution(options.channels?.[type] ?? {}, random));
   const changes = [];
-  for (const { type, index, event } of snapshot.events) {
+  for (const { type, index, event, lineIndex: sourceLineIndex = snapshot.lineIndex } of snapshot.events) {
     targets.forEach((lineIndex, targetIndex) => {
       const offset = targetIndex * increment; const after = structuredClone(event);
       after.startTime = fromNumber(beatValue(event.startTime) + offset); after.endTime = fromNumber(beatValue(event.endTime) + offset);
       const modifier = modifiers.get(type);
       if (modifier) { const value = modifier(targetIndex, targets.length > 1 ? targetIndex / (targets.length - 1) : 0); if (value !== null) { after.start += value; after.end += value; } }
-      const change = { kind: 'events', type, index, before: event, after, lineIndex, copy: true };
+      const change = { kind: 'events', type, index, before: event, after, sourceLineIndex, lineIndex, copy: true };
       validateChange(change, snapshot.chart.judgeLineList.length, snapshot); changes.push(change);
     });
   }

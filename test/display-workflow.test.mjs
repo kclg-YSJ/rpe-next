@@ -43,6 +43,19 @@ test('Hold 头尾沿身体边缘拼接，头尾宽度使用身体缩放基准', 
   assert.deepEqual(calls.map(call => call.slice(1)), [[-25, -150, 50, 150], [-25, -155, 50, 5], [-30, 0, 60, 10]]);
 });
 
+test('默认皮肤的零长度 Hold 不绘制身体，头尾分别可见，判定后只绘制尾', () => {
+  const skin = new RpeSkin(() => {});
+  for (const [name, width, height] of [['Hold', 100, 100], ['HoldHead', 120, 20], ['HoldEnd', 100, 10]]) skin.images.set(name, { name, naturalWidth: width, naturalHeight: height });
+  for (const showHead of [true, false]) for (const direction of [1, -1]) {
+    const calls = [], scales = [], context = { save() {}, restore() {}, translate() {}, scale(...args) { scales.push(args); }, drawImage(...args) { calls.push(args); } };
+    skin.hold(context, 100, 200, 200, 50, false, showHead, undefined, 50, direction);
+    assert.deepEqual(scales, [[1, direction]]);
+    assert.deepEqual(calls.map(call => call[0].name), showHead ? ['HoldEnd', 'HoldHead'] : ['HoldEnd']);
+    assert.deepEqual(calls[0].slice(1), [-25, -5, 50, 5]);
+    if (showHead) assert.deepEqual(calls[1].slice(1), [-30, 0, 60, 10]);
+  }
+});
+
 test('粒子四个、原时长和指数扩散，定位采样结果确定', () => {
   const particles = hitParticles(0.2, 42, 175);
   assert.equal(particles.length, 4); assert.equal(particles[0].alpha, 0.7);

@@ -46,6 +46,11 @@ test('打击图集逐行选帧且时长严格遵循包配置，Hold 图集首尾
   assert.equal(noteSkinFrame(info,-1),null);assert.deepEqual(noteSkinFrame(info,0.25),{index:5,column:1,row:1});assert.equal(noteSkinFrame(info,0.8),null);
   const standard=holdSkinLayout(info,{width:160,height:300},false,100,-100,80);assert.equal(standard.headHeight,9);assert.equal(standard.tailHeight,6);assert.equal(standard.headY,0);assert.equal(standard.tailY,-206);
   const compact=holdSkinLayout({...info,holdCompact:true},{width:160,height:300},true,100,300,80);assert.equal(compact.direction,-1);assert.equal(compact.headY,-5.5);assert.equal(compact.tailY,-204);assert.equal(compact.bodyPixels,262);
+  for(const direction of [1,-1]) {
+    assert.equal(holdSkinLayout(info,{width:160,height:300},false,0,0,80,80,direction).direction,direction);
+    assert.equal(holdSkinLayout(info,{width:160,height:300},false,100,-100,80,80,direction).direction,1);
+    assert.equal(holdSkinLayout(info,{width:160,height:300},false,100,300,80,80,direction).direction,-1);
+  }
 });
 
 function drawContext(){const calls=[];return new Proxy({calls,globalAlpha:1},{get(target,key){return target[key]??((...args)=>calls.push([key,...args]));}});}
@@ -54,6 +59,20 @@ test('Phira Hold 从同一图片分别裁切尾、身体、头；keepHead、comp
   let context=drawContext();runtime.hold(context,50,200,20,80,false,false);let images=context.calls.filter(call=>call[0]==='drawImage');assert.equal(images.length,2);assert.deepEqual(images[0].slice(2,6),[0,12,160,270]);
   runtime.info={...runtime.info,holdKeepHead:true,holdCompact:true};context=drawContext();runtime.hold(context,50,200,20,80,true,false);images=context.calls.filter(call=>call[0]==='drawImage');assert.equal(images.length,3);assert.equal(images[2][7],-5.5);assert.equal(images[1][7],-184);
   const skin=new RpeSkin(()=>{});skin.setResourcePack(runtime);assert.equal(skin.hitLifetime,0.5);assert.equal(skin.hold(drawContext(),0,100,0,50),true);skin.setResourcePack(null);assert.equal(runtime.images.size,0);
+});
+
+test('导入皮肤的零长度 Hold 头尾不互相遮挡，keepHead 不使判定后的零长度长条保留头',()=>{
+  const record=parseNoteSkin(noteSkinFixture()), image={naturalWidth:160,naturalHeight:300};
+  const runtime=new ResourceNoteSkin(record,new Map([['hold.png',image],['hold_mh.png',image]]),(_,source)=>source);
+  const skin=new RpeSkin(()=>{});skin.setResourcePack(runtime);
+  for(const holdCompact of [false,true])for(const holdKeepHead of [false,true])for(const highlight of [false,true])for(const showHead of [false,true])for(const direction of [1,-1]) {
+    runtime.info={...record.info,holdCompact,holdKeepHead};const context=drawContext();skin.hold(context,50,200,200,80,highlight,showHead,undefined,80,direction);
+    assert.deepEqual(context.calls.find(call=>call[0]==='scale'),['scale',1,direction]);
+    const images=context.calls.filter(call=>call[0]==='drawImage'),[tailPixels,headPixels]=runtime.info[highlight?'holdAtlasMH':'holdAtlas'];
+    assert.equal(images.length,showHead?2:1);assert.deepEqual(images[0].slice(2,6),[0,0,160,tailPixels]);
+    assert.equal(images[0][7]+images[0][9],0);
+    if(showHead){assert.deepEqual(images[1].slice(2,6),[0,300-headPixels,160,headPixels]);assert.equal(images[1][7],0);}
+  }
 });
 
 test('图集参数变化会清除帧和重复身体缓存，时长或颜色修改不影响已有图像缓存',()=>{

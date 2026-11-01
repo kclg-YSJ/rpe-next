@@ -34,6 +34,22 @@ function setup() {
   return { audio, context, starts };
 }
 
+test('超大谱音乐直接使用流式 URL，保持定位与倍速且不解码整首音频', async () => {
+  const original = globalThis.Audio;
+  class LoadedMedia extends SeekingMedia { set src(value) { this.url = value; queueMicrotask(() => this.onloadedmetadata?.()); } }
+  globalThis.Audio = LoadedMedia;
+  const { audio, context } = setup(); audio.media = null;
+  context.createMediaElementSource = () => ({ connect() {}, disconnect() {} });
+  context.decodeAudioData = () => { throw Error('must not decode'); };
+  try {
+    await audio.loadStream('rpe://app/__large-preview/test/music', 1000);
+    assert.equal(audio.buffer, null); assert.equal(audio.usesMedia, true); assert.equal(audio.media.url, 'rpe://app/__large-preview/test/music');
+    audio.seek(30); audio.media.finishSeek(); assert.equal(audio.time, 30);
+    audio.clear(); await audio.loadStream(null, 1000); assert.equal(audio.duration, 1000);
+    audio.clear(); assert.equal(audio.duration, 600);
+  } finally { audio.clear(); globalThis.Audio = original; }
+});
+
 test('载入音乐优先保存解码样本；解码器不支持时仍可回退原生媒体', async () => {
   const original = globalThis.Audio;
   class LoadedMedia extends SeekingMedia {

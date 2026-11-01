@@ -25,6 +25,7 @@ export class EditorSession extends EventTarget {
     this.multiLineMode = 'notes';
     this.multiLineMerge = true;
     this.multiLineIndices = [];
+    this.multiLineExpression = '';
     this.multiLineSelection = new Map();
     this.multiEventSelection = new Map();
     this.multiSelectionIntent = null;
@@ -40,7 +41,7 @@ export class EditorSession extends EventTarget {
   get chart() { return this.history.document; }
   get line() { return this.chart.judgeLineList?.[this.lineIndex]; }
   get notes() { return this.line?.notes ?? []; }
-  get multiLineActive() { return this.multiLineEnabled && this.multiLineIndices.length > 0; }
+  get multiLineActive() { return this.multiLineEnabled && (this.multiLineIndices.length > 0 || Boolean(this.multiLineExpression)); }
   get targetLineIndices() {
     if (!this.multiLineActive) return [this.lineIndex];
     return [...this.multiLineIndices];
@@ -50,7 +51,7 @@ export class EditorSession extends EventTarget {
   setMultiLineEnabled(enabled = true, mode = this.multiLineMode) {
     this.multiLineEnabled = Boolean(enabled);
     this.multiLineMode = mode === 'events' ? 'events' : 'notes';
-    if (this.multiLineEnabled && !this.multiLineIndices.length) this.multiLineIndices = [this.lineIndex];
+    if (this.multiLineEnabled && !this.multiLineIndices.length && !this.multiLineExpression) this.multiLineIndices = [this.lineIndex];
     // Turning the mode off only hides multi-line editing. Keep the selected line
     // list and per-line selections so reopening the mode restores the workspace.
     this.normalizeMultiLine(); this.notify();
@@ -59,8 +60,10 @@ export class EditorSession extends EventTarget {
   setMultiLineMode(mode) { this.multiLineMode = mode === 'events' ? 'events' : 'notes'; this.notify(); }
   normalizeMultiLine() {
     const length = this.chart.judgeLineList?.length ?? 0;
+    if (this.multiLineExpression && this.multiLineResolvedIndices !== this.multiLineIndices) this.multiLineExpression = '';
     this.multiLineIndices = [...new Set(this.multiLineIndices.filter(index => Number.isInteger(index) && index >= 0 && index < length))].sort((a, b) => a - b);
-    if (this.multiLineEnabled && !this.multiLineIndices.length && length) this.multiLineIndices = [Math.max(0, Math.min(this.lineIndex, length - 1))];
+    if (this.multiLineExpression) this.multiLineResolvedIndices = this.multiLineIndices;
+    if (this.multiLineEnabled && !this.multiLineIndices.length && !this.multiLineExpression && length) this.multiLineIndices = [Math.max(0, Math.min(this.lineIndex, length - 1))];
   }
   addMultiLine(index = this.lineIndex) {
     this.multiLineEnabled = true;
@@ -72,7 +75,7 @@ export class EditorSession extends EventTarget {
     if (!this.multiLineIndices.length) this.multiLineEnabled = false;
     this.normalizeMultiLine(); this.notify();
   }
-  clearMultiLines() { this.multiLineIndices = []; this.multiLineEnabled = false; this.notify(); }
+  clearMultiLines() { this.multiLineExpression = ''; this.multiLineIndices = []; this.multiLineEnabled = false; this.notify(); }
   toggleMultiLine(index = this.lineIndex) { this.isTargetLine(index) ? this.removeMultiLine(index) : this.addMultiLine(index); }
   addNextMultiLine() {
     if (!this.multiLineIndices.length) return this.addMultiLine(this.lineIndex);
@@ -100,7 +103,7 @@ export class EditorSession extends EventTarget {
   removeMinimumMultiLine() {
     if (this.multiLineIndices.length) this.removeMultiLine(Math.min(...this.multiLineIndices));
   }
-  notify() { this.dispatchEvent(new Event('change')); }
+  notify() { this.largeDocument?.selectionChanged(); this.dispatchEvent(new Event('change')); }
 
   selectionState() { return selectionState(this); }
 
@@ -124,6 +127,7 @@ export class EditorSession extends EventTarget {
     const change=emitModHook('session:before-commit',{session:this,label,chart,beforeSelection,cancel:false,normalizeAlpha:true});
     if(change.cancel)return false;label=change.label;chart=change.chart;beforeSelection=change.beforeSelection;
     if(change.normalizeAlpha!==false)chart = integerChartAlpha(chart, this.chart);
+    if (this.largeDocument) return this.largeDocument.commit(label, chart, beforeSelection);
     if (this.collaboration) {const result=this.collaboration.commit(label, chart, beforeSelection);emitModHook('session:after-commit',{session:this,label,chart:this.chart});return result;}
     if (this.history.commit(label, chart, { beforeSelection, afterSelection: this.selectionState() })) {
       const time = Number.isFinite(this.editSeconds) ? Math.max(0, this.editSeconds) : 0;
@@ -181,6 +185,7 @@ export class EditorSession extends EventTarget {
   }
 
   deleteSelection() {
+    if (this.largeDocument?.logicalSelection) return this.largeDocument.transformSelected(t('session.s4c896a7'), null, { remove: true });
     const entries = this.selectedNoteEntries();
     if (!entries.length) return;
     const beforeSelection = this.selectionState();
@@ -201,6 +206,7 @@ export class EditorSession extends EventTarget {
   }
 
   transformSelection(label, change) {
+    if (this.largeDocument?.logicalSelection) return this.largeDocument.transformSelected(label, change);
     const entries = this.selectedNoteEntries();
     if (!entries.length) return;
     const lines = [...this.chart.judgeLineList];
@@ -214,6 +220,7 @@ export class EditorSession extends EventTarget {
   }
 
   moveSelectionToLine(targetLineIndex) {
+    if (this.largeDocument?.logicalSelection) return this.largeDocument.transformSelected(t('session.s060c482'), note => note, { targetLine: targetLineIndex });
     const entries = this.selectedNoteEntries();
     if (!entries.length || !Number.isInteger(targetLineIndex) || targetLineIndex < 0 || targetLineIndex >= this.chart.judgeLineList.length) return;
     if (this.multiLineActive && this.multiLineMode === 'notes') {
@@ -225,6 +232,7 @@ export class EditorSession extends EventTarget {
         selectedByLine.get(entry.lineIndex).push(entry);
       }
       const moving = entries.filter(entry => entry.lineIndex !== targetLineIndex);
+      if (!moving.length) return;
       for (const [lineIndex, selectedEntries] of selectedByLine) {
         if (lineIndex === targetLineIndex) continue;
         const line = lines[lineIndex]; if (!line) continue;
@@ -234,7 +242,7 @@ export class EditorSession extends EventTarget {
       }
       const target = lines[targetLineIndex]; if (!target) return;
       const targetNotes = [...(target.notes ?? [])];
-      const selectedIndices = new Set();
+      const selectedIndices = new Set((selectedByLine.get(targetLineIndex) ?? []).map(entry => entry.index));
       for (const entry of moving) { selectedIndices.add(targetNotes.length); targetNotes.push(structuredClone(entry.note)); }
       lines[targetLineIndex] = { ...target, notes: targetNotes, numOfNotes: targetNotes.length };
       this.multiLineSelection = new Map([[targetLineIndex, selectedIndices]]);
@@ -258,10 +266,11 @@ export class EditorSession extends EventTarget {
     this.commit(t('session.s060c482'), { ...this.chart, judgeLineList: lines }, beforeSelection);
   }
 
-  copy() { this.clipboard = structuredClone(this.notes.filter((note, index) => this.selection.has(index))); }
+  copy() { this.clipboard = structuredClone(this.notes.filter((note, index) => this.selection.has(index)).map(note => this.largeDocument ? this.largeDocument.copyNote(note) : note)); }
 
   paste(beat, mirror = false, keepTime = false) {
     if (!this.clipboard.length) return;
+    if (!this.largeDocument && this.clipboard.some(note => note._rpenLargeCopies > 1)) throw Error('请在超大谱工程中粘贴重合音符组，或只复制一个音符。');
     const earliest = this.clipboard.reduce((minimum, note) => Math.min(minimum, beatValue(note.startTime)), Infinity);
     const delta = keepTime ? 0 : beat - earliest;
     this.insertNotes(this.clipboard.map(note => ({ ...structuredClone(note),
@@ -287,6 +296,7 @@ export class EditorSession extends EventTarget {
   }
 
   travel(direction) {
+    if (this.largeDocument) return this.largeDocument.travel(direction);
     const auxiliary = (direction === 'undo' ? this.history.undoStack : this.history.redoStack).at(-1);
     if (auxiliary?.auxiliaryOnly) { this.history[direction](); this.notify(); return; }
     if (this.collaboration) return this.collaboration.travel(direction);

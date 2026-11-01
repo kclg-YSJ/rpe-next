@@ -16,6 +16,7 @@ import { noiseRenderingLayers } from '../core/noise-skin.mjs';
 import { DEFAULT_EDITOR_PREFERENCES } from '../core/default-settings.mjs';
 import { HitEffectBatch } from './hit-effect-batch.mjs';
 import { NoteSpriteBatch, holdBatchWithinBudget } from './note-sprite-batch.mjs';
+import { CountedNoteBatch } from './counted-note-batch.mjs';
 
 const clamp = value => Math.max(0, Math.min(1, value));
 
@@ -62,7 +63,11 @@ export class Preview {
     for (const layer of [this.shaderCanvas, this.overlayCanvas]) if (layer && layer.parentElement !== this.canvas.parentElement) this.canvas.after(layer);
     if (this.overflowLayer && this.overflowLayer.parentElement !== this.canvas.parentElement) this.canvas.after(this.overflowLayer);
     this.chart = chart;
-    if (this.preparedChart !== chart || this.preparedTempo !== tempo || this.scene.chart !== chart || this.scene.tempo !== tempo) {
+    if (this.largeChartView) {
+      this.largeChartView.prepare(this, chart, tempo);
+      this.passes = renderPasses(chart.judgeLineList, this.scene.order);
+      this.shaderRuntime.compile(chart, tempo);
+    } else if (this.preparedChart !== chart || this.preparedTempo !== tempo || this.scene.chart !== chart || this.scene.tempo !== tempo) {
       this.scene.compile(chart, tempo); this.simultaneous = simultaneousNotes(chart, tempo, this.simultaneousCounts);
       this.completionTimes = this.scene.lines.flatMap(runtime => runtime.notes.filter(entry => !entry.note.isFake).map(entry => entry.note.type === 2 ? entry.end : entry.start)).sort((left, right) => left - right);
       this.passes = renderPasses(chart.judgeLineList, this.scene.order);
@@ -365,6 +370,8 @@ export class Preview {
       }
       else for (const entry of visibleNotes.get(index)) {
         const note = entry.note;
+        const repetitions = entry.multiplicity ?? 1;
+        if (context instanceof CountedNoteBatch) context.repetitions = repetitions;
         if ((note.type === 2) !== (pass.kind === 'hold')) continue;
         const position = previewNotePosition(runtime.noteState(entry, state, seconds), runtime.line, positionScale);
         if (position.alpha <= 0 || position.size === 0) continue;
@@ -401,6 +408,7 @@ export class Preview {
         if (collectCenters) collectCenters.set(entry.index, hitArea);
         context.save();
         context.globalAlpha = clamp(position.alpha) * noteOpacity;
+        if (!(context instanceof CountedNoteBatch) && repetitions > 1) context.globalAlpha = 1 - (1 - context.globalAlpha) ** repetitions;
         const tint = note.tint ?? note.color;
         context.fillStyle = Array.isArray(tint) ? `rgb(${tint.join(',')})` : NOTE_COLORS[note.type];
         let drawnHold = false;
@@ -421,7 +429,7 @@ export class Preview {
     } };
     for (const pass of this.passes) {
       const compatible = !this.noteBatch.failed && this.skin?.noteBatchCompatible;
-      const dense = compatible && (pass.kind === 'hold' ? holdCount > 512 && holdBatchWithinBudget(visibleNotes, states, seconds, this.noteSize, scale, width, height, this.skin) : pass.kind === 'note' && noteCount > 512);
+      const dense = compatible && (this.largeChartView ? pass.kind !== 'line' && CountedNoteBatch.compatible(this.skin) : pass.kind === 'hold' ? holdCount > 512 && holdBatchWithinBudget(visibleNotes, states, seconds, this.noteSize, scale, width, height, this.skin) : pass.kind === 'note' && noteCount > 512);
       const firstHit = this.noteHitAreas.length;
       let batched = false;
       try {

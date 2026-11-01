@@ -26,12 +26,15 @@ const layerNumber = { ...integer(0, 3), description: t('agent-chart-tools.sa5543
 const time = value => Array.isArray(value) ? [...value] : fromNumber(agentBeat(value));
 const splitSchema = agentSchema({ segments: integer(4, 8192), simplify: boolean, tolerance: number(.001, 10000) });
 const trajectoryOptions = agentSchema(Object.fromEntries(Object.entries(TRAJECTORY_DEFAULTS).map(([key, value]) => [key, typeof value === 'boolean' ? boolean : typeof value === 'number' ? agentNumber : typeof value === 'string' ? agentText : { type: 'object' }])));
+const checkLineTokens = (input, chart) => {
+  const count = chart.judgeLineList.length;
+  const groups = new Set(groupNames(chart));
+  for (const token of input.trim().split(/\s+/)) if (!groups.has(token) && /^[+-]?\d+(?::[+-]?\d+)?$/.test(token) && token.split(':').some(value => !Number.isSafeInteger(Number(value)) || Number(value) < 0 || Number(value) >= count)) throw Error(t('agent-chart-tools.s9519714'));
+};
 const lineIndices = (input, chart) => {
   const count = chart.judgeLineList.length;
-  if (typeof input === 'string') {
-    const groups = new Set(groupNames(chart));
-    for (const token of input.trim().split(/\s+/)) if (!groups.has(token) && /^[+-]?\d+(?::[+-]?\d+)?$/.test(token) && token.split(':').some(value => !Number.isSafeInteger(Number(value)) || Number(value) < 0 || Number(value) >= count)) throw Error(t('agent-chart-tools.s9519714'));
-  } else if (!Array.isArray(input)) throw Error(t('agent-chart-tools.s1d6a371'));
+  if (typeof input === 'string') checkLineTokens(input, chart);
+  else if (!Array.isArray(input)) throw Error(t('agent-chart-tools.s1d6a371'));
   const indices = Array.isArray(input) ? [...input] : parseLineExpression(input, count, chart);
   if (indices.some(index => !Number.isInteger(index) || !chart.judgeLineList[index]) || new Set(indices).size !== indices.length) throw Error(t('agent-chart-tools.saad7470'));
   return indices;
@@ -127,16 +130,23 @@ export function registerAgentChartTools(commands, editor, { current, check, prep
   });
   register('multi_line', t('agent-chart-tools.s5f27b55'), agentSchema({ lines: { anyOf: [{ type: 'string' }, { type: 'array', items: agentIndex, maxItems: 10000 }] }, enabled: boolean, mode: choice(['notes', 'events']), merge: boolean, width: number(30, 2400) }), 'read', args => {
     const chart = current(), session = editor.session, changing = Object.keys(args).length > 0;
-    const indices = args.lines === undefined ? [...session.multiLineIndices] : lineIndices(args.lines, chart);
-    if (indices.some(index => !Number.isInteger(index) || !chart.judgeLineList[index]) || new Set(indices).size !== indices.length || changing && (args.enabled ?? true) && !indices.length) throw Error(t('agent-chart-tools.saad7470'));
+    if (typeof args.lines === 'string') checkLineTokens(args.lines, chart);
+    const expression = typeof args.lines === 'string' ? editor.timeline.resolveMultiLineExpression?.(args.lines) : null;
+    const indices = args.lines === undefined ? [...session.multiLineIndices] : expression?.indices ?? lineIndices(args.lines, chart);
+    const dynamic = expression?.dynamic || args.lines === undefined && Boolean(session.multiLineExpression);
+    if (indices.some(index => !Number.isInteger(index) || !chart.judgeLineList[index]) || new Set(indices).size !== indices.length || changing && (args.enabled ?? true) && !indices.length && !dynamic) throw Error(t('agent-chart-tools.saad7470'));
     return { access: changing ? 'edit' : 'read', valid: () => editor.session === session && editor.chart === chart, apply: () => {
       if (changing) {
-        session.multiLineIndices = indices; session.setMultiLineEnabled(args.enabled ?? true, args.mode ?? session.multiLineMode);
+        if (args.lines !== undefined) {
+          if (expression?.dynamic) editor.timeline.setMultiLineExpression(args.lines);
+          else { session.multiLineExpression = ''; session.multiLineIndices = indices; }
+        }
+        session.setMultiLineEnabled(args.enabled ?? true, args.mode ?? session.multiLineMode);
         if (args.merge !== undefined) session.setMultiLineMerge(args.merge);
         if (args.width !== undefined) { const events = session.multiLineMode === 'events'; editor.timeline[events ? 'multiLineEventWidth' : 'multiLineWidth'] = args.width; editor.timeline[events ? 'multiLineEventWidthExplicit' : 'multiLineWidthExplicit'] = true; editor.raw?.persistEditor?.(); }
         session.notify(); editor.render?.();
       }
-      return { enabled: session.multiLineEnabled, mode: session.multiLineMode, lines: [...session.multiLineIndices], merge: session.multiLineMerge };
+      return { enabled: session.multiLineEnabled, mode: session.multiLineMode, lines: [...session.multiLineIndices], expression: session.multiLineExpression || null, merge: session.multiLineMerge };
     } };
   });
   register('global_events', t('agent-chart-tools.s654934a'), agentSchema({ action: choice(['list', 'read', 'replace']), revision: agentText, type: agentText, column: agentText, offset: agentIndex, limit: integer(1, 200), events: { type: 'array', maxItems: 10000, items: { type: 'object' } } }, ['action']), 'read', args => {

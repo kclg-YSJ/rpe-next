@@ -21,7 +21,7 @@ export class EventInteraction {
   hit(point) { return this.timeline.eventRects.findLast(rectangle => point.x >= rectangle.x && point.x <= rectangle.x + rectangle.width && point.y >= rectangle.y && point.y <= rectangle.y + rectangle.height); }
   endpointTarget() {
     if (this.timeline.rpeEventDrag !== true || !this.timeline.eventEndpointDragHeld || this.pending) return null;
-    const entries = selectedEventEntries(this.timeline.getSession()); return entries.length === 1 ? entries[0] : null;
+    const entries = selectedEventEntries(this.timeline.getSession()); return entries.length === 1 && this.timeline.eventTypes.includes(entries[0].type) ? entries[0] : null;
   }
   consumeContextMenu() { const suppress = this.suppressContextMenu || this.drag?.endpoint; this.suppressContextMenu = false; return Boolean(suppress); }
   updateCursor(point = this.timeline.eventCursor) {
@@ -72,10 +72,12 @@ export class EventInteraction {
     const point = this.timeline.eventCursor;
     if (beat === undefined && !point) return false;
     const lineIndex = this.timeline.lineIndexAt(point?.x ?? 0, this.canvas.clientWidth, 'events');
+    if (lineIndex < 0 || !this.timeline.eventTypes.length) return false;
     const panelWidth = this.timeline.panelWidth(this.canvas.clientWidth, 'events'); const panelOffset = this.timeline.panelIndex(lineIndex, 'events') * this.timeline.panelStride(this.canvas.clientWidth, 'events') - this.timeline.multiLineViewportOffset(this.canvas.clientWidth, 'events');
     const channel = this.timeline.eventChannelAt ? this.timeline.eventChannelAt((point?.x ?? 0) - panelOffset) : Math.max(0, Math.min(this.timeline.eventTypes.length - 1, Math.floor(((point?.x ?? 0) - panelOffset) / (panelWidth / this.timeline.eventTypes.length))));
     if (channel < 0 && !this.pending && !type) return false;
     const eventType = this.pending?.type ?? type ?? this.timeline.eventTypes[channel];
+    if (!this.timeline.eventTypes.includes(eventType)) return false;
     const at = beat ?? this.timeline.eventBeatAt(point.y, eventType, true);
     session.focus = 'events'; session.eventLayer = this.timeline.layer; session.selection.clear();
     if (!this.pending) {

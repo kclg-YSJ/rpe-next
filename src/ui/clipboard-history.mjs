@@ -48,7 +48,8 @@ export function renderClipboardHistory(host, history, actions) {
     const select = document.createElement('button'); select.type = 'button'; select.className = 'clipboard-select'; select.dataset.action = 'use';
     select.setAttribute('aria-pressed', String(history.activeId === entry.id));
     const picture = document.createElement('canvas'); picture.setAttribute('aria-hidden', 'true'); drawClipboardThumbnail(picture, entry);
-    const title = document.createElement('strong'); title.textContent = t('clipboard-history.s444c700', { p0: entry.pinned ? '◆ ' : '', p1: entry.notes.length, p2: entry.events.length });
+    const noteCount=entry.notes.reduce((sum,note)=>sum+(note._rpenLargeClipboard?.total??note._rpenLargeCopies??1),0);
+    const title = document.createElement('strong'); title.textContent = t('clipboard-history.s444c700', { p0: entry.pinned ? '◆ ' : '', p1: noteCount, p2: entry.events.length });
     const details = document.createElement('span'); details.textContent = t('clipboard-history.se0c9a04', { p0: entry.source, p1: entry.line, p2: new Date(entry.created).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
     select.setAttribute('aria-label', t('clipboard-history.sc2ebd01', { p0: entry.name || title.textContent, p1: details.textContent })); select.onclick = () => actions.use(entry.id);
     select.append(picture, title, details); card.append(select);

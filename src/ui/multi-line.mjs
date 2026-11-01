@@ -1,10 +1,23 @@
 import { formatLineExpression, parseLineExpression } from '../application/multi-line-edit.mjs';
 import { groupLineIndices, groupNames, isDefaultLineName, lineFeatureLabels, lineNameLabel } from '../core/line-groups.mjs';
 import { t } from '../i18n.mjs';
+import { EVENT_TYPES } from '../core/chart.mjs';
+import { SPECIAL_TRACKS } from '../core/editor-display.mjs';
 
 export class MultiLinePanel {
   constructor(host, getSession, { activate = () => {}, render = () => {}, notify = () => {}, timeline = null, persist = () => {} } = {}) {
-    this.host = host; this.getSession = getSession; this.activate = activate; this.renderSession = render; this.notify = notify; this.timeline = timeline; this.persist = persist; this.drag = null; this.listScrollTop = null;
+    this.host = host; this.getSession = getSession; this.activate = activate; this.renderSession = render; this.notify = notify; this.timeline = timeline; this.persist = persist; this.drag = null; this.listScrollTop = null; this.eventColumnsOpen = false;
+  }
+
+  syncSelection() {
+    const session = this.getSession(), selected = new Set(session.multiLineIndices);
+    if (this.count) this.count.textContent = session.multiLineActive ? t('multi-line.s9191962', { p0: selected.size }) : t('multi-line.sb9004e6');
+    if (this.expression && document.activeElement !== this.expression) this.expression.value = session.multiLineExpression || formatLineExpression(session.multiLineIndices, session.chart);
+    for (const [index, { row, checkbox }] of this.rows ?? []) {
+      if (checkbox.checked !== selected.has(index)) { checkbox.checked = selected.has(index); row.classList.toggle('selected', checkbox.checked); }
+      const disabled = !session.multiLineEnabled && index !== session.lineIndex;
+      if (checkbox.disabled !== disabled) checkbox.disabled = disabled;
+    }
   }
 
   render() {
@@ -15,7 +28,7 @@ export class MultiLinePanel {
     this.host.replaceChildren();
     const title = document.createElement('div'); title.className = 'panel-title';
     title.append(t('multi-line.s5255093'));
-    const count = document.createElement('small'); count.textContent = session.multiLineActive ? t('multi-line.s9191962', { p0: session.multiLineIndices.length }) : t('multi-line.sb9004e6'); title.append(count);
+    const count = document.createElement('small'); this.count = count; count.textContent = session.multiLineActive ? t('multi-line.s9191962', { p0: session.multiLineIndices.length }) : t('multi-line.sb9004e6'); title.append(count);
     this.host.append(title);
     const intro = document.createElement('p'); intro.className = 'hint'; intro.textContent = t('multi-line.s59e6f4f'); this.host.append(intro);
     const widthField = document.createElement('label'); widthField.className = 'field multi-line-width-field'; widthField.append(t('multi-line.s5a95e4f'));
@@ -58,23 +71,42 @@ export class MultiLinePanel {
     }
     this.host.append(actions);
     const expressionField = document.createElement('label'); expressionField.className = 'field multi-line-expression-field'; expressionField.append(t('multi-line.s6dcecd0'));
-    const expression = document.createElement('input'); expression.type = 'text'; expression.inputMode = 'text'; expression.placeholder = t('multi-line.s188ac1e'); expression.value = formatLineExpression(session.multiLineIndices, session.chart); expression.title = t('multi-line.s9cd3607'); expressionField.append(expression); this.host.append(expressionField);
+    const expression = document.createElement('input'); this.expression = expression; expression.type = 'text'; expression.inputMode = 'text'; expression.placeholder = t('multi-line.s188ac1e'); expression.value = session.multiLineExpression || formatLineExpression(session.multiLineIndices, session.chart); expression.title = t('multi-line.s9cd3607'); expressionField.append(expression); this.host.append(expressionField);
     const applyExpression = () => {
-      const previous = [...session.multiLineIndices];
+      if (expression.value.trim() === (session.multiLineExpression || formatLineExpression(session.multiLineIndices, session.chart))) return;
+      const previous = [...session.multiLineIndices], previousExpression = session.multiLineExpression;
       try {
-        const indices = parseLineExpression(expression.value, session.chart.judgeLineList?.length ?? 0, session.chart);
-        if (!indices.length) throw new Error(t('multi-line.sa828e01'));
-        session.multiLineIndices = indices; session.multiLineEnabled = true; session.normalizeMultiLine(); session.notify(); this.renderSession();
-      } catch (error) { expression.value = formatLineExpression(previous, session.chart); this.notify(error.message, 'warning'); }
+        const result = this.timeline?.resolveMultiLineExpression(expression.value) ?? { indices: parseLineExpression(expression.value, session.chart.judgeLineList?.length ?? 0, session.chart) };
+        if (!result.indices.length && !result.dynamic) throw new Error(t('multi-line.sa828e01'));
+        if (this.timeline) this.timeline.setMultiLineExpression(expression.value); else session.multiLineIndices = result.indices;
+        session.multiLineEnabled = true; session.normalizeMultiLine(); session.notify(); this.renderSession();
+      } catch (error) { expression.value = previousExpression || formatLineExpression(previous, session.chart); this.notify(error.message, 'warning'); }
     };
     expression.addEventListener('change', applyExpression); expression.addEventListener('blur', applyExpression); expression.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); applyExpression(); } });
+    const columns = document.createElement('details'); columns.className = 'multi-line-event-columns'; columns.open = this.eventColumnsOpen;
+    columns.addEventListener('toggle', () => { if (columns.isConnected) this.eventColumnsOpen = columns.open; });
+    const summary = document.createElement('summary'); summary.textContent = t('multi-line.eventColumns'); columns.append(summary);
+    const options = document.createElement('div'); options.className = 'multi-line-event-options';
+    for (const type of this.timeline?.extended ? SPECIAL_TRACKS.map(track => track.key) : EVENT_TYPES) {
+      const label = document.createElement('label'), input = document.createElement('input'); input.type = 'checkbox'; input.checked = this.timeline?.multiLineEventVisibility?.[type] !== false;
+      label.append(input, this.timeline?.eventLabel(type) ?? type);
+      input.onchange = () => {
+        if (!this.timeline) return;
+        this.timeline.multiLineEventVisibility = { ...this.timeline.multiLineEventVisibility, [type]: input.checked };
+        this.timeline.cancelPlacement(); this.timeline.changed(); this.persist();
+      };
+      options.append(label);
+    }
+    columns.append(options); this.host.append(columns);
     const list = document.createElement('div'); list.className = 'multi-line-list';
+    this.rows = new Map();
     list.addEventListener('scroll', () => { this.listScrollTop = list.scrollTop; }, { passive: true });
-    const syncExpression = () => { expression.value = formatLineExpression(session.multiLineIndices, session.chart); };
+    const syncExpression = () => { expression.value = session.multiLineExpression || formatLineExpression(session.multiLineIndices, session.chart); };
     const setRow = (index, selected) => {
       const values = new Set(session.multiLineIndices);
       if (selected) values.add(index); else values.delete(index);
       session.multiLineIndices = [...values].sort((left, right) => left - right);
+      session.multiLineExpression = '';
       session.multiLineEnabled = session.multiLineIndices.length > 0;
       syncExpression();
       list.querySelectorAll('.multi-line-row').forEach(row => {
@@ -91,7 +123,7 @@ export class MultiLinePanel {
       const lineLabel = lineNameLabel(line, index); name.textContent = isDefaultLineName(line, index) ? lineLabel : t('multi-line.s3ad4a06', { p0: index, p1: lineLabel });
       const features = lineFeatureLabels(line); const featureText = document.createElement('small'); featureText.className = 'multi-line-features'; featureText.textContent = features.join(' · '); featureText.hidden = !features.length; label.append(name, featureText);
       const stats = document.createElement('small'); const events = [...(line.eventLayers ?? []), line.extended ?? {}].reduce((sum, layer) => sum + Object.values(layer ?? {}).reduce((total, value) => total + (Array.isArray(value) ? value.length : 0), 0), 0); stats.textContent = t('multi-line.sdf24632', { p0: line.notes?.length ?? 0, p1: events });
-      row.classList.toggle('current', index === session.lineIndex); row.classList.toggle('selected', checkbox.checked); row.append(checkbox, label, stats); return row;
+      row.classList.toggle('current', index === session.lineIndex); row.classList.toggle('selected', checkbox.checked); row.append(checkbox, label, stats); this.rows.set(index, { row, checkbox }); return row;
     };
     const hasNamedGroups = names.slice(1).some((unused, groupIndex) => groupLineIndices(session.chart, groupIndex + 1).length > 0);
     if (hasNamedGroups) {

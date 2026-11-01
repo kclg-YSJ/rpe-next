@@ -202,6 +202,7 @@ tokens 是初始默认值，不是只能读取的常量。可在 `@root` 状态/
 | `language-settings` / `language-select` | `#language-settings` / `#ui-language`，语言分类与选择控件 |
 | `dictation-settings` / `dictation-indicator` / `dictation-candidate` / `dictation-permission` | 本地语音输入设置、按住说话状态浮层、可复制结果、麦克风授权与系统权限说明面板；听写状态浮层不改变当前输入焦点 |
 | `performance-monitor` | 默认 F10 开关的性能浮层；位于浏览器顶层，支持拖拽并记住位置。内部用 Shadow DOM 保持深色半透明面板的可读性，皮肤可调整宿主样式，不移动或复制内部数值及图表节点 |
+| `graphics-settings` / `graphics-warning` | Windows 桌面端“图形设备”设置和启动显卡提示。显示实际渲染器，保留独显偏好、检测、系统设置、复制程序路径及“不再提示”交互；网页版不显示 |
 | `theme-settings` | `#editor-skin-settings` |
 | `context-menu` | `.timeline-context-menu` |
 | `line-overview` | `.line-switcher`，Ctrl+滚轮线缩略图 |
@@ -217,6 +218,7 @@ tokens 是初始默认值，不是只能读取的常量。可在 `@root` 状态/
 | `clock` / `beat-display` / `bpm-display` | 当前秒数与总时长 / 当前拍数 / 当前 BPM 读数，可分别设置样式或隐藏 |
 | `note-properties` / `event-properties` / `line-properties` / `noise-properties` | 四类属性表单 |
 | `noise-layers` / `noise-list` / `line-list` / `multi-line-list` | 对应层/物件列表 |
+| `multi-line-event-columns` | 多线列表上方默认折叠的事件栏勾选组；内部 `.multi-line-event-options` 自动换行，保留原生勾选交互 |
 | `asset-tree` / `asset-details` | 素材树 / 素材详情 |
 | `sample-bar` / `sample-panel` | 预览取样操作条 / 原地取样面板 |
 | `field` / `hint` / `panel-title` / `panel-actions` | 字段行 / 提示 / 标题 / 页面操作区 |
