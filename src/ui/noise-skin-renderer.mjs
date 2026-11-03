@@ -11,15 +11,29 @@ const downsample = `precision highp float; varying highp vec2 uv; uniform sample
 void main(){ivec2 p=ivec2(min(floor(uv*screenSize),screenSize-1.));gl_FragColor=texelFetch(screenTexture,p,0);}`;
 const imageConvert = `precision highp float; varying highp vec2 uv; uniform sampler2D screenTexture; uniform float srgb; uniform float premult;
 void main(){vec4 c=texture2D(screenTexture,uv);if(srgb>.5)c.rgb=mix(c.rgb/12.92,pow((c.rgb+.055)/1.055,vec3(2.4)),step(vec3(.04045),c.rgb));if(premult>.5)c.rgb*=c.a;gl_FragColor=c;}`;
+// Overlay mode only: skin shaders take an opaque scene and hand the whole frame
+// back. The render studio draws the noise above the HUD, so compare against the
+// untouched capture and keep only the pixels the skin actually changed.
+const cutout = `precision highp float; varying highp vec2 uv; uniform sampler2D screenTexture; uniform sampler2D sceneTexture;
+void main(){
+  vec4 c=texture2D(screenTexture,uv);
+  vec3 s=texture2D(sceneTexture,uv).rgb;
+  float delta=max(max(abs(c.r-s.r),abs(c.g-s.g)),abs(c.b-s.b));
+  float keep=smoothstep(0.003,0.022,delta);
+  gl_FragColor=vec4(c.rgb*keep,keep);
+}`;
 
 // Owns GPU resources only. Chart geometry, timing and layer order stay with NoisePreview.
 export class NoiseSkinRenderer {
   dispose() { this.clearSkins(); this.lost = true; this.gl?.getExtension('WEBGL_lose_context')?.loseContext(); if (this.canvas) this.canvas.width = this.canvas.height = 1; }
-  constructor(invalidate, report) {
-    this.invalidate = invalidate; this.report = report; this.skins = new Map(); this.instances = new Map(); this.errors = new Set();
+  // overlay=false keeps the historical behaviour: the skin owns the whole frame
+  // and the playfield is cleared before it is blitted back. Only the render
+  // studio opts in; the editor preview must stay on the default path.
+  constructor(invalidate, report, { overlay = false } = {}) {
+    this.invalidate = invalidate; this.report = report; this.overlay = overlay; this.skins = new Map(); this.instances = new Map(); this.errors = new Set();
     this.canvas = document.createElement('canvas'); this.capture = document.createElement('canvas');
     this.captureContext = this.capture.getContext('2d');
-    this.gl = this.canvas.getContext('webgl2', { alpha: true, premultipliedAlpha: false, antialias: false, preserveDrawingBuffer: true, depth: false, stencil: true });
+    this.gl = this.canvas.getContext('webgl2', { alpha: true, premultipliedAlpha: overlay, antialias: false, preserveDrawingBuffer: true, depth: false, stencil: true });
     if (!this.gl) return;
     this.canvas.addEventListener('webglcontextlost', event => { event.preventDefault(); this.lost = true; });
     this.canvas.addEventListener('webglcontextrestored', () => { this.lost = false; this.skins.clear(); this.instances.clear(); this.initialize(); this.invalidate?.(); });
@@ -31,6 +45,7 @@ export class NoiseSkinRenderer {
     this.quadBuffer = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, this.quadBuffer); gl.bufferData(gl.ARRAY_BUFFER, this.quad, gl.STATIC_DRAW);
     this.buffer = gl.createBuffer(); this.vertexCapacity = 0; this.touchPoints = new Float32Array(128);
     this.copy = this.program(copy); this.maskProgram = this.program(maskFragment); this.downsample = this.program(downsample); this.imageConvert = this.program(imageConvert);
+    this.cutout = this.overlay ? this.program(cutout) : null;
   }
   program(source) {
     const gl = this.gl;
@@ -194,6 +209,15 @@ export class NoiseSkinRenderer {
       let screen = instance.screens[0]; let other = instance.screens[1]; gl.bindTexture(gl.TEXTURE_2D,screen.texture); gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true); gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,false); gl.pixelStorei(gl.UNPACK_COLORSPACE_CONVERSION_WEBGL,gl.NONE); gl.texSubImage2D(gl.TEXTURE_2D,0,0,0,gl.RGBA,gl.UNSIGNED_BYTE,this.capture); gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,false);
       this.geometryMask(instance,entries,viewport,scale,canvasWidth,canvasHeight);
       for (const target of instance.targets.values()) if (!target.spec.noClear) this.clear(target.front);
+      if (this.overlay) {
+        // Untouched frame: reference for the cutout and source of the pixels that
+        // are not part of the noise area.
+        if (!instance.scene||instance.scene.width!==width||instance.scene.height!==height) {
+          if (instance.scene) { this.destroy(instance.scene); const index=instance.resources.indexOf(instance.scene); if (index>=0) instance.resources.splice(index,1); }
+          instance.scene=this.texture(width,height,'rgba8','linear'); instance.resources.push(instance.scene);
+        }
+        this.blit(screen,instance.scene);
+      }
       for (const pass of instance.passes) {
         const target = pass.target; const output = target ? target.back : other;
         if (pass.component) this.blit(target.front,output);
@@ -208,8 +232,21 @@ export class NoiseSkinRenderer {
         gl.drawArrays(gl.TRIANGLES,0,6); gl.colorMask(true,true,true,true);
         if (target) [target.front,target.back] = [target.back,target.front]; else [screen,other] = [other,screen];
       }
-      this.blit(screen,null);
-      context.save(); context.globalAlpha = 1; context.clearRect(viewport.left,viewport.top,viewport.width,viewport.height); context.drawImage(this.canvas,viewport.left,viewport.top,viewport.width,viewport.height); context.restore(); return true;
+      context.save(); context.globalAlpha = 1;
+      if (this.overlay) {
+        // Composite only the changed pixels above the scene and the HUD; several
+        // noise layers add up instead of erasing each other.
+        this.bind(this.cutout,null);
+        const cutoutUnit=this.sampler(this.cutout,'screenTexture',screen,0);
+        this.sampler(this.cutout,'sceneTexture',instance.scene,cutoutUnit);
+        gl.drawArrays(gl.TRIANGLES,0,6);
+        context.drawImage(this.canvas,viewport.left,viewport.top,viewport.width,viewport.height);
+      } else {
+        this.blit(screen,null);
+        context.clearRect(viewport.left,viewport.top,viewport.width,viewport.height);
+        context.drawImage(this.canvas,viewport.left,viewport.top,viewport.width,viewport.height);
+      }
+      context.restore(); return true;
     } catch (error) { const message = t('noise-skin-renderer.s8875622')+layer.skin+'：'+error.message; if (!this.errors.has(message)) { this.errors.add(message); this.report?.(message); console.warn(message); } return false; }
   }
   snapshot(source) { const target = this.texture(source.width,source.height,source.format); this.blit(source,target); return target; }
