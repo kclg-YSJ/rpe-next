@@ -1,0 +1,241 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "video-render-settings-v1",
+  "title": "RPEN local video render settings v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "format": {
+      "type": "string",
+      "default": "mp4",
+      "enum": [
+        "mp4",
+        "mov",
+        "mkv",
+        "webm"
+      ]
+    },
+    "preset": {
+      "type": "string",
+      "default": "1080p"
+    },
+    "width": {
+      "type": "number",
+      "default": 1920,
+      "minimum": 64,
+      "maximum": 7680,
+      "multipleOf": 2
+    },
+    "height": {
+      "type": "number",
+      "default": 1080,
+      "minimum": 64,
+      "maximum": 4320,
+      "multipleOf": 2
+    },
+    "fps": {
+      "type": "number",
+      "default": 60,
+      "enum": [
+        24,
+        25,
+        30,
+        50,
+        60,
+        90,
+        120,
+        144,
+        240
+      ]
+    },
+    "videoCodec": {
+      "type": "string",
+      "default": "auto",
+      "enum": [
+        "auto",
+        "avc",
+        "hevc",
+        "vp9",
+        "vp8",
+        "av1",
+        "prores"
+      ]
+    },
+    "videoBitrate": {
+      "type": "number",
+      "default": 12,
+      "minimum": 1,
+      "maximum": 200
+    },
+    "audioCodec": {
+      "type": "string",
+      "default": "auto",
+      "enum": [
+        "auto",
+        "aac",
+        "opus",
+        "flac",
+        "pcm-s16",
+        "vorbis"
+      ]
+    },
+    "audioBitrate": {
+      "type": "number",
+      "default": 192
+    },
+    "sampleRate": {
+      "type": "number",
+      "default": 48000,
+      "enum": [
+        32000,
+        44100,
+        48000,
+        88200,
+        96000
+      ]
+    },
+    "fileName": {
+      "type": "string",
+      "default": "{name} - Autoplay"
+    },
+    "start": {
+      "type": "number",
+      "default": 0,
+      "minimum": 0,
+      "maximum": 43199.9
+    },
+    "end": {
+      "type": "number",
+      "default": 0,
+      "minimum": 0,
+      "maximum": 43200
+    },
+    "backgroundDim": {
+      "type": "number",
+      "default": 0.65,
+      "minimum": 0,
+      "maximum": 1
+    },
+    "backgroundBlur": {
+      "type": "number",
+      "default": 63,
+      "minimum": 0,
+      "maximum": 200
+    },
+    "display": {
+      "type": "string",
+      "default": "score",
+      "enum": [
+        "score",
+        "information",
+        "clean"
+      ]
+    },
+    "offset": {
+      "type": "number",
+      "default": 0,
+      "minimum": -60000,
+      "maximum": 60000
+    },
+    "offsetAuto": {
+      "type": "boolean",
+      "default": true
+    },
+    "noteScale": {
+      "type": "number",
+      "default": 100,
+      "minimum": 30,
+      "maximum": 300
+    },
+    "lineScale": {
+      "type": "number",
+      "default": 1,
+      "minimum": 0.2,
+      "maximum": 3
+    },
+    "noteSkin": {
+      "type": "string",
+      "default": "default"
+    },
+    "noteHighlight": {
+      "type": "boolean",
+      "default": true
+    },
+    "skinPolicy": {
+      "type": "string",
+      "default": "render",
+      "enum": [
+        "render",
+        "skin"
+      ]
+    },
+    "autoplayText": {
+      "type": "string",
+      "default": "AUTOPLAY"
+    },
+    "showCombo": {
+      "type": "boolean",
+      "default": true
+    },
+    "showOffsetBar": {
+      "type": "boolean",
+      "default": false
+    },
+    "showApBadge": {
+      "type": "boolean",
+      "default": true
+    },
+    "showProgress": {
+      "type": "boolean",
+      "default": true
+    },
+    "showPause": {
+      "type": "boolean",
+      "default": true
+    },
+    "showChartName": {
+      "type": "boolean",
+      "default": true
+    },
+    "showChartLevel": {
+      "type": "boolean",
+      "default": true
+    },
+    "showHitEffects": {
+      "type": "boolean",
+      "default": true
+    },
+    "shaders": {
+      "type": "boolean",
+      "default": true
+    },
+    "noise": {
+      "type": "boolean",
+      "default": true
+    },
+    "musicVolume": {
+      "type": "number",
+      "default": 0.9,
+      "minimum": 0,
+      "maximum": 1
+    },
+    "hitVolume": {
+      "type": "number",
+      "default": 0.6,
+      "minimum": 0,
+      "maximum": 1
+    },
+    "hitSounds": {
+      "type": "boolean",
+      "default": true
+    },
+    "watermark": {
+      "type": "string",
+      "default": ""
+    },
+    "loop": {
+      "type": "boolean",
+      "default": true
+    }
+  }
+}

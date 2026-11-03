@@ -14,6 +14,7 @@ void main(){vec4 c=texture2D(screenTexture,uv);if(srgb>.5)c.rgb=mix(c.rgb/12.92,
 
 // Owns GPU resources only. Chart geometry, timing and layer order stay with NoisePreview.
 export class NoiseSkinRenderer {
+  dispose() { this.clearSkins(); this.lost = true; this.gl?.getExtension('WEBGL_lose_context')?.loseContext(); if (this.canvas) this.canvas.width = this.canvas.height = 1; }
   constructor(invalidate, report) {
     this.invalidate = invalidate; this.report = report; this.skins = new Map(); this.instances = new Map(); this.errors = new Set();
     this.canvas = document.createElement('canvas'); this.capture = document.createElement('canvas');

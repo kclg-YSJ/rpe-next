@@ -1,3 +1,6 @@
+import { createCustomEasingControls } from './custom-easing-controls.mjs';
+import { previewGlobalCurve } from '../application/animation-curve-preview.mjs';
+import { withStandardEasing, rebaseCustomEventValues } from '../core/event-easing.mjs';
 import {formatBeat,parseBeat} from '../core/beat.mjs';
 import {selectedEvents,transformEvents} from '../application/event-commands.mjs';
 import {beatInputControl} from './beat-input.mjs';
@@ -36,7 +39,7 @@ export class GlobalEventInspector {
       const entries = selectedEvents(this.document.editor); if(entries.length!==1)return;
       const current = entries[0], next = change(structuredClone(current.event), this.document.columns.find(column => column.key === current.type));
       if(JSON.stringify(next)===JSON.stringify(current.event))return;
-      transformEvents(this.document.editor, label, () => next);
+      transformEvents(this.document.editor, label, () => rebaseCustomEventValues(current.event, next));
     };
     const field = (name, key, kind, value, apply) => {
       const label = node('label', 'field'); label.append(name);
@@ -61,15 +64,16 @@ export class GlobalEventInspector {
     for (const [key, name] of [['startTime', t('global-event-inspector.s087c451')], ['endTime', t('global-event-inspector.sc4d3fa4')]]) field(name, key, 'beat', event[key], value => update(current => ({ ...current, [key]: value })));
     for (const [key, name] of [['start', t('global-event-inspector.s532cd47')], ['end', t('global-event-inspector.s00005a6')]]) field(name, key, column.valueType, event[key], value => update(current => ({ ...current, [key]: value, ...(current.inst ? { start: value, end: structuredClone(value) } : {}) })));
     field(t('global-event-inspector.s7787450'), 'inst', 'boolean', event.inst, value => update(current => ({ ...current, inst: value ? 1 : 0, ...(value ? { end: structuredClone(current.start) } : {}) })));
-    for (const [key, name, fallback] of [['easingLeft', t('global-event-inspector.s2fbff0e'), 0], ['easingRight', t('global-event-inspector.sb38574e'), 1], ['linkgroup', t('global-event-inspector.s50136f9'), 0]]) field(name, key, 'number', event[key] ?? fallback, value => {
+    for (const [key, name, fallback] of [['easingLeft', t('global-event-inspector.s2fbff0e'), 0], ['easingRight', t('global-event-inspector.sb38574e'), 1], ['linkgroup', t('global-event-inspector.s50136f9'), 0]].filter(([key]) => !event.customEasing || key === 'linkgroup')) field(name, key, 'number', event[key] ?? fallback, value => {
       if (key === 'linkgroup' ? !Number.isInteger(value) || value < 0 : value < 0 || value > 1) throw Error(key === 'linkgroup' ? t('global-event-inspector.sbf11766') : t('global-event-inspector.s773fbe4'));
       update(current => ({ ...current, [key]: value }));
     });
     const easing = node('select'); easing.setAttribute('aria-label', t('global-event-inspector.sa593f21')); EASING_NAMES.forEach((name, index) => easing.append(new Option(`${index + 1} · ${name}`, index + 1))); easing.value = event.easingType ?? 1;
-    easing.onchange = () => this.safely(() => update(current => ({ ...current, easingType: Number(easing.value), bezier: 0 })));
-    const label = node('label', 'field', t('global-event-inspector.s727b7cd')); label.append(easing); form.append(label);
-    form.append(createEasingPicker(event.easingType ?? 1, value => this.safely(() => update(current => ({ ...current, easingType: value, bezier: 0 }))), this.easingState ??= { open: false }).element);
-    field(t('global-event-inspector.s3493008'), 'bezier', 'boolean', event.bezier, value => update(current => ({ ...current, bezier: value ? 1 : 0, bezierPoints: current.bezierPoints ?? [0, 0, 1, 1] })));
+    easing.onchange = () => this.safely(() => update(current => withStandardEasing(current, Number(easing.value))));
+    const label = node('label', 'field', t('global-event-inspector.s727b7cd')); label.append(easing); label.hidden = Boolean(event.customEasing); form.append(label);
+    form.append(createEasingPicker(event.customEasing ? 0 : event.easingType ?? 1, value => this.safely(() => update(current => withStandardEasing(current, value))), this.easingState ??= { open: false }).element);
+    form.append(createCustomEasingControls(event, change => update(change, t('animation-curve.edit')), { report: error => this.report(error), previewChart: curve => previewGlobalCurve(this.editor.context.session, this.document.columns.find(column => column.key === key), entries[0].index, curve), signature: () => JSON.stringify(selectedEvents(this.document.editor).map(e => [e.type,e.index,e.event])), timing: { BPMList: this.document.editor.chart.BPMList, factor: 1 }, read: () => { const entries = selectedEvents(this.document.editor); return entries.length === 1 && entries[0].type === key ? entries[0].event : null; } }));
+    if (!event.customEasing) field(t('global-event-inspector.s3493008'), 'bezier', 'boolean', event.bezier, value => update(current => ({ ...current, bezier: value ? 1 : 0, bezierPoints: current.bezierPoints ?? [0, 0, 1, 1] })));
     if (event.bezier) field(t('global-event-inspector.sb1f6d6a'), 'bezierPoints', 'json', event.bezierPoints, value => update(current => ({ ...current, bezierPoints: value })));
     const custom = column.inspector ?? type.inspector;
     if (custom) {

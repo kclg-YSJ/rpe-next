@@ -1,3 +1,4 @@
+import { rebaseCustomEventValues } from '../core/event-easing.mjs';
 import { assertChart, noteIsAbove } from '../core/chart.mjs';
 import { integerNoteAlpha } from '../core/alpha-values.mjs';
 import { beatValue, fromNumber } from '../core/beat.mjs';
@@ -36,7 +37,7 @@ export function editCapturedSelection(snapshot, { note = value => value, event =
     return { kind: 'notes', index: entry.index, sourceLineIndex, lineIndex: target(sourceLineIndex), before: entry.note, after: integerNoteAlpha(note(entry.note, entry)) };
   });
   for (const entry of snapshot.events) {
-    let after = event(entry.event, entry.type, entry);
+    let after = rebaseCustomEventValues(entry.event, event(entry.event, entry.type, entry));
     if (entry.type === 'paintEvents' && snapshot.shaderAutoAlign !== false && beatValue(after.startTime) !== beatValue(entry.event.startTime)) after = alignShaderParameters(after);
     const sourceLineIndex = entry.lineIndex ?? snapshot.lineIndex;
     changes.push({ kind: 'events', type: entry.type, index: entry.index, sourceLineIndex, lineIndex: target(sourceLineIndex), before: entry.event, after });

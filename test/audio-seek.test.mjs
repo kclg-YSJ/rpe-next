@@ -5,6 +5,8 @@ import { EditorPlayback } from '../src/application/playback.mjs';
 import { HitSounds } from '../src/platform/hitsounds.mjs';
 import { createChart, createNote } from '../src/core/chart.mjs';
 import { TempoMap } from '../src/core/tempo.mjs';
+import { SceneRuntime } from '../src/core/scene.mjs';
+import { recentHits } from '../src/core/hit-effects.mjs';
 
 class SeekingMedia extends EventTarget {
   duration = 120;
@@ -33,6 +35,34 @@ function setup() {
   audio.media = new SeekingMedia();
   return { audio, context, starts };
 }
+
+test('从时间滑条结尾重播时先通知视图回到音频零秒，正负 offset 与零秒特效均保留', async () => {
+  for (const offset of [-500, 0, 500]) {
+    const { audio, context, starts } = setup(); audio.media = null; audio.buffer = { duration: 10 };
+    const chart = createChart(); chart.META.offset = offset; chart.BPMList = [{ bpm: 120, startTime: [0, 0, 1] }];
+    chart.judgeLineList[0].notes = [createNote(1, Math.max(0, -offset / 1000) * 2, 0)];
+    const scene = new SceneRuntime(); scene.compile(chart, new TempoMap(chart.BPMList));
+    let since = Infinity, seekCount = 0;
+    const playback = new EditorPlayback(audio, { stop() {}, async prepare() {} }, () => {
+      assert.equal(audio.time, 0); assert.equal(audio.playing, false); assert.equal(starts.length, 0);
+      since = audio.time - offset / 1000 - .001; seekCount++;
+    });
+    audio.seek(audio.duration); await playback.toggle(chart);
+    assert.equal(seekCount, 1); assert.equal(audio.playing, true); assert.equal(starts[0].offset, 0);
+    context.currentTime = Math.max(0, offset / 1000) + .05;
+    assert.equal(recentHits(scene.lines[0], audio.time - offset / 1000, since).length, 1);
+  }
+});
+
+test('中途播放与已取消的结尾播放准备不会隐式回零，迟到的准备结果不会恢复播放', async () => {
+  const { audio } = setup(); audio.media = null; audio.buffer = { duration: 10 };
+  let seekCount = 0, release;
+  const sounds = { stop() {}, prepare: async () => {} }, playback = new EditorPlayback(audio, sounds, () => { seekCount++; });
+  audio.seek(4); await playback.toggle(createChart()); assert.equal(audio.time, 4); assert.equal(seekCount, 0); playback.pause();
+  audio.seek(10); sounds.prepare = () => new Promise(resolve => { release = resolve; });
+  const pending = playback.toggle(createChart()); await playback.toggle(createChart()); release(); await pending;
+  assert.equal(audio.time, 10); assert.equal(audio.playing, false); assert.equal(seekCount, 0); assert.equal(playback.pending, false);
+});
 
 test('超大谱音乐直接使用流式 URL，保持定位与倍速且不解码整首音频', async () => {
   const original = globalThis.Audio;

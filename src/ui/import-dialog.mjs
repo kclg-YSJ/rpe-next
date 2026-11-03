@@ -16,8 +16,8 @@ export function showImportDialog({ readFiles, onOpen, onError, onLargePreview })
   const cancel = document.createElement('button'); cancel.type = 'button'; cancel.textContent = t('chart-import.cancel'); cancel.onclick = () => dialog.close();
   const open = document.createElement('button'); open.id = 'chart-import-open'; open.type = 'button'; open.className = 'primary'; open.textContent = t('chart-import.open'); open.setAttribute('aria-describedby', status.id);
   actions.append(cancel, open);
-  if (globalThis.rpenLargePreview?.platform === 'win32' && onLargePreview) {
-    const large = document.createElement('button'); large.type = 'button'; large.id = 'chart-import-large-preview'; large.textContent = '超大谱 · 查看与编辑';
+  if (globalThis.rpenLargePreview?.version === 1 && onLargePreview) {
+    const large = document.createElement('button'); large.type = 'button'; large.id = 'chart-import-large-preview'; large.textContent = t('large-chart.entry');
     large.onclick = () => { if (busy) return; dialog.close(); onLargePreview(); }; actions.prepend(large);
   }
   dialog.append(heading, description);

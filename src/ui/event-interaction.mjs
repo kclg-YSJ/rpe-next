@@ -7,6 +7,7 @@ import { captureSelection, editCapturedSelection, commitSelectionEdit } from '..
 import { eventDisplayIndex } from './event-display-index.mjs';
 import { intervalSelection, extendIntervalSelection } from '../core/selection-interval.mjs';
 import { t } from '../i18n.mjs';
+import { expandXyEntries, xyOtherAxis } from '../application/xy-binding.mjs';
 
 export class EventInteraction {
   constructor(timeline, reportError) {
@@ -32,7 +33,11 @@ export class EventInteraction {
   previewEvent(event) {
     const drag = this.drag; if (!drag) return event;
     if (drag.endpoint) {
-      if (event !== drag.event) return event;
+      if (event !== drag.event) {
+        if (!drag.xyEvents?.has(event)) return event;
+        const next = this.previewEvent(drag.event);
+        return { ...event, startTime: next.startTime, endTime: next.endTime };
+      }
       if (drag.frozen) return drag.frozen;
       const timeline = this.timeline;
       let beat;
@@ -48,6 +53,19 @@ export class EventInteraction {
   }
   previewRectangles(rectangles, width) {
     const drag = this.drag;
+    if (drag?.xySnapshot) {
+      const lineIndex = this.timeline.getSession().lineIndex;
+      const visible = new Set(rectangles.map(rectangle => `${rectangle.lineIndex ?? lineIndex}:${rectangle.type}:${rectangle.index}`));
+      const missing = [];
+      for (const entry of drag.xySnapshot.events) {
+        if (visible.has(`${entry.lineIndex}:${entry.type}:${entry.index}`)) continue;
+        const channel = this.timeline.eventTypes.indexOf(entry.type); if (channel < 0) continue;
+        const bounds = this.timeline.eventColumnBounds(channel, this.timeline.panelWidth(width, 'events'));
+        const offset = this.timeline.panelIndex(entry.lineIndex, 'events') * this.timeline.panelStride(width, 'events') - this.timeline.multiLineViewportOffset(width, 'events');
+        missing.push({ type: entry.type, index: entry.index, lineIndex: entry.lineIndex, x: bounds.x + offset, width: bounds.width });
+      }
+      if (missing.length) rectangles = [...rectangles, ...missing];
+    }
     if (!drag?.endpoint || rectangles.some(rectangle => rectangle.type === drag.type && rectangle.index === drag.index && (rectangle.lineIndex ?? this.timeline.getSession().lineIndex) === drag.lineIndex)) return rectangles;
     const channel = this.timeline.eventTypes.indexOf(drag.type); if (channel < 0) return rectangles;
     const panelWidth = this.timeline.panelWidth(width, 'events'), bounds = this.timeline.eventColumnBounds(channel, panelWidth);
@@ -65,6 +83,25 @@ export class EventInteraction {
   }
 
   createEvent(...args) { return this.timeline.createPlacedEvent ? this.timeline.createPlacedEvent(...args) : placedEvent(...args); }
+
+  bindXyDrag(session) {
+    if (session.xyBinding !== true || !this.drag || !['move','startTime','endTime'].includes(this.drag.kind)) return;
+    const snapshot = captureSelection(session);
+    if (!snapshot.events.some(entry => xyOtherAxis(entry.type))) return;
+    const events = expandXyEntries(snapshot.chart, snapshot.eventLayer, snapshot.events);
+    const selected = new Map();
+    for (const entry of snapshot.events) { if (!selected.has(entry.lineIndex)) selected.set(entry.lineIndex, new Set()); selected.get(entry.lineIndex).add(eventKey(entry.type, entry.index)); }
+    const selection = new Map();
+    for (const entry of events) { if (!selection.has(entry.lineIndex)) selection.set(entry.lineIndex, new Set()); selection.get(entry.lineIndex).add(eventKey(entry.type, entry.index)); }
+    this.drag.xySnapshot = { ...snapshot, notes: [], events }; this.drag.xySelected = selected;
+    this.drag.xySelection = selection; this.drag.xyEvents = new Set(events.map(entry => entry.event));
+  }
+
+  previewSelected(type, index, lineIndex = this.timeline.getSession().lineIndex) {
+    const session = this.timeline.getSession();
+    const selection = this.drag?.xySelection?.get(lineIndex) ?? (session.multiLineActive && session.multiLineMode === 'events' ? session.multiEventSelection.get(lineIndex) : session.eventSelection);
+    return selection?.has(eventKey(type,index)) ?? false;
+  }
 
   place(type, beat, easingType, inst = false) {
     const session = this.timeline.getSession();
@@ -103,6 +140,7 @@ export class EventInteraction {
       session.focus = 'events'; session.eventLayer = this.timeline.layer; this.timeline.hoverArea = 'events'; this.timeline.eventCursor = point; this.timeline.clipboardPointer = point;
       this.canvas.focus({ preventScroll: true }); this.canvas.setPointerCapture(event.pointerId);
       this.drag = { kind: event.button === 0 ? 'startTime' : 'endTime', endpoint: true, event: endpoint.event, type: endpoint.type, lineIndex: endpoint.lineIndex, index: endpoint.index, chart: session.chart, start: point, current: point };
+      this.bindXyDrag(session);
       this.suppressContextMenu = event.button === 2; this.updateCursor(point); this.timeline.changed(); return;
     }
     if (event.button === 2) return;
@@ -140,6 +178,7 @@ export class EventInteraction {
       const selected = eventListAt(session, rectangle.lineIndex ?? session.lineIndex, rectangle.type)?.[rectangle.index];
       this.drag = { kind, type: rectangle.type, lineIndex: rectangle.lineIndex, start: point, current: point, anchor: selected?.[kind === 'endTime' ? 'endTime' : 'startTime'], originSeconds: this.timeline.tempo.seconds(this.timeline.origin, this.timeline.factorForLine(rectangle.lineIndex ?? session.lineIndex)) };
     } else if (!multiMode) this.drag = { kind: 'stroke', start: point, current: point, points: [point], remove: event.button === 2 };
+    this.bindXyDrag(session);
     session.notify();
   }
 
@@ -189,7 +228,7 @@ export class EventInteraction {
       this.move(event); const drag = this.drag, session = this.timeline.getSession(), next = this.previewEvent(drag.event); this.drag = null;
       this.canvas.releasePointerCapture?.(event.pointerId);
       if ((drag.moved || drag.scrolled) && session.chart === drag.chart && selectedEventEntries(session).length === 1 && selectedEventEntries(session)[0].event === drag.event) {
-        try { transformEvents(session, t('event-interaction.s18a93d4'), current => current === drag.event ? next : current); } catch (error) { this.reportError(error); }
+        try { transformEvents(session, t('event-interaction.s18a93d4'), current => current === drag.event ? next : current, { xyTiming: Boolean(drag.xySnapshot) }); } catch (error) { this.reportError(error); }
       }
       this.updateCursor(); this.timeline.changed(); return;
     }
@@ -252,8 +291,10 @@ export class EventInteraction {
         const change = current => ({ ...current,
           startTime: drag.kind === 'endTime' ? current.startTime : fromNumber(beatValue(current.startTime) + delta),
           endTime: drag.kind === 'startTime' ? current.endTime : fromNumber(beatValue(current.endTime) + delta) });
-        if (session.multiLineActive && session.multiLineMode === 'events') {
-          const result = editCapturedSelection(captureSelection(session), { event: change });
+        if (drag.xySnapshot || session.multiLineActive && session.multiLineMode === 'events') {
+          if (drag.xySnapshot && (session.chart !== drag.xySnapshot.chart || session.eventLayer !== drag.xySnapshot.eventLayer)) return;
+          const result = editCapturedSelection(drag.xySnapshot ?? captureSelection(session), { event: change });
+          if (drag.xySnapshot) { result.eventSelection = new Set(drag.xySelected.get(session.lineIndex) ?? []); result.multiEventSelection = drag.xySelected; }
           commitSelectionEdit(session, result, drag.kind === 'move' ? t('event-interaction.s9728d19') : t('event-interaction.s8c3d905'));
         } else transformEvents(session, drag.kind === 'move' ? t('event-interaction.s9728d19') : t('event-interaction.s8c3d905'), change);
       }

@@ -1,3 +1,4 @@
+import { cropCustomEvent } from '../core/event-easing.mjs';
 import { assertChart, createEvent, createNote } from '../core/chart.mjs';
 import { beatValue } from '../core/beat.mjs';
 import { TempoMap } from '../core/tempo.mjs';
@@ -26,7 +27,7 @@ function insertStep(events, time, value, tempo, factor, replace, track = new Eve
       if (start < beat) {
         if (event.trajectory || event.bezier) throw new Error(t('text-lines.s88ab6d6'));
         const progress = (seconds - tempo.seconds(event.startTime, factor)) / (tempo.seconds(event.endTime, factor) - tempo.seconds(event.startTime, factor));
-        output.push({ ...event, endTime: [...time], end: track.sample({ event, start: tempo.seconds(event.startTime, factor), end: tempo.seconds(event.endTime, factor) }, seconds), easingRight: (event.easingLeft ?? 0) + ((event.easingRight ?? 1) - (event.easingLeft ?? 0)) * progress });
+        output.push(event.customEasing ? cropCustomEvent(event, 0, progress, event.startTime, [...time]) : { ...event, endTime: [...time], end: track.sample({ event, start: tempo.seconds(event.startTime, factor), end: tempo.seconds(event.endTime, factor) }, seconds), easingRight: (event.easingLeft ?? 0) + ((event.easingRight ?? 1) - (event.easingLeft ?? 0)) * progress });
       }
     } else output.push(event);
   }

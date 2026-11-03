@@ -1,3 +1,4 @@
+import { cropCustomEvent, rebaseCustomEventValues } from '../core/event-easing.mjs';
 import { EVENT_TYPES, assertChart, createEvent } from '../core/chart.mjs';
 import { integerAlphaEvent } from '../core/alpha-values.mjs';
 import { beatValue, fromNumber } from '../core/beat.mjs';
@@ -5,6 +6,7 @@ import { trajectoryHasRotation } from '../core/curve-trajectory.mjs';
 import { EventTrack } from '../core/events.mjs';
 import { shaderEvents, replaceShaderEvents, alignShaderParameters } from '../core/shader-events.mjs';
 import { t } from '../i18n.mjs';
+import { expandXyEntries, xyIntervalOccupied, xyOtherAxis, xyTimingUpdates } from './xy-binding.mjs';
 
 export const eventKey = (type, index) => `${type}:${index}`;
 export function eventListAt(session, lineIndex, type, layer = session.eventLayer) {
@@ -83,14 +85,14 @@ export function commitEventLists(session, label, updates, selection = session.ev
   session.commit(label, chart, beforeSelection);
 }
 
-export function transformedEventLists(session, lineIndex, selection, transform) {
+export function transformedEventLists(session, lineIndex, selection, transform, { xyTiming = false } = {}) {
   const updates = new Map();
   const linked = new Map();
   for (const key of selection) {
     const [type, indexText] = key.split(':'); const index = Number(indexText);
     const event = eventListAt(session, lineIndex, type)[index]; if (!event) continue;
     if (!updates.has(type)) updates.set(type, [...eventListAt(session, lineIndex, type)]);
-    let next = transform(event, type);
+    let next = rebaseCustomEventValues(event, transform(event, type));
     if (type === 'paintEvents' && session.shaderAutoAlign !== false && beatValue(next.startTime) !== beatValue(event.startTime)) next = alignShaderParameters(next);
     updates.get(type)[index] = next;
     const link = Number(event.linkgroup ?? 0);
@@ -103,17 +105,18 @@ export function transformedEventLists(session, lineIndex, selection, transform) 
       const event = events[index];
       if (Number(event.linkgroup ?? 0) !== link || selection.has(eventKey(type, index))) continue;
       events[index] = { ...event, start: structuredClone(next.start), end: structuredClone(next.end), easingType: next.easingType,
-        easingLeft: next.easingLeft, easingRight: next.easingRight, bezier: next.bezier, bezierPoints: structuredClone(next.bezierPoints) };
+        easingLeft: next.easingLeft, easingRight: next.easingRight, bezier: next.bezier, bezierPoints: structuredClone(next.bezierPoints), customEasing: structuredClone(next.customEasing) };
     }
     updates.set(type, events);
   }
+  if (xyTiming && session.xyBinding === true) xyTimingUpdates(session.chart, lineIndex, session.eventLayer, selection, updates);
   return updates;
 }
 
-export function transformEvents(session, label, transform) {
+export function transformEvents(session, label, transform, options) {
   let chart = session.chart;
   for (const [lineIndex, selection] of eventSelections(session)) {
-    const updates = transformedEventLists(session, lineIndex, selection, transform);
+    const updates = transformedEventLists(session, lineIndex, selection, transform, options);
     if (updates.size) chart = chartWithEventLists(chart, lineIndex, session.eventLayer, updates);
   }
   if (chart === session.chart) return;
@@ -138,7 +141,15 @@ export function insertEvent(session, type, event) {
 
 export function insertEventAt(session, lineIndex, type, event) {
   const events = eventListAt(session, lineIndex, type);
-  const chart = chartWithEventLists(session.chart, lineIndex, session.eventLayer, new Map([[type, [...events, event]]]));
+  const updates = new Map([[type, [...events, event]]]);
+  if (session.xyBinding === true) {
+    const other = xyOtherAxis(type);
+    if (other && !xyIntervalOccupied(session.chart, lineIndex, session.eventLayer, other, event)) {
+      const paired = placedEvent(session, other, beatValue(event.startTime), beatValue(event.endTime), undefined, lineIndex, Boolean(event.inst));
+      if (paired) updates.set(other, [...eventListAt(session, lineIndex, other), paired]);
+    }
+  }
+  const chart = chartWithEventLists(session.chart, lineIndex, session.eventLayer, updates);
   assertChart(chart);
   const beforeSelection = session.selectionState();
   selectEvent(session, lineIndex, type, events.length, { replace: true });
@@ -161,8 +172,10 @@ export function placedEvent(session, type, first, second, easingType, lineIndex 
 
 export function deleteEvents(session) {
   let chart = session.chart;
-  const entries = selectedEventEntries(session);
-  for (const [lineIndex, selection] of eventSelections(session)) {
+  const entries = session.xyBinding === true ? expandXyEntries(session.chart, session.eventLayer, selectedEventEntries(session)) : selectedEventEntries(session);
+  const selections = session.xyBinding === true ? new Map() : eventSelections(session);
+  if (session.xyBinding === true) for (const entry of entries) { if (!selections.has(entry.lineIndex)) selections.set(entry.lineIndex, new Set()); selections.get(entry.lineIndex).add(eventKey(entry.type, entry.index)); }
+  for (const [lineIndex, selection] of selections) {
     const updates = new Map();
     for (const { type } of entries.filter(entry => entry.lineIndex === lineIndex)) {
       if (!updates.has(type)) updates.set(type, eventListAt(session, lineIndex, type).filter((event, index) => !selection.has(eventKey(type, index))));
@@ -200,6 +213,7 @@ export function pasteEvents(session, beat, keepTime = false, mirror = false) {
 export function splitEvent(event, beat, tempo, factor = 1) {
   const start = tempo.seconds(event.startTime, factor); const end = tempo.seconds(event.endTime, factor); const at = tempo.seconds(beat, factor);
   if (!(at > start && at < end)) throw new Error(t('event-commands.s93fe9d3'));
+  if (event.customEasing) { const p = (at - start) / (end - start); return [cropCustomEvent(event, 0, p, event.startTime, fromNumber(beat)), cropCustomEvent(event, p, 1, fromNumber(beat), event.endTime)]; }
   if (event.bezier) throw new Error(t('event-commands.sa2fb5ea'));
   if (typeof event.start !== 'number') throw new Error(t('event-commands.s22db670'));
   const progress = (at - start) / (end - start);
@@ -212,6 +226,7 @@ export function splitEvent(event, beat, tempo, factor = 1) {
 function splitEventOriginal(event, beat, tempo, factor = 1) {
   const start = tempo.seconds(event.startTime, factor); const end = tempo.seconds(event.endTime, factor); const at = tempo.seconds(beat, factor);
   if (!(at > start && at < end)) throw new Error(t('event-commands.s93fe9d3'));
+  if (event.customEasing) return splitEvent(event, beat, tempo, factor);
   if (event.bezier || typeof event.start !== 'number') throw new Error(t('event-commands.sbec4067'));
   const value = new EventTrack([event], tempo, factor).value(at);
   return [

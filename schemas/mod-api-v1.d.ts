@@ -44,9 +44,23 @@ export interface Command {
   run(): unknown;
 }
 export type GlobalEventSource = {kind: 'builtin' | 'mod'; id: string; name: string; author?: string; version?: string};
+/** Normalized time-monotone cubic animation curve, embedded with every event. */
+export interface AnimationCurveNode {
+  x: number; y: number; mode?: 'auto' | 'smooth' | 'corner' | 'linear' | 'hold';
+  in?: [number, number]; out?: [number, number];
+  [key: string]: unknown;
+}
+export interface AnimationCurve { version: 1; name?: string; nodes: AnimationCurveNode[]; [key: string]: unknown; }
+export interface CustomEventEasing {
+  curve: AnimationCurve;
+  /** Source time domain. Cropping retains the original output basis. */
+  domain?: [number, number]; sourceStart?: number | number[] | string | boolean; sourceEnd?: number | number[] | string | boolean;
+  [key: string]: unknown;
+}
 export interface GlobalEvent {
   startTime: Beat; endTime: Beat; start: any; end: any;
   easingType?: number; easingLeft?: number; easingRight?: number;
+  customEasing?: CustomEventEasing;
   bezier?: number | boolean; bezierPoints?: [number, number, number, number];
   inst?: number | boolean; linkgroup?: number;
   [key: string]: any;
@@ -121,6 +135,8 @@ export interface Editor {
   loop: {start: number; end: number} | null;
   audio: any; audioSources: any; audioOnsets: any; audioAnalysis: any; playback: any; preview: any; realtimePreview: any; timeline: any;
   skin: any; images: any; hitSounds: any; editorSkins: any; noteSkins: any; noiseEditor: any; eventSampler: any;
+  /** Advanced floating panel; edits native line speed events using distance easing. */
+  speedCurve: { active: boolean; open(anchor?: { x: number; y: number }): boolean; close(): void; saveView(immediate?: boolean): void };
   trajectoryPanel: any; textLinesPanel: any; noiseFitPanel: any;
   noiseTrackingPanel: any; multiEdit: any; batchControls: any; collaboration: any;
   globalEvents: any; globalEventRegistry: any; openGlobalEvents(): void;

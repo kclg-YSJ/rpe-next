@@ -1,3 +1,4 @@
+import { cropCustomEvent } from '../core/event-easing.mjs';
 import { beatValue, fromNumber } from '../core/beat.mjs';
 import { createEvent, assertChart } from '../core/chart.mjs';
 import { createPlacedLine } from '../core/placement-defaults.mjs';
@@ -56,6 +57,7 @@ export function noteTrackingChart(chart, generated, replace = false, tempo) {
       const track = new EventTrack([event], tempo, factor), secondsStart = tempo.seconds(event.startTime, factor), secondsEnd = tempo.seconds(event.endTime, factor);
       const clip = (left, right) => {
         const l = tempo.seconds(left, factor), r = tempo.seconds(right, factor), easeLeft = event.easingLeft ?? 0, easeRange = (event.easingRight ?? 1) - easeLeft;
+        if (event.customEasing) return cropCustomEvent(event, (l - secondsStart) / (secondsEnd - secondsStart), (r - secondsStart) / (secondsEnd - secondsStart), fromNumber(left), fromNumber(right));
         return { ...event, startTime: fromNumber(left), endTime: fromNumber(right), start: track.value(l), end: track.value(r), easingLeft: easeLeft + easeRange * (l - secondsStart) / (secondsEnd - secondsStart), easingRight: easeLeft + easeRange * (r - secondsStart) / (secondsEnd - secondsStart) };
       };
       if (a < begin) retained.push(clip(a, begin)); if (b > finish) retained.push(clip(finish, b));

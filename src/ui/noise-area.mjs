@@ -3,6 +3,9 @@ import { samplingTarget, sampleEditingArea, noiseSampleHandle, applyNoiseSample,
 import { beatValue, fromNumber, parseBeat, formatBeat } from '../core/beat.mjs';
 import { previewViewport, previewPositionScale, strokeIntersects } from '../core/editor-display.mjs';
 import { prepareCanvas } from './timeline.mjs';
+import { createCustomEasingControls } from './custom-easing-controls.mjs';
+import { previewCurveEvent } from '../application/animation-curve-preview.mjs';
+import { withStandardEasing, rebaseCustomEventValues } from '../core/event-easing.mjs';
 import { createEasingPicker, EASING_NAMES } from './easing-picker.mjs';
 import { NoiseAreaList } from './noise-list.mjs';
 import { NoiseLayerPanel } from './noise-layer-panel.mjs';
@@ -112,12 +115,13 @@ export class NoiseAreaEditor {
     try {
       const previous = this.event ? this.area()[this.event.type]?.[this.event.index] : null;
       const area = change(structuredClone(this.area()));
+      if (previous) area[this.event.type][this.event.index] = rebaseCustomEventValues(previous, area[this.event.type][this.event.index]);
       if (previous?.linkgroup > 0 && this.event.type !== 'activeIntervals') {
         const next = area[this.event.type][this.event.index];
-        const fields = ['start', 'end', 'easingType', 'easingLeft', 'easingRight', 'bezier', 'bezierPoints'];
+        const fields = ['start', 'end', 'easingType', 'easingLeft', 'easingRight', 'bezier', 'bezierPoints', 'customEasing'];
         if (fields.some(field => JSON.stringify(previous[field]) !== JSON.stringify(next[field]))) area[this.event.type] = area[this.event.type].map((entry, index) => {
           if (index === this.event.index || entry.linkgroup !== previous.linkgroup) return entry;
-          const linked = { ...entry, ...Object.fromEntries(fields.filter(field => next[field] !== undefined).map(field => [field, structuredClone(next[field])])) };
+          const linked = { ...entry, ...Object.fromEntries(fields.map(field => [field, structuredClone(next[field])])) };
           if (linked.inst) linked.end = linked.start;
           return linked;
         });
@@ -448,11 +452,13 @@ export class NoiseAreaEditor {
         this.field(host, t('noise-area.s7787450'), event.inst, (item, value) => modifyEvent(entry => { entry.inst = value ? 1 : 0; if (value) entry.end = entry.start; })(item), { kind: 'checkbox' });
         this.field(host, t('noise-area.s7941eab'), event.linkgroup ?? 0, (item, value) => modifyEvent(entry => { entry.linkgroup = Math.max(0, Math.round(value)); })(item));
         if (event.linkgroup > 0) host.append(button(t('noise-area.s6e49702') + event.linkgroup, t('noise-area.sbe454d5'), () => { this.selection = new Set(NOISE_TRACKS.slice(1).flatMap(([track]) => (this.area()[track] ?? []).flatMap((entry, position) => entry.linkgroup === event.linkgroup ? [track + ':' + position] : []))); this.render(); this.invalidate(); }));
-        this.field(host, t('noise-area.s727b7cd'), event.easingType ?? 1, (item, value) => modifyEvent(entry => { entry.easingType = value; })(item), { choices: EASING_NAMES.map((name, position) => [position + 1, (position + 1) + ' · ' + name]) });
-        host.append(createEasingPicker(event.easingType ?? 1, value => this.edit(modifyEvent(entry => { entry.easingType = value; })), this.easingState).element);
-        for (const [field, label] of [['easingLeft', t('noise-area.s2fbff0e')], ['easingRight', t('noise-area.sb38574e')]]) this.field(host, label, event[field] ?? (field === 'easingLeft' ? 0 : 1), (item, value) => modifyEvent(entry => { entry[field] = value; })(item), { step: 0.05 });
-        this.field(host, 'Bezier', event.bezier, (item, value) => modifyEvent(entry => { entry.bezier = value ? 1 : 0; })(item), { kind: 'checkbox' });
-        for (const [position, label] of [t('noise-area.scc6b884'), t('noise-area.s2382dea'), t('noise-area.s8b368a9'), t('noise-area.se34ffb4')].entries()) this.field(host, label, (event.bezierPoints ?? [0, 0, 1, 1])[position], (item, value) => modifyEvent(entry => { entry.bezierPoints ??= [0, 0, 1, 1]; entry.bezierPoints[position] = value; })(item), { step: 0.05 });
+        if (!event.customEasing) this.field(host, t('noise-area.s727b7cd'), event.easingType ?? 1, (item, value) => modifyEvent(entry => { Object.assign(entry, withStandardEasing(entry, value)); delete entry.customEasing; })(item), { choices: EASING_NAMES.map((name, position) => [position + 1, (position + 1) + ' · ' + name]) });
+        host.append(createEasingPicker(event.customEasing ? 0 : event.easingType ?? 1, value => this.edit(modifyEvent(entry => { Object.assign(entry, withStandardEasing(entry, value)); delete entry.customEasing; })), this.easingState).element);
+        const areaIndex = this.selected;
+        host.append(createCustomEasingControls(event, change => this.edit(item => { item[type][index] = change(item[type][index]); return item; }), { report: error => this.report(error), previewChart: curve => { const area = { ...this.context.session.chart.blockAreaList[areaIndex] }; area[type] = area[type].map((event, position) => position === index ? previewCurveEvent(event, curve) : event); return { chart: this.replaceArea(area), lineIndex: this.context.session.lineIndex }; }, signature: () => JSON.stringify([this.selected,this.event,this.context.session.chart.blockAreaList?.[areaIndex]?.[type]?.[index]]), timing: { BPMList: this.context.session.chart.BPMList, factor: 1 }, preview: curve => { if (this.selected !== areaIndex || this.event?.type !== type || this.event?.index !== index) return; const area = structuredClone(this.context.session.chart.blockAreaList[areaIndex]); const source = area[type][index]; source.customEasing = source.customEasing ? { ...source.customEasing, curve } : { curve }; this.draftChart = this.replaceArea(area); this.invalidate(); }, cancelPreview: () => { this.draftChart = null; this.invalidate(); }, read: () => this.selected === areaIndex && this.event?.type === type && this.event?.index === index ? this.context.session.chart.blockAreaList?.[areaIndex]?.[type]?.[index] : null }));
+        if (!event.customEasing) for (const [field, label] of [['easingLeft', t('noise-area.s2fbff0e')], ['easingRight', t('noise-area.sb38574e')]]) this.field(host, label, event[field] ?? (field === 'easingLeft' ? 0 : 1), (item, value) => modifyEvent(entry => { entry[field] = value; })(item), { step: 0.05 });
+        if (!event.customEasing) this.field(host, 'Bezier', event.bezier, (item, value) => modifyEvent(entry => { entry.bezier = value ? 1 : 0; })(item), { kind: 'checkbox' });
+        if (!event.customEasing) for (const [position, label] of [t('noise-area.scc6b884'), t('noise-area.s2382dea'), t('noise-area.s8b368a9'), t('noise-area.se34ffb4')].entries()) this.field(host, label, (event.bezierPoints ?? [0, 0, 1, 1])[position], (item, value) => modifyEvent(entry => { entry.bezierPoints ??= [0, 0, 1, 1]; entry.bezierPoints[position] = value; })(item), { step: 0.05 });
       }
       host.append(button(t('noise-area.s6e88590'), t('noise-area.s9f829d4'), () => this.select(this.selected)));
     } else {

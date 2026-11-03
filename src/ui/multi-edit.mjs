@@ -2,6 +2,7 @@ import { localPreferences } from '../platform/local-preferences.mjs';
 import { captureSelection, commitSelectionEdit } from '../application/batch-edit.mjs';
 import { previewMultiEdit, previewEventClones, noteBatchModifier, NOTE_BATCH_FIELDS, EVENT_BATCH_FIELDS, EVENT_BATCH_TYPES, BATCH_OPERATIONS } from '../application/multi-edit.mjs';
 import { beatValue } from '../core/beat.mjs';
+import { eventNumericValue, eventValueRange } from '../core/event-easing.mjs';
 import { easing, bezier } from '../core/easing.mjs';
 import { createEasingPicker, EASING_NAMES } from './easing-picker.mjs';
 import { NOTE_COLORS } from './timeline.mjs';
@@ -262,11 +263,12 @@ function drawEventGhost(context, event, horizontal, width, vertical, range = [Ma
   const top = vertical(end); const bottom = vertical(start);
   context.strokeRect(horizontal, top, width, Math.max(2, bottom - top));
   if (typeof event.start !== 'number' || typeof event.end !== 'number') return;
+  if (event.customEasing) { const actual = eventValueRange(event); range = [Math.min(range[0], actual.min), Math.max(range[1], actual.max)]; }
   context.beginPath();
   for (let step = 0; step <= 30; step++) {
     const progress = step / 30;
     const amount = event.bezier ? bezier(progress, event.bezierPoints) : easing(progress, event.easingType ?? 1, event.easingLeft ?? 0, event.easingRight ?? 1);
-    const value = event.start + (event.end - event.start) * amount;
+    const value = event.customEasing ? eventNumericValue(event, progress) : event.start + (event.end - event.start) * amount;
     const position = horizontal + 5 + (range[0] === range[1] ? 0.5 : (value - range[0]) / (range[1] - range[0])) * (width - 10);
     if (!step) context.moveTo(position, vertical(start)); else context.lineTo(position, vertical(start + (end - start) * progress));
   }

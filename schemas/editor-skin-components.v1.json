@@ -28,6 +28,10 @@
     "agent-images": ".agent-image-list",
     "placement-defaults": "#placement-defaults-panel",
     "placement-defaults-menu": "#timeline-placement-defaults",
+    "animation-curve": "#animation-curve-editor",
+    "custom-easing-templates": ".custom-easing-group",
+    "speed-curve-panel": "#speed-curve-panel",
+    "speed-curve-menu": "#timeline-speed-curve",
     "diagnostics-panel": "[data-panel=\"diagnose\"]",
     "diagnose-deep": "#diagnose-deep",
     "diagnose-target": "#diagnose-target",
@@ -172,7 +176,9 @@
     "tool-tap": "[data-tool=\"1\"]",
     "tool-hold": "[data-tool=\"2\"]",
     "tool-flick": "[data-tool=\"3\"]",
-    "tool-drag": "[data-tool=\"4\"]"
+    "tool-drag": "[data-tool=\"4\"]",
+    "render-video": "#render-video",
+    "render-studio": "#rpen-render-studio"
   },
   "slots": [
     "file-actions",
@@ -554,6 +560,7 @@
     "timeline-context-menu",
     "timeline-selection-interval",
     "timeline-placement-defaults",
+    "timeline-speed-curve",
     "timeline-add-marker",
     "trajectory-context-split",
     "timeline-delete-marker",
@@ -567,7 +574,8 @@
     "modal-content",
     "modal-error",
     "modal-delete",
-    "modal-apply"
+    "modal-apply",
+    "render-video"
   ],
   "runtimeRoots": [
     "#performance-monitor",

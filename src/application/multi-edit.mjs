@@ -73,6 +73,7 @@ function scopeFor(item, kind, line, index, count) {
 }
 
 function writeField(item, field, value) {
+  if (field === 'easing') { delete item.customEasing; item.bezier = 0; }
   if (field === 't1' || field === 't2') item[field === 't1' ? 'startTime' : 'endTime'] = fromNumber(value);
   else if (field === 'duration') item.endTime = fromNumber(beatValue(item.startTime) + Math.max(0, value));
   else if (field === 'both') { item.start = value; item.end = value; }

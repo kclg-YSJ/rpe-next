@@ -17,6 +17,7 @@ try {
         else if(request.method==='travel')result=await store.travel(request.value);
         else if(request.method==='save')result=await store.saveDatabase(request.value);
         else if(request.method==='hits')result=store.hits(request.value);
+        else if(request.method==='soundNames')result=store.soundNames();
         else if(request.method==='selection')result=await store.selections.select(request.value);
         else if(request.method==='selectionRead')result=store.selections.read(request.value);
         else if(request.method==='selectionEdit')result=await store.selections.stage(request.value);

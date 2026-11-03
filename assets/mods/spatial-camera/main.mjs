@@ -3,6 +3,7 @@ import { CameraTracks } from './events.mjs';
 import { CameraProjection } from './projection.mjs';
 import { CameraControls } from './inspector.mjs';
 import { cameraFollowsChart } from './settings.mjs';
+import { registerRenderExtension } from '@rpen/ui/render-extensions.mjs';
 
 export function activate(api){
   const editor=api.editor,tracks=new CameraTracks(),controls=new CameraControls(api,tracks);
@@ -17,8 +18,8 @@ export function activate(api){
   const attachRenderer=renderer=>{
     const projection=new CameraProjection(()=>editor.invalidate());
     const releases=[];let sceneChart,sceneImages,imageGeneration,animatedScene=false;
-    for(const method of ['drawBackground','drawScene','drawUi'])releases.push(api.patch(renderer,method,previous=>function(context,chart,tempo,seconds,selectedLine,frame){
-      const world=method==='drawScene';
+    for(const method of ['drawBackground','drawScene','drawUi',...(renderer.drawRenderHits?['drawRenderHits']:[])])releases.push(api.patch(renderer,method,previous=>function(context,chart,tempo,seconds,selectedLine,frame){
+      const world=method==='drawScene'||method==='drawRenderHits';
       if(!world&&!cameraFollowsChart(chart))return previous.call(this,context,chart,tempo,seconds,selectedLine,frame);
       const pose=this.spatialCameraOverride??controls.poseOverride??tracks.sample(chart,tempo,seconds);
       if(world)this.spatialCameraState={...pose};
@@ -34,7 +35,7 @@ export function activate(api){
       if(world&&(sceneChart!==chart||sceneImages!==this.images||imageGeneration!==this.images?.generation)){sceneChart=chart;sceneImages=this.images;imageGeneration=this.images?.generation;animatedScene=chart.judgeLineList.some(line=>this.images?.describe?.(line.Texture)?.animated);}
       const background=method==='drawBackground',cacheKey=background&&!this.images?.backgroundAnimated&&this.images?.background?`${this.images.backgroundName??''}|${this.backgroundAlpha}|${this.backgroundBlur}`:null;
       if(background&&projection.backgroundImage!==this.images?.background){projection.backgroundImage=this.images?.background;projection.captureCache=null;}
-      try{const drawn=projection.render(context,this,chart,tempo,seconds,selectedLine,frame,pose,api.settings.get('quality'),draw,{mapHits:world,forceCapture:world&&animatedScene||background&&Boolean(this.images?.backgroundAnimated),cacheKey});if(drawn)return;}
+      try{const drawn=projection.render(context,this,chart,tempo,seconds,selectedLine,frame,pose,api.settings.get('quality'),draw,{mapHits:method==='drawScene',forceCapture:world&&animatedScene||background&&Boolean(this.images?.backgroundAnimated),cacheKey});if(drawn)return;}
       catch(error){projection.failed=true;api.notify('摄像机透视暂不可用，已恢复平面预览：'+error.message,'error');}
       projection.camera=null;return previous.call(this,context,chart,tempo,seconds,selectedLine,frame);
     }));
@@ -45,6 +46,7 @@ export function activate(api){
   };
   controls.attachRenderer=attachRenderer;
   for(const renderer of [editor.preview,editor.realtimePreview])attachRenderer(renderer);
+  api.dispose(registerRenderExtension(renderer => attachRenderer(renderer)));
   api.commands.register({id:'assistant',title:'摄像机姿态过渡助手',setting:'assistant-key',run:()=>controls.openAssistant()});
   api.commands.register({id:'global-events',title:'打开摄像机全局事件',run:()=>api.globalEvents.open()});
   api.dispose(()=>{document.querySelector('#spatial-camera-overview')?.remove();editor.globalEvents.render();});

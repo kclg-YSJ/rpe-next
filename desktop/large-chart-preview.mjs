@@ -1,25 +1,29 @@
 import { Worker } from 'node:worker_threads';
 import { randomUUID } from 'node:crypto';
-import { mkdir, readFile, writeFile, realpath, lstat, readdir, unlink, rmdir, copyFile, statfs } from 'node:fs/promises';
-import { createReadStream } from 'node:fs';
+import { mkdir, readFile, writeFile, realpath, lstat, readdir, unlink, rmdir, copyFile, statfs, access } from 'node:fs/promises';
+import { constants, createReadStream } from 'node:fs';
 import { Readable } from 'node:stream';
 import { join, dirname } from 'node:path';
+import { largeChartSaveDestination, largeChartSpace } from './large-chart-paths.mjs';
 
 const FORMAT = 'rpen-large-preview-v1', uuid = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/;
-const documentCommands = ['window','editable','page','edit','travel','save','hits','selection','selectionRead','selectionEdit','selectionCopy','selectionPaste'];
+const documentCommands = ['window','editable','page','edit','travel','save','hits','soundNames','selection','selectionRead','selectionEdit','selectionCopy','selectionPaste'];
 const cacheFiles = /^(?:\.owner\.json|notes\.sqlite(?:-journal|-wal|-shm)?|summary\.json|(?:cover|music)\.[a-z0-9]+)$/;
 async function smallJson(path) {
   const info = await lstat(path); if (!info.isFile() || info.isSymbolicLink() || info.size > 4096) throw Error('预览缓存标识文件无效');
   return JSON.parse(await readFile(path, 'utf8'));
 }
 export async function previewCacheRoot(parent) {
-  // This experiment explicitly keeps every large file on the user's E drive.
-  // realpath also rejects junctions which redirect a selected E folder to C.
+  const selected = await lstat(parent);
+  if (!selected.isDirectory() || selected.isSymbolicLink()) throw Error('请选择普通目录，缓存目录不能是链接或重定向目录');
   const actual = await realpath(parent);
-  if (process.platform !== 'win32' || !/^E:\\/i.test(actual)) throw Error('实验预览的缓存目录必须位于 E 盘');
+  await largeChartSpace(actual, 2 * 1024 ** 3);
   const root = join(actual, 'RPEN-LargeChartPreview');
   await mkdir(root, { recursive: true });
-  if ((await lstat(root)).isSymbolicLink() || (await realpath(root)).toLowerCase() !== root.toLowerCase()) throw Error('缓存目录不能是链接或重定向目录');
+  const canonical = await realpath(root), same = process.platform === 'win32' ? canonical.toLowerCase() === root.toLowerCase() : canonical === root;
+  const info = await lstat(root);
+  if (!info.isDirectory() || info.isSymbolicLink() || !same) throw Error('缓存目录不能是链接或重定向目录');
+  await access(root, constants.W_OK);
   const marker = join(root, '.rpen-cache.json');
   try { if ((await smallJson(marker)).format !== FORMAT) throw Error('缓存目录标识不匹配'); }
   catch (error) { if (error.code !== 'ENOENT') throw error; await writeFile(marker, JSON.stringify({ format: FORMAT }), { flag: 'wx' }); }
@@ -154,7 +158,7 @@ export function installLargeChartPreview({ ipcMain, service, window, origin, dia
           if (!service.root) {
             let parent; try { parent = (await smallJson(service.statePath)).parent; await service.configure(parent); } catch { parent = null; }
             if (!parent) {
-              const folder = await dialog.showOpenDialog(window(), { title: '选择 E 盘缓存位置（上限 1 GiB，关闭后清理）', defaultPath: 'E:\\', properties: ['openDirectory', 'createDirectory'] });
+              const folder = await dialog.showOpenDialog(window(), { title: '选择缓存位置（上限 1 GiB，至少 2 GiB 可用空间）', defaultPath: dirname(source.filePaths[0]), properties: ['openDirectory', 'createDirectory'] });
               if (folder.canceled || current !== generation) return { ok: true, result: null }; await service.configure(folder.filePaths[0]);
             }
           }
@@ -167,8 +171,8 @@ export function installLargeChartPreview({ ipcMain, service, window, origin, dia
       else if(documentCommands.includes(action)&&action!=='save')result=await service.command(id,action,value);
       else if(action==='save'){
         const job=service.job;if(!job||job.id!==id)throw Error('工程已关闭');let destination=job.savedPath;
-        if(!destination||!/^E:\\/i.test(destination)||value?.saveAs){const choice=await dialog.showSaveDialog(window(),{title:'保存超大谱工程',defaultPath:/^E:\\/i.test(destination??'')?destination:join(dirname(service.root),'谱面.rpenlarge'),filters:[{name:'超大谱工程',extensions:['rpenlarge']}]});if(choice.canceled)return{ok:true,result:null};destination=choice.filePath;}
-        const parent=await realpath(dirname(destination));if(!/^E:\\/i.test(parent)||parent.toLowerCase()===service.root.toLowerCase()||parent.toLowerCase().startsWith(service.root.toLowerCase()+'\\'))throw Error('请将工程保存在 E 盘缓存目录之外');
+        if(!destination||value?.saveAs){const choice=await dialog.showSaveDialog(window(),{title:'保存超大谱工程',defaultPath:destination??join(dirname(service.root),'谱面.rpenlarge'),filters:[{name:'超大谱工程',extensions:['rpenlarge']}]});if(choice.canceled)return{ok:true,result:null};destination=choice.filePath;}
+        destination = await largeChartSaveDestination(destination, service.root);
         result=await service.command(id,'save',destination);job.savedPath=destination;job.owner.savedPath=destination;await writeFile(join(job.workspace,'.owner.json'),JSON.stringify(job.owner));result.savedPath=destination;
       }
       else if (action === 'close') { generation++; result = await service.close({discard:value?.discard===true}); }

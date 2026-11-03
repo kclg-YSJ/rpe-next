@@ -1,3 +1,4 @@
+import { assertEventEasing } from './event-easing.mjs';
 import { beatValue, fromNumber } from './beat.mjs';
 import { t } from '../i18n.mjs';
 
@@ -22,6 +23,7 @@ export function validateGlobalEvent(event, path = t('global-events.s550e328')) {
     for (const item of Object.values(value)) inspect(item, parents); parents.delete(value);
   };
   inspect(event);
+  assertEventEasing(event);
   if (event.easingType !== undefined) check(Number.isInteger(event.easingType) && event.easingType >= 1 && event.easingType <= 29, path + t('global-events.sd140225'));
   for (const key of ['easingLeft', 'easingRight']) if (event[key] !== undefined) check(Number.isFinite(event[key]), path + '.' + key + t('global-events.s83da463'));
   if (event.bezier) check(Array.isArray(event.bezierPoints) && event.bezierPoints.length === 4 && event.bezierPoints.every(Number.isFinite), path + t('global-events.s0e21209'));

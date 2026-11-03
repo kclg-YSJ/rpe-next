@@ -1,3 +1,4 @@
+import { eventNumericValue } from '../core/event-easing.mjs';
 import { beatValue, fromNumber } from '../core/beat.mjs';
 import { easing, bezier } from '../core/easing.mjs';
 import { EVENT_TYPES } from '../core/chart.mjs';
@@ -29,13 +30,13 @@ export function cutEventParts(type, event, { division = 4, density = 4, beat, te
   }
   cuts.push(end);
   const sample = position => {
-    const progress = (position - start) / (end - start);
+    const progress = event.customEasing && tempo ? (tempo.seconds(position, factor) - tempo.seconds(event.startTime, factor)) / (tempo.seconds(event.endTime, factor) - tempo.seconds(event.startTime, factor)) : (position - start) / (end - start);
     const amount = event.bezier ? bezier(progress, event.bezierPoints) : easing(progress, event.easingType, event.easingLeft ?? 0, event.easingRight ?? 1);
-    if (Array.isArray(event.start)) return event.start.map((value, index) => Math.trunc(value + (event.end[index] - value) * amount));
-    const value = event.start + (event.end - event.start) * amount;
+    if (Array.isArray(event.start)) return event.customEasing ? eventNumericValue(event, progress).map(Math.trunc) : event.start.map((value, index) => Math.trunc(value + (event.end[index] - value) * amount));
+    const value = event.customEasing ? eventNumericValue(event, progress) : event.start + (event.end - event.start) * amount;
     return type === 'alphaEvents' ? Math.trunc(value) : value;
   };
-  return cuts.slice(0, -1).map((point, index) => ({ ...structuredClone(event), startTime: fromNumber(point), endTime: fromNumber(cuts[index + 1]),
+  return cuts.slice(0, -1).map((point, index) => ({ ...structuredClone(event), customEasing: undefined, startTime: fromNumber(point), endTime: fromNumber(cuts[index + 1]),
     start: sample(point), end: sample(cuts[index + 1]), easingType: 1, easingLeft: 0, easingRight: 1, bezier: 0, bezierPoints: [0, 0, 1, 1], linkgroup: 0, inst: 0 }));
 }
 

@@ -4,7 +4,7 @@ import { t } from '../i18n.mjs';
 const bridge = globalThis.rpenDesktopStorage?.version === 1 ? globalThis.rpenDesktopStorage : null;
 export async function largeChartCommand(action, id, value) {
   const bridge = globalThis.rpenLargePreview;
-  if (bridge?.version !== 1) throw Error('超大谱工程需要 Windows 桌面版');
+  if (bridge?.version !== 1) throw Error(t('large-chart.desktopRequired'));
   const response = await bridge.call(action, id, value);
   if (!response.ok) throw Error(response.error);
   return response.result;

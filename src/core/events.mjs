@@ -1,5 +1,5 @@
 import { upperBound } from './beat.mjs';
-import { easing, bezier } from './easing.mjs';
+import { eventEasing, customEventIntegral } from './event-easing.mjs';
 import { trajectoryEventValue } from './curve-trajectory.mjs';
 
 export class EventTrack {
@@ -19,12 +19,14 @@ export class EventTrack {
   }
 
   sample(entry, seconds) {
-    const event = entry.event;
+    const original = entry.event;
+    const source = original.customEasing;
+    const event = source && 'sourceStart' in source ? { ...original, start: source.sourceStart, end: source.sourceEnd } : original;
     if (event.trajectory) return trajectoryEventValue(event, entry.end <= entry.start ? 1 : Math.max(0, Math.min(1, (seconds - entry.start) / (entry.end - entry.start))));
     if (typeof event.start === 'number' && event.start === event.end) return event.start;
     if (Array.isArray(event.start) && Array.isArray(event.end) && event.start.every((value, index) => value === event.end[index])) return event.start;
     const progress = entry.end <= entry.start ? 1 : Math.max(0, Math.min(1, (seconds - entry.start) / (entry.end - entry.start)));
-    const amount = event.bezier ? bezier(progress, event.bezierPoints) : easing(progress, event.easingType, event.easingLeft ?? 0, event.easingRight ?? 1);
+    const amount = eventEasing(original, progress);
     if (Array.isArray(event.start) && Array.isArray(event.end)) return event.start.map((value, index) => value + (event.end[index] - value) * amount);
     if (typeof event.start === 'string' && typeof event.end === 'string') {
       if (seconds < entry.start) return '';
@@ -70,9 +72,10 @@ export class SpeedIntegral extends EventTrack {
     if (!segment.entry) return 0;
     const { event, start: eventStart, end: eventEnd } = segment.entry;
     const duration = end - segment.start;
-    if (event.start === event.end) return duration * event.start;
+    if (!event.customEasing && event.start === event.end) return duration * event.start;
     if (segment.start >= eventEnd) return duration * this.sample(segment.entry, eventEnd);
     if (end <= eventStart) return duration * this.sample(segment.entry, eventStart);
+    if (event.customEasing && eventEnd > eventStart) return (eventEnd - eventStart) * customEventIntegral(event, (segment.start - eventStart) / (eventEnd - eventStart), (end - eventStart) / (eventEnd - eventStart));
     if (!event.bezier && (event.easingType ?? 1) === 1) return duration * (this.sample(segment.entry, segment.start) + this.sample(segment.entry, end)) / 2;
     const step = (end - segment.start) / 20;
     let sum = 0;

@@ -1,3 +1,5 @@
+import { ANIMATION_CURVE_VERSION, chartHasAnimationCurves, internChartAnimationCurves, chartCurveEvents } from './chart-animation-curves.mjs';
+import { assertEventEasing } from './event-easing.mjs';
 import { beatValue, fromNumber } from './beat.mjs';
 import { integerChartAlpha } from './alpha-values.mjs';
 import { TempoMap } from './tempo.mjs';
@@ -48,7 +50,7 @@ export function parseChart(text) {
   chart = normalizeLineGroups(chart);
   if (chart.blockAreaList != null) chart.blockAreaList = normalizeNoiseAreas(chart.blockAreaList);
   assertChart(chart);
-  return integerChartAlpha(chart);
+  return internChartAnimationCurves(integerChartAlpha(chart));
 }
 
 export function noteIsAbove(note) {
@@ -59,7 +61,7 @@ export function serializeChart(chart, { compact = false } = {}) {
   const custom=emitModHook('chart:serialize',{chart,compact,text:null});if(custom.text!==null)return String(custom.text);chart=custom.chart;compact=custom.compact;
   assertChart(chart);
   chart = integerChartAlpha(chart);
-  const version = Math.max(chart.META.RPEVersion ?? 0, chart.globalEvents ? GLOBAL_EVENT_VERSION : 0, chart.noiseAreaLayers ? NOISE_LAYER_VERSION : chart.blockAreaList?.length ? NOISE_VERSION : 0);
+  const version = Math.max(chartHasAnimationCurves(chart) ? ANIMATION_CURVE_VERSION : 0, chart.META.RPEVersion ?? 0, chart.globalEvents ? GLOBAL_EVENT_VERSION : 0, chart.noiseAreaLayers ? NOISE_LAYER_VERSION : chart.blockAreaList?.length ? NOISE_VERSION : 0);
   const snapshot = version !== chart.META.RPEVersion ? { ...chart, META: { ...chart.META, RPEVersion: version } } : chart;
   return stringifyPreservingNumbers(snapshot, compact ? 0 : 2) + (compact ? '' : '\n');
 }
@@ -81,6 +83,7 @@ export function assertChart(chart) {
   if (chart.blockAreaList != null) validateNoiseAreas(chart.blockAreaList);
   validateNoiseLayers(chart);
   validateGlobalEvents(chart);
+  for (const event of chartCurveEvents(chart)) if (event.customEasing) assertEventEasing(event);
   if (chart.noiseAreaOptions !== undefined) {
     if (!chart.noiseAreaOptions || typeof chart.noiseAreaOptions !== 'object' || Array.isArray(chart.noiseAreaOptions)) throw new Error(t('chart.s9704a67'));
     for (const key of ['ignoreTripleInversion']) if (chart.noiseAreaOptions[key] !== undefined && typeof chart.noiseAreaOptions[key] !== 'boolean') throw new Error('noiseAreaOptions.' + key + t('chart.sdb758e5'));
@@ -119,6 +122,7 @@ export function assertChart(chart) {
           for (const property of ['easingLeft', 'easingRight']) {
             if (event[property] !== undefined && !Number.isFinite(event[property])) throw new Error(t('chart.s19e1a42', { p0: path, p1: type, p2: index, p3: property }));
           }
+          assertEventEasing(event);
           if (event.bezier && (!Array.isArray(event.bezierPoints) || event.bezierPoints.length !== 4 || !event.bezierPoints.every(Number.isFinite))) throw new Error(t('chart.sa6dd197', { p0: path, p1: type, p2: index }));
         }
       }

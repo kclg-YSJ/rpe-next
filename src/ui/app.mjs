@@ -94,6 +94,8 @@ import { NoteTrackingPanel } from './note-tracking.mjs';
 import { CollaborationPanel } from './collaboration.mjs';
 import { NoiseAreaEditor } from './noise-area.mjs';
 import { EventSampler } from './event-sampler.mjs';
+import { SpeedCurvePanel, singleSpeedCurveNote } from './speed-curve.mjs';
+import { closeAnimationCurveEditor, animationCurvePlaybackActive, animationCurvePreviewState } from './custom-easing-controls.mjs';
 import { EditorSkins } from './editor-skins.mjs';
 import { NoteSkins } from './note-skins.mjs';
 import { editorSkinContext, editorCanvasRevision } from './editor-skin-canvas.mjs';
@@ -129,16 +131,18 @@ catch (error) {
   host.append(message, retry); document.body.append(host); throw error;
 }
 if (globalThis.rpenDesktopStorage) {
-  globalThis.rpenFlushPreferences = async () => { await agentPanel?.flush(); await flushLocalPreferences(); };
-  globalThis.rpenPrepareClose = async () => { multiLineStateStore.capture(); await session.largeDocument?.flush(); await agentPanel?.stopAndFlush(); await flushLocalPreferences(); };
+  globalThis.rpenFlushPreferences = async () => { speedCurve?.saveView(true); await agentPanel?.flush(); await flushLocalPreferences(); };
+  globalThis.rpenPrepareClose = async () => { multiLineStateStore.capture(); speedCurve?.saveView(true); await session.largeDocument?.flush(); await agentPanel?.stopAndFlush(); await flushLocalPreferences(); };
 }
 
 const element = selector => document.querySelector(selector);
 let mods;
 let agentPanel;
 let dictationInput;
+let speedCurve;
 globalThis.__rpenModInputGate=true;
 for(const type of ['keydown','keyup','wheel','pointerdown','pointerup','mousedown','mouseup','click','dblclick','contextmenu','drop','dragstart','input','change','submit'])window.addEventListener(type,event=>{
+  if (type === 'keydown' && speedCurve?.active && speedCurve.handleKeydown(event)) return;
   const runtime=mods?.runtime;
   if(type==='keydown'&&event.ctrlKey&&event.altKey&&event.shiftKey&&event.key==='F11'){cancelValueDrag();event.preventDefault();event.stopImmediatePropagation();runtime?.emergency?.();return;}
   if(type==='keydown')dictationInput?.keydown(event);
@@ -167,6 +171,7 @@ const displayFields = [
   ['judgement-color', 'judgementColor', '#ffffff'],
   ['judgement-width', 'judgementWidth', DEFAULT_EDITOR_PREFERENCES.judgementWidth], ['judgement-alpha', 'judgementAlpha', DEFAULT_EDITOR_PREFERENCES.judgementAlpha],
   ['rpe-event-drag', 'rpeEventDrag', DEFAULT_EDITOR_PREFERENCES.rpeEventDrag],
+  ['xy-binding', 'xyBinding', DEFAULT_EDITOR_PREFERENCES.xyBinding],
   ['default-line-thickness', 'lineScale', 1.5],
   ['line-switcher-enabled', 'lineSwitcher', true],
   ['overlapping-line-picker', 'overlappingLinePicker', DEFAULT_EDITOR_PREFERENCES.overlappingLinePicker],
@@ -192,6 +197,7 @@ const settingsDialog = createSettingsPanel({
       return false;
     }
     writeLocalePreference(locale.locale);
+    speedCurve?.saveView(true);
     try { await flushLocalPreferences(); }
     catch (error) { writeLocalePreference(previousLocale); setLocale(previousLocale); reportError(error); return false; }
     try { if (hasDocument && libraryProject?.id) sessionStorage.setItem(LOCALE_REOPEN_KEY, libraryProject.id); } catch { /* storage unavailable */ }
@@ -226,6 +232,7 @@ let editorPreferences = { ...DEFAULT_EDITOR_PREFERENCES, ...readEditorPreference
 const fileOptions = () => ({ includeBackupCharts: editorPreferences.includeBackupCharts === true });
 let atHome = true;
 let hasDocument = false;
+let renderStudio = null;
 // Set before a language switch reloads the page so the same chart reopens.
 const LOCALE_REOPEN_KEY = 'rpe-next-reopen-project';
 let previewReturnTime = 0;
@@ -283,9 +290,12 @@ for (const renderer of [preview, realtimePreview]) {
   renderer.noisePreview.hiddenLayers = noiseEditor.hiddenLayers;
   renderer.noisePreview.simpleLayers = noiseEditor.simpleLayers;
 }
+document.addEventListener('rpen-animation-curve-preview-changed', () => invalidate());
 const eventSampler = new EventSampler(element('.stage'), () => ({ session, tempo, preview, realtimePreview, previewVisible: preview.visible, timeline, seconds: chartSeconds, playing: () => audio.playing, sampleAutoFit: element('#sample-auto-fit').checked, pairedMovementSampling: element('#paired-movement-sampling').checked }), { invalidate, pause: () => playback.pause(), notify });
-const audioAnalysis = new AudioAnalysis(element('#audio-analysis-overlay'), () => timeline, () => audio, () => persistEditor());
+speedCurve = new SpeedCurvePanel(() => ({ session, timeline, preferences }), { invalidate, pause: () => playback.pause() });
+const audioAnalysis = new AudioAnalysis(element('#audio-analysis-overlay'), () => timeline, () => audio, () => { persistEditor(); invalidate(); });
 const audioSources = new AudioSources(() => audio), audioOnsets = new AudioOnsets({ getTiming: sourceOffset => mapperTiming(session.chart, sourceOffset) }); audioAnalysis.attachSources(audioSources, notify, audioOnsets);
+audioAnalysis.requestFrame = () => invalidate();
 let noteHoverTimer = null;
 let noteHoverKey = null;
 function clearNoteSourceToast() {
@@ -646,7 +656,7 @@ element('#collaboration-tool').onclick = () => activatePane('collaboration');
 const playback = new EditorPlayback(audio, hitSounds, () => {
   timeline.origin = currentBeat();
   for (const renderer of [preview, realtimePreview]) { renderer.noisePreview.gpu?.reset(); renderer.overflowNoisePreview?.gpu?.reset(); renderer.overflowRevision++; }
-  preview.effectsSince = realtimePreview.effectsSince = chartSeconds();
+  preview.effectsSince = realtimePreview.effectsSince = chartSeconds() - .001;
   invalidate();
 });
 let performanceMonitor = null, monitorLoop = null;
@@ -829,12 +839,14 @@ subscribeLibrary(change => {
 });
 
 function setHome(visible) {
+  if (visible) speedCurve.close();
   if (visible) performanceMonitor?.finish('interrupted');
   if (visible) diagnosticHighlight.clear();
   if (visible) { placementDefaultsPanel.hide(); session.noteDefaults = normalizeNoteDefaults(); diagnostics.reset(); lastDiagnosticSignature = null; }
   if (visible) quickCurve.cancel();
   if (visible) { linePicker.hide(); directPlacement.close(); }
-  if (visible) agentPanel?.reset();
+  if (visible) closeAnimationCurveEditor();
+  agentPanel?.reset();
   if (visible) audioSources.reset(audio.buffer);
   if (visible && noiseTrackingPanel.sampling) noiseTrackingPanel.endSample();
   if (visible && noteTrackingPanel.sampling) noteTrackingPanel.endSample();
@@ -849,6 +861,7 @@ function setHome(visible) {
   element('.workspace').hidden = visible;
   element('.transport').hidden = visible;
   element('#resume-editor').hidden = !hasDocument;
+  element('#render-video').disabled = visible || !hasDocument;
   for (const selector of ['#save', '#export']) element(selector).disabled = !hasDocument;
   if (visible) { playback.pause(); timeline.cancelPlacement(); home.refresh().catch(reportError); }
   invalidate();
@@ -884,6 +897,14 @@ function openTimelineContextMenu(event, canvas = null, markerIndex = null) {
   element('#timeline-delete-marker').hidden = markerIndex === null;
   element('#timeline-selection-interval').hidden = markerIndex !== null;
   element('#timeline-placement-defaults').hidden = markerIndex !== null;
+  const speedCurveItem = element('#timeline-speed-curve');
+  speedCurveItem.hidden = markerIndex !== null;
+  speedCurveItem.disabled = !singleSpeedCurveNote(session) || noiseEditor.active || globalEvents.active;
+  speedCurveItem.onclick = () => {
+    const entry = singleSpeedCurveNote(session), source = timeline.notesCanvas.getBoundingClientRect();
+    const point = entry && !preview.visible ? { x: source.left + timeline.noteHorizontal(entry.note.positionX, entry.lineIndex), y: source.top + timeline.noteVertical(entry.note, 'startTime', entry.lineIndex) } : { x: event.clientX, y: event.clientY };
+    closeTimelineContextMenu(); eventSampler.finish(false); speedCurve.open(point);
+  };
   element('#timeline-selection-interval').textContent = t('app.s3f3831b', { p0: timeline.selectionInterval ?? 1 });
   const selections = session.multiLineActive && session.multiLineMode === 'events'
     ? [...session.multiEventSelection].flatMap(([lineIndex, keys]) => [...keys].map(key => ({ lineIndex, key })))
@@ -1093,6 +1114,7 @@ function updateLineInfo() {
 }
 
 function renderSession() {
+  if (speedCurve.active) speedCurve.sync();
   editorSkinState({ dirty: session.history.dirty || assetDirty, location: atHome ? 'home' : 'editor', mode: globalEvents.active ? 'global-events' : noiseEditor.active ? 'noise' : session.multiLineActive ? 'multi-' + session.multiLineMode : timeline.notesOnly ? 'notes' : 'notes-events' });
   const editor = element('.editor');
   noiseEditor.syncChrome();
@@ -1106,6 +1128,7 @@ function renderSession() {
   session.cutDensity = Number(element('#event-cut-density').value);
   session.dragSensitivity = Number(element('#event-drag-sensitivity').value);
   session.rpeEventDrag = timeline.rpeEventDrag;
+  session.xyBinding = element('#xy-binding').checked;
   updateLineInfo();
   session.eventWheelSteps = Object.fromEntries(['moveXEvents', 'moveYEvents', 'rotateEvents', 'alphaEvents', 'speedEvents', 'scaleXEvents', 'scaleYEvents'].flatMap((key, index) => Number.isFinite(preferences.originalSettings.scrollValueIncrement?.[index]) ? [[key, preferences.originalSettings.scrollValueIncrement[index]]] : []));
   timeline.origin = currentBeat();
@@ -1225,6 +1248,7 @@ function renderSession() {
 session.addEventListener('change', renderSession);
 
 function replaceChart(chart, name, nextAssets = new Map(), nextFolders = [], options = {}) {
+  speedCurve.close();
   if (largeChartWorkspace) {
     const previous = largeChartWorkspace; largeChartWorkspace = null;
     previous.dispose(); closingLargeChart = previous.close().catch(reportError);
@@ -1236,6 +1260,7 @@ function replaceChart(chart, name, nextAssets = new Map(), nextFolders = [], opt
   quickCurve.cancel();
   linePicker.hide(); directPlacement.close();
   chart = normalizeLineGroups(chart);
+  closeAnimationCurveEditor();
   agentPanel?.reset();
   assertChart(chart);
   if (!options.preserveRepoId) { versionRepoId = options.repoId ?? crypto.randomUUID(); versionControl?.detach(); }
@@ -1505,6 +1530,15 @@ element('#file-input').addEventListener('change', async event => {
 });
 listen('#save', () => save());
 listen('#export', () => { noiseEditor.flush(); if (session.largeDocument) return session.largeDocument.save(true); showExportDialog(session.chart, assets, chartName, (name, format) => { status(t('app.s94b8e7e', { p0: name })); if (format === 'pez') { noteExternalBackup(); storagePanel.refresh().catch(() => {}); } }, libraryProject?.identifier ?? libraryProject?.info?.Path, fileOptions()); });
+listen('#render-video', async () => {
+  if (atHome || !hasDocument || mods?.runtime.locks.size || renderStudio?.opening) return;
+  try {
+    noiseEditor.flush(); eventSampler.finish(false); speedCurve.close();
+    const { closeAnimationCurveEditor } = await import('./custom-easing-controls.mjs'); closeAnimationCurveEditor();
+    renderStudio ??= (await import('./render-studio/index.mjs')).createRenderStudio(modEditor, { notify, drawOverlays: (renderer, frame) => mods?.runtime.draw(renderer, frame) });
+    await renderStudio.open();
+  } catch (error) { reportError(error); }
+});
 listen('#view-toggle', () => togglePreview());
 listen('#close-preview', () => togglePreview(false, true));
 listen('#background', () => element('#background-input').click());
@@ -2148,13 +2182,14 @@ function frame(timestamp) {
   if (audio.playing && !mods?.runtime.locks.size && loop && currentBeat() >= loop.end) seekBeat(loop.start, false);
   if (audio.playing && audio.time >= audio.duration) { audio.pause(); if (performanceMonitor?.run) performanceMonitor.finish('complete'); invalidate(); }
   if (!session.largeDocument) hitSounds.tick(session.chart, tempo, session.lineIndex);
-  if (!atHome && (audio.playing || dirtyFrame || eventSampler.looping || trajectoryPanel.active || noteTrackingPanel.active && noteTrackingPanel.animating || noiseTrackingPanel.active && noiseTrackingPanel.animating || noiseFitPanel.active && noiseFitPanel.options.animate && noiseFitPanel.options.show && noiseFitPanel.previewChart && !noiseFitPanel.fullPreview) && frameLimiter.shouldRender(timestamp, editorPreferences.fpsLimit ?? preferences.settings.fpsLimit)) {
+  if (!atHome && (audio.playing || dirtyFrame || eventSampler.looping || animationCurvePlaybackActive() || trajectoryPanel.active || noteTrackingPanel.active && noteTrackingPanel.animating || noiseTrackingPanel.active && noiseTrackingPanel.animating || noiseFitPanel.active && noiseFitPanel.options.animate && noiseFitPanel.options.show && noiseFitPanel.previewChart && !noiseFitPanel.fullPreview) && frameLimiter.shouldRender(timestamp, editorPreferences.fpsLimit ?? preferences.settings.fpsLimit)) {
     frameSampleCount++;
     const start = performance.now();
     const beat = currentBeat();
     session.editSeconds = Math.max(0, chartSeconds());
     updateLineInfo();
     timeline.origin = beat;
+    if (audioAnalysis.pitchView?.active) audioAnalysis.pitchView.draw(offsetSeconds());
     if (!preview.visible && !noiseEditor.active && !globalEvents.active && !noiseFitPanel.active && !noiseTrackingPanel.previewing && !noteTrackingPanel.previewing) {
       timeline.draw(beat);
       multiEdit.drawTimeline();
@@ -2173,12 +2208,14 @@ function frame(timestamp) {
     const trajectoryView = trajectoryPanel.tick(timestamp, chartSeconds(), audio.playing, realtimePreview);
     const noiseView = noiseEditor.active ? noiseEditor.previewState() : null;
     const eventSampleView = eventSampler.previewState();
+    const animationCurveView = animationCurvePreviewState(timestamp);
+    const speedCurveView = speedCurve.previewState();
     const textView = textLinesPanel.view();
     const noiseFitView = noiseFitPanel.tick(timestamp, chartSeconds(), audio.playing, realtimePreview);
     const trackingView = noteTrackingPanel.tick(timestamp, chartSeconds(), audio.playing) ?? noiseTrackingPanel.tick(timestamp, chartSeconds(), audio.playing);
     const quickCurveView = quickCurve.view();
-    const modView=emitModHook('preview:before',{chart:trackingView?.chart ?? noiseView?.chart ?? eventSampleView?.chart ?? noiseFitView?.chart ?? textView?.chart ?? trajectoryView?.chart ?? (multiEdit.active && multiEdit.previewHovered && multiEdit.previewEnabled.checked && multiEdit.result ? multiEdit.result.chart : viewSession.chart),seconds:trackingView?.seconds ?? noiseView?.seconds ?? eventSampleView?.seconds ?? noiseFitView?.seconds ?? textView?.seconds ?? trajectoryView?.seconds ?? chartSeconds(),lineIndex:viewSession.lineIndex});
-    const viewChart = performanceMonitor?.run ? session.chart : quickCurveView ?? modView.chart;
+    const modView=emitModHook('preview:before',{chart:animationCurveView?.chart ?? trackingView?.chart ?? noiseView?.chart ?? eventSampleView?.chart ?? noiseFitView?.chart ?? textView?.chart ?? trajectoryView?.chart ?? (multiEdit.active && multiEdit.previewHovered && multiEdit.previewEnabled.checked && multiEdit.result ? multiEdit.result.chart : viewSession.chart),seconds:animationCurveView?.seconds ?? trackingView?.seconds ?? noiseView?.seconds ?? eventSampleView?.seconds ?? noiseFitView?.seconds ?? textView?.seconds ?? trajectoryView?.seconds ?? chartSeconds(),lineIndex:animationCurveView?.lineIndex ?? viewSession.lineIndex});
+    const viewChart = performanceMonitor?.run ? session.chart : speedCurveView?.chart ?? quickCurveView ?? modView.chart;
     preview.noteOverrides = realtimePreview.noteOverrides = viewChart === session.chart ? noteOverrides : null;
     const viewSeconds = performanceMonitor?.run ? chartSeconds() : modView.seconds;
     const previewAllLines = preview.allLines; const previewEffects = preview.showHitEffects;
@@ -2195,7 +2232,7 @@ function frame(timestamp) {
     preview.forceLineOpacity = forcedLineOpacity;
     if (!preview.visible) {
       const visible = realtimePreview.visible;
-      if (trackingView || trajectoryView || textView || noiseFitView || noiseEditor.sampleMode || eventSampler.active) realtimePreview.visible = true;
+      if (animationCurveView || trackingView || trajectoryView || textView || noiseFitView || noiseEditor.sampleMode || eventSampler.active) realtimePreview.visible = true;
       element('#realtime-preview').hidden = !realtimePreview.visible;
       const opacity = realtimePreview.opacity;
       const allLines = realtimePreview.allLines;
@@ -2204,7 +2241,7 @@ function frame(timestamp) {
       realtimePreview.forceLineOpacity = Boolean(trackingView?.forceLineOpacity);
       if (trackingView) realtimePreview.allLines = true;
       if (textView || noiseFitView) { realtimePreview.allLines = true; realtimePreview.lineNumbers = false; realtimePreview.lineArrows = false; }
-      if (trackingView || noiseEditor.sampleMode || eventSampler.active || noiseFitView) realtimePreview.opacity = 1;
+      if (animationCurveView || trackingView || noiseEditor.sampleMode || eventSampler.active || noiseFitView) realtimePreview.opacity = 1;
       realtimePreview.draw(viewChart, tempo, viewSeconds, modView.lineIndex);
       if(realtimePreview.visible)mods?.runtime.draw(realtimePreview,{target:'realtime',chart:viewChart,tempo,seconds:viewSeconds,timestamp});
       realtimePreview.opacity = opacity;
@@ -2391,6 +2428,7 @@ function applyDisplaySettings() {
   timeline.eventValueFontSize = Number(element('#event-value-size').value); timeline.eventValueThreshold = Number(element('#event-value-threshold').value); timeline.eventCurveThreshold = Number(element('#event-curve-threshold').value); timeline.eventOpacity = Number(element('#event-opacity').value); timeline.eventBarWidth = Number(element('#event-bar-width').value);
   timeline.seamlessEvents = element('#seamless-events').checked;
   timeline.rpeEventDrag = globalEvents.timeline.rpeEventDrag = element('#rpe-event-drag').checked;
+  session.xyBinding = element('#xy-binding').checked;
   if (!timeline.rpeEventDrag) setEventEndpointDragHeld(false);
   timeline.drawEventCurves = element('#draw-event-curves').checked;
   timeline.selectionInterval = globalEvents.timeline.selectionInterval = Number(element('#selection-interval').value);
@@ -2446,7 +2484,7 @@ const modEditor={
   get session(){return session;},get chart(){return session.chart;},get tempo(){return tempo;},get assets(){return assets;},get preferences(){return preferences;},get editorPreferences(){return editorPreferences;},get chartName(){return chartName;},get agentWorkspaceId(){return versionRepoId;},
   get hasDocument(){return hasDocument&&!atHome;},get home(){return atHome;},get activePane(){return activePaneName;},
   get dirty(){return session.history.dirty||assetDirty;},get libraryProject(){return libraryProject;},get loop(){return loop;},set loop(value){loop=value;},
-  audio,audioSources,audioOnsets,audioAnalysis,playback,preview,realtimePreview,timeline,skin,images,hitSounds,editorSkins,noteSkins,noiseEditor,eventSampler,trajectoryPanel,textLinesPanel,noiseFitPanel,noiseTrackingPanel,noteTrackingPanel,quickCurve,multiEdit,batchControls,linePanel,collaboration,globalEvents,globalEventRegistry,openGlobalEvents,versionControl,directPlacement,placementDefaultsPanel,diagnostics,diagnosticHighlight,
+  audio,audioSources,audioOnsets,audioAnalysis,playback,preview,realtimePreview,timeline,skin,images,hitSounds,editorSkins,noteSkins,noiseEditor,eventSampler,speedCurve,trajectoryPanel,textLinesPanel,noiseFitPanel,noiseTrackingPanel,noteTrackingPanel,quickCurve,multiEdit,batchControls,linePanel,collaboration,globalEvents,globalEventRegistry,openGlobalEvents,versionControl,directPlacement,placementDefaultsPanel,diagnostics,diagnosticHighlight,
   chartSeconds,offsetSeconds,currentBeat,invalidate,render:renderSession,notify,save,activatePane,
   commit:(label,chart)=>session.commit(label,chart),replace:(chart,name=chartName)=>replaceChart(chart,name),
   seek:(seconds,{music=false,pause=true}={})=>{playback.seek(seconds+(music?0:offsetSeconds()),pause);invalidate();},
@@ -2497,6 +2535,7 @@ const aboutUpdates = new AboutUpdates(settingsDialog, {
       try { await save(); } catch { throw Object.assign(Error('Save incomplete'), { code: 'UPDATE_SAVE' }); }
     }
     if (hasDocument && (session.history.dirty || assetDirty)) throw Object.assign(Error('Save incomplete'), { code: 'UPDATE_SAVE' });
+    speedCurve.saveView(true);
     await flushLocalPreferences();
     if (!nativeStorage && hasDocument && libraryProject?.id) sessionStorage.setItem(LOCALE_REOPEN_KEY, libraryProject.id);
   },

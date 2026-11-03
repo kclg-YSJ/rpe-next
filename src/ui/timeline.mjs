@@ -1105,8 +1105,7 @@ export class Timeline {
     } else if (drag) {
       context.strokeStyle = '#fff'; context.setLineDash([5, 3]);
       for (const rectangle of this.eventInteraction.previewRectangles(this.eventRects, width)) {
-        const lineSelection = session.multiLineActive && session.multiLineMode === 'events' ? (session.multiEventSelection?.get(rectangle.lineIndex) ?? new Set()) : session.eventSelection;
-        if (!lineSelection.has(eventKey(rectangle.type, rectangle.index))) continue;
+        if (!this.eventInteraction.previewSelected(rectangle.type, rectangle.index, rectangle.lineIndex ?? session.lineIndex)) continue;
         const event = session.multiLineActive && session.multiLineMode === 'events' ? eventListAt(session, rectangle.lineIndex, rectangle.type)[rectangle.index] : eventList(session, rectangle.type)[rectangle.index]; if (!event) continue;
         const vertical = session.multiLineActive && session.multiLineMode === 'events' ? beat => this.verticalForLine(beat, rectangle.lineIndex, height) : beat => this.eventVertical(beat, rectangle.type);
         const preview = this.eventInteraction.previewEvent(event);
@@ -1279,7 +1278,7 @@ export class Timeline {
       drag.points.forEach((point, index) => index ? context.lineTo(point.x, point.y) : context.moveTo(point.x, point.y)); context.stroke();
     } else if (drag) {
       context.strokeStyle = '#fff'; context.setLineDash([5, 3]);
-      for (const rectangle of this.eventInteraction.previewRectangles(this.eventRects, width)) if (this.getSession().eventSelection.has(eventKey(rectangle.type, rectangle.index))) {
+      for (const rectangle of this.eventInteraction.previewRectangles(this.eventRects, width)) if (this.eventInteraction.previewSelected(rectangle.type, rectangle.index)) {
         const event = this.eventInteraction.previewEvent(layer[rectangle.type][rectangle.index]);
         const top = this.eventVertical(beatValue(event.endTime), rectangle.type);
         const bottom = this.eventVertical(beatValue(event.startTime), rectangle.type);

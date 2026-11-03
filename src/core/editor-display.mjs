@@ -1,3 +1,4 @@
+import { eventValueRange } from './event-easing.mjs';
 import { beatValue } from './beat.mjs';
 import { easing } from './easing.mjs';
 import { trajectoryEventValue } from './curve-trajectory.mjs';
@@ -55,6 +56,7 @@ export function eventChains(events) {
       group = { entries: [], min: Infinity, max: -Infinity }; groups.push(group);
     }
     group.entries.push(entry);
+    if (entry.event.customEasing) { const range = eventValueRange(entry.event); if (range) { group.min = Math.min(group.min, range.min); group.max = Math.max(group.max, range.max); } }
     if (entry.event.trajectory) for (let index = 0; index <= 64; index++) { const value = trajectoryEventValue(entry.event, index / 64); group.min = Math.min(group.min, value); group.max = Math.max(group.max, value); }
     for (const value of [entry.event.start, entry.event.end]) if (typeof value === 'number') { group.min = Math.min(group.min, value); group.max = Math.max(group.max, value); }
   }

@@ -1,8 +1,10 @@
 import { easing, bezier } from '../core/easing.mjs';
+import { eventEasing, eventEndpoints } from '../core/event-easing.mjs';
 
 const shapes = new Map();
 const eventShapes = new WeakMap();
 function curveShape(event, steps) {
+  if (event.customEasing) { let found = eventShapes.get(event); if (found?.steps === steps && found.custom === event.customEasing && found.curve === event.customEasing.curve) return found.samples; const samples = Array.from({ length: steps + 1 }, (_, i) => eventEasing(event, i / steps)); eventShapes.set(event, { samples, steps, custom: event.customEasing, curve: event.customEasing.curve }); return samples; }
   const points = event.bezierPoints;
   const key = event.start === event.end || (!event.bezier && (event.easingType ?? 1) === 1) ? 'linear'
     : event.bezier ? `b:${steps}:${Array.isArray(points) ? points.join(',') : ''}` : `e:${steps}:${event.easingType}:${event.easingLeft ?? 0}:${event.easingRight ?? 1}`;
@@ -30,10 +32,11 @@ export function drawEventCurve(context, event, range, rectangle, startY, endY, {
     context.lineWidth = lineWidth; context.beginPath();
   }
   const samples = curveShape(event, steps);
+  const endpoints = event.customEasing ? eventEndpoints(event) : null, a = endpoints?.[0] ?? event.start, b = endpoints?.[1] ?? event.end;
   for (let step = 0; step < samples.length; step++) {
     const progress = step / (samples.length - 1);
     const amount = samples[step];
-    const value = event.start + (event.end - event.start) * amount;
+    const value = a + (b - a) * amount;
     const normalized = span > 0.01 ? (value - range.min) / span : 0.5;
     const x = rectangle.x + padding + normalized * Math.max(1, rectangle.width - 2 * padding);
     const y = startY + (endY - startY) * progress;

@@ -1,3 +1,5 @@
+import { bakeChartAnimationCurves } from '../application/animation-curve-export.mjs';
+import { chartHasAnimationCurves } from '../core/chart-animation-curves.mjs';
 import { serializeChart, stringifyPreservingNumbers, EVENT_TYPES, EXTENDED_TYPES } from '../core/chart.mjs';
 import { parseDocument } from '../core/formats.mjs';
 import { readZip, writeZip, crc32, inspectZip } from './archive.mjs';
@@ -147,7 +149,9 @@ export function legacyChart(chart, splitSettings = {}, compatibility = {}) {
       for (const event of trajectories) for (const [type, fragments] of expandTrajectory(event, tempo, line.bpmfactor ?? 1, splitSettings)) layer[type] = [...(layer[type] ?? []), ...fragments].sort((left, right) => beatValue(left.startTime) - beatValue(right.startTime));
     }
   }
-  return orderedExportChart(next, compatibility);
+  const hasCustomCurves = chartHasAnimationCurves(next);
+  if (compatibility.bakeCustomEasing === false && hasCustomCurves) throw Error(t('animation-curve.bakeRequired'));
+  return orderedExportChart(hasCustomCurves ? bakeChartAnimationCurves(next, tempo, compatibility.curveBake) : next, compatibility);
 }
 
 export function exportLegacyChart(chart, name) {
@@ -297,7 +301,7 @@ export function createChartExport(chart, assets, chartName, options = {}) {
   if (!['json', 'pez'].includes(format) || !['next', 'rpe'].includes(compatibility)) throw new Error(t('files.sca076d2'));
   let source = compatibility === 'rpe' && options.removeNoiseAreas ? { ...chart, blockAreaList: [] } : chart;
   if (compatibility === 'rpe' && options.removeGlobalEvents) { source = { ...source }; delete source.globalEvents; }
-  const snapshot = compatibility === 'rpe' ? legacyChart(source, split, { clampBezier: options.clampBezier === true, bezierMargin: options.bezierMargin }) : orderedExportChart(chart);
+  const snapshot = compatibility === 'rpe' ? legacyChart(source, split, { clampBezier: options.clampBezier === true, bezierMargin: options.bezierMargin, bakeCustomEasing: options.bakeCustomEasing, curveBake: options.curveBake }) : orderedExportChart(chart);
   delete snapshot.chartTime;
   if (name !== undefined && !String(name).trim()) throw new Error(t('files.sc04226c'));
   const stem = name === undefined ? chartExportStem(chart, chartName) : safeExportStem(name);

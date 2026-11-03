@@ -6,7 +6,7 @@ import { assetUrl } from '../core/asset-url.mjs';
 export function createEasingPicker(value, onChange, state = { open: false }) {
   const gallery = document.createElement('details'); gallery.open = state.open;
   gallery.addEventListener('toggle', () => { state.open = gallery.open; });
-  const summary = document.createElement('summary'); summary.textContent = t('easing-picker.s36919c3'); gallery.append(summary);
+  const summary = document.createElement('summary'); summary.textContent = t('animation-curve.standard'); gallery.append(summary);
   const choices = document.createElement('div'); choices.className = 'easing-gallery';
   const select = selected => {
     for (const button of choices.children) {

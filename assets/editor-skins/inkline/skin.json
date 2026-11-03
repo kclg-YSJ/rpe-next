@@ -610,7 +610,7 @@
       }
     },
     {
-      "selector": "input[type=range]:not(.line-switcher-scroll):not(.alpha-sample-gradient)",
+      "selector": "input[type=range]:not(.line-switcher-scroll):not(.alpha-sample-gradient):not(.speed-curve-y-zoom)",
       "set": {
         "appearance": "none",
         "background": "transparent",
@@ -621,7 +621,7 @@
       }
     },
     {
-      "selector": "input[type=range]:not(.line-switcher-scroll):not(.alpha-sample-gradient)::-webkit-slider-runnable-track",
+      "selector": "input[type=range]:not(.line-switcher-scroll):not(.alpha-sample-gradient):not(.speed-curve-y-zoom)::-webkit-slider-runnable-track",
       "set": {
         "height": "4px",
         "background": "var(--rpen-ink-press)",
@@ -629,7 +629,7 @@
       }
     },
     {
-      "selector": "input[type=range]:not(.line-switcher-scroll):not(.alpha-sample-gradient)::-webkit-slider-thumb",
+      "selector": "input[type=range]:not(.line-switcher-scroll):not(.alpha-sample-gradient):not(.speed-curve-y-zoom)::-webkit-slider-thumb",
       "set": {
         "appearance": "none",
         "width": "14px",
@@ -643,14 +643,14 @@
       }
     },
     {
-      "selector": "input[type=range]:not(.line-switcher-scroll):not(.alpha-sample-gradient):hover::-webkit-slider-thumb",
+      "selector": "input[type=range]:not(.line-switcher-scroll):not(.alpha-sample-gradient):not(.speed-curve-y-zoom):hover::-webkit-slider-thumb",
       "set": {
         "background": "var(--rpen-ink-text-high)",
         "transform": "scale(1.1)"
       }
     },
     {
-      "selector": "input[type=range]:not(.line-switcher-scroll):not(.alpha-sample-gradient):focus-visible::-webkit-slider-thumb",
+      "selector": "input[type=range]:not(.line-switcher-scroll):not(.alpha-sample-gradient):not(.speed-curve-y-zoom):focus-visible::-webkit-slider-thumb",
       "set": {
         "background": "var(--rpen-ink-accent)"
       }

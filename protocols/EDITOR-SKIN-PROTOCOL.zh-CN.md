@@ -205,6 +205,7 @@ tokens 是初始默认值，不是只能读取的常量。可在 `@root` 状态/
 | `graphics-settings` / `graphics-warning` | Windows 桌面端“图形设备”设置和启动显卡提示。显示实际渲染器，保留独显偏好、检测、系统设置、复制程序路径及“不再提示”交互；网页版不显示 |
 | `theme-settings` | `#editor-skin-settings` |
 | `context-menu` | `.timeline-context-menu` |
+| `speed-curve-menu` / `speed-curve-panel` | 单音符右键“调速曲线”入口与按需创建的浮动面板；保留模式按钮、节点数值、横向范围和纵向缩放控件。仅选中节点显示紧凑属性标签，其他节点保留图形标记；状态消息留在底部，不覆盖曲线。绘图区内沿用 Tap 放置快捷键直接添加节点，面板内删除沿用普通删除/快速删除的快捷键配置 |
 | `line-overview` | `.line-switcher`，Ctrl+滚轮线缩略图 |
 | `clipboard-history` | `#clipboard-results` |
 | `version-control-tool` / `version-control-panel` | 谱面版本控制入口按钮 / 右侧版本控制页面根节点 |
@@ -226,6 +227,8 @@ tokens 是初始默认值，不是只能读取的常量。可在 `@root` 状态/
 | `chat` / `peer-markers` | 联机聊天框 / 他人时间位置 |
 | `tab-notes` / `tab-events` / `tab-lines` / `tab-chart` / `tab-noise` | 对应右侧页签，移动后别名仍有效 |
 | `tool-select` / `tool-tap` / `tool-hold` / `tool-flick` / `tool-drag` | 选择与各类音符工具 |
+
+调速面板中的 `.speed-curve-y-control` 与曲线区域等高；`.speed-curve-y-zoom` 是真正的竖向范围控件，应沿绘图区完整高度显示，不能套用横向滑条的固定高度或轨道样式。工具栏 `.speed-curve-snap-step` 是独立的纵轴吸附步长数值框，不能隐藏或被挤出面板。“后段缓动”直接描述当前节点到下一个同层节点的距离曲线；默认判定锚点坐标不可改，但用户节点重合时优先编辑真实节点，拍数输入、拖拽和删除保持可用，只有距离受判定约束而禁用。末节点缓动为原生 `disabled`，保留灰显和原因提示。近似识别的缓动编号以 ≈ 标注。面板位置、尺寸和视图设置自动记忆，皮肤不得覆盖用户保存的位置和大小。
 
 以下命令的别名均直接展开为同名 id，例如 `@save` → `#save`：
 
@@ -267,6 +270,10 @@ tokens 是初始默认值，不是只能读取的常量。可在 `@root` 状态/
 常见样式入口：`.panel-title` 标题、`.field` 标签/控件行、`.hint` 提示、`.action-grid` 操作网格、`.primary` 主操作、`.wide-button` 整行按钮、`details > summary` 折叠头、`.modal-actions` 窗口底栏。例如 `[data-panel="events"] .field input` 只修改事件输入框。不要将 CSS 绑定到某一行索引或中文标签文本；可参考组件目录中的静态 id，动态字段以所属面板加控件类型作通用定制。
 
 音符属性字段与普通事件的首尾等输入提供 `data-rpen-field`，采用数据字段名，如 `positionX`、`startTime`、`start`、`end`；设置字段采用其控件 id。使用 data-key 的轨迹等工具也会映射同名字段。示例：`@note-properties input[data-rpen-field=positionX]`。没有显式登记此属性的历史表单不能按它定位，请使用对应稳定组件别名，不能用翻译后的 aria-label 充当字段契约。
+
+音频分析的“显著音高”使用按需创建的 `#audio-pitch-overlay`，通过 `data-skin-canvas="audio"` 复用既有音频画布色板、字体及透明度参数。原位与右侧模式均为编辑画布下方的透明衬图，使用 `pointer-events:none`，不遮挡或接管编辑操作；`#audio-pitch-source`、`#audio-pitch-position` 分别为单声部选择及显示位置控件，`.audio-pitch-panel`、`.audio-pitch-options`、`.audio-pitch-status` 可用于界面样式。未开启时不创建音高画布或推理 Worker。
+音高额外显示设置统一放在默认折叠的 `.audio-pitch-options`，阈值/不透明度/粗细滑条为 `#audio-pitch-threshold`、`#audio-pitch-opacity`、`#audio-pitch-lineWidth`，波形透明度与参考线开关为 `#audio-pitch-followWaveform`、`#audio-pitch-showGrid`。音域使用 `#audio-pitch-auto-range`、`#audio-pitch-low`、`#audio-pitch-high`，滑条旁的 `output` 显示音名和频率，`.audio-pitch-slider-control` 管理轨道及读数布局。上述调节不改变控件焦点、谱面数据或撤销记录。
+`#audio-pitch-reset` 为显示设置内的重置按钮，保留当前声部、显示位置、控件及折叠状态，只恢复显示参数及自动音域。事件编辑区不提供音高悬停提示；原位模式的提示仍使用音符画布，衬图始终不命中鼠标。
 
 本文登记的别名、面板名、变量、画布角色、状态属性与已经明确标注的字段名在同一 API 内保留意义；底层 class/id 可以调整，别名会同步适配。未登记的实现 class/id 不作此承诺。清单可用 compatibility.maxApi 限制未经作者验证的后续 API。旧运行时曾忽略未知字段，不能指望这些历史构建识别 API 2 的兼容声明；发布时请同时标注需要支持 API 2 的编辑器。
 
@@ -650,3 +657,7 @@ variants 的每个条目需要 name，可覆盖 colorScheme、tokens、styles、
 builtin 必须使用组件目录 builtinAssets 表中登记的有限名称，不能输入任意应用文件路径。当前包含 folder、save、setting、help、play、replay、showback、jump、copy、shear、paste、delete0、switch、layout、return、info、waves、bezier、addline、mute；复用时无需把这些图片拷贝进包，应用升级由目录保持引用映射。未列出的音符/打击素材不作通用资源接口。
 
 普通 image 的 path 为 1x 来源，sources 提供最多 4 个额外倍率，倍率须大于 1、不超过 4 且互不重复。每张来源都计入文件与大小上限并解码校验。asset()/icons 的背景生成 image-set，装饰使用 srcset，浏览器按显示密度选择；显式预览图使用 path 的基础来源。字体与 builtin 不接受 sources。为了避免接入任意资源字符串，直接在 CSS 中手写 image-set/url 仍禁止。
+
+动画曲线是编辑器内的大浮窗，直接继承当前皮肤；不创建系统子窗口。组件别名 animation-curve 指向 #animation-curve-editor，custom-easing-templates 指向 .custom-easing-group。布局保留可拖动标题栏、画布、长纵向滑条、侧栏、帮助与右下角缩放柄。帮助图示使用当前颜色令牌；无额外的模组运行环境。
+
+视频渲染：render-video 指向顶部唯一入口 #render-video（首页禁用），render-studio 指向按需创建的 #rpen-render-studio。不得在皮肤中复制渲染入口。面板继承皮肤颜色；详见 VIDEO-RENDER.zh-CN.md。

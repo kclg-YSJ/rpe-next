@@ -1,3 +1,4 @@
+import { cropCustomEvent } from '../core/event-easing.mjs';
 import { beatValue, fromNumber } from '../core/beat.mjs';
 import { createEvent, assertChart } from '../core/chart.mjs';
 import { compileTrajectory, sampleCurveTrajectory, TRAJECTORY_VERSION, trajectoryHasRotation } from '../core/curve-trajectory.mjs';
@@ -46,6 +47,7 @@ export function trajectoryChart(chart, lineIndex, layerIndex, event, editing = n
       const secondsStart = tempo.seconds(original.startTime, factor); const secondsEnd = tempo.seconds(original.endTime, factor);
       const clipped = (first, last) => {
         const startTime = fromNumber(first); const endTime = fromNumber(last);
+        if (original.customEasing) return cropCustomEvent(original, (tempo.seconds(startTime, factor) - secondsStart) / (secondsEnd - secondsStart), (tempo.seconds(endTime, factor) - secondsStart) / (secondsEnd - secondsStart), startTime, endTime);
         const left = original.easingLeft ?? 0; const range = (original.easingRight ?? 1) - left;
         return { ...original, startTime, endTime, start: track.value(tempo.seconds(startTime, factor)), end: track.value(tempo.seconds(endTime, factor)), easingLeft: left + range * (tempo.seconds(startTime, factor) - secondsStart) / (secondsEnd - secondsStart), easingRight: left + range * (tempo.seconds(endTime, factor) - secondsStart) / (secondsEnd - secondsStart) };
       };

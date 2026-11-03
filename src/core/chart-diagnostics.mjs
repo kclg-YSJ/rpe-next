@@ -1,3 +1,4 @@
+import { assertEventEasing } from './event-easing.mjs';
 import { beatValue, fromNumber } from './beat.mjs';
 import { TempoMap } from './tempo.mjs';
 import { diagnoseNoiseAreas, NOISE_TRACKS } from './noise-areas.mjs';
@@ -45,7 +46,8 @@ function easingIssues(event, emit) {
   // EventTrack returns constant values before looking at easing. RPE's FillBlank
   // even stores the line id as the easing id of its constant incline event.
   // Keep those unused fields intact rather than reporting a playback error.
-  if (!sameValue(event.start, event.end)) {
+  if (event.customEasing) { try { assertEventEasing(event); } catch { emit('easing', 'error'); } }
+  if (!event.customEasing && !sameValue(event.start, event.end)) {
     if (!event.bezier) {
       if (event.easingType !== undefined && (!Number.isInteger(event.easingType) || event.easingType < 1 || event.easingType > 29)) emit('easing', 'error');
       const left = event.easingLeft ?? 0, right = event.easingRight ?? 1;

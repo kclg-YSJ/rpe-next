@@ -4,6 +4,7 @@ import { previewViewport, previewPositionScale } from '../core/editor-display.mj
 import { DEFAULT_LINE_WIDTH, DEFAULT_LINE_HEIGHT } from '../core/visual-constants.mjs';
 import { NoteSpriteBatch } from './note-sprite-batch.mjs';
 import { RpeSkin } from './skin.mjs';
+import { t } from '../i18n.mjs';
 
 // Repeated equal sprites accumulate their texel alpha, without instantiating or
 // drawing millions of copies. Ordering between different groups is approximate.
@@ -53,7 +54,7 @@ export class LargeChartPreview {
     this.stage = node('div', 'large-preview-stage'); this.canvas = node('canvas'); this.context = this.canvas.getContext('2d'); this.stage.append(this.canvas);
     this.overlay = node('div', 'large-preview-overlay'); this.message = node('p', '', '选择 PEC 压缩包开始预览'); this.progress = node('progress'); this.progress.max = 1; this.progress.value = 0; this.progress.hidden = true;
     this.overlay.append(this.message, this.progress); this.stage.append(this.overlay);
-    const footer = node('div', 'large-preview-footer'); this.stats = node('span'); this.cache = node('button', 'large-preview-cache', 'E 盘缓存 · 上限 1 GiB'); this.cache.onclick = () => call('openCache').catch(error => this.error(error)); footer.append(this.stats, this.cache);
+    const footer = node('div', 'large-preview-footer'); this.stats = node('span'); this.cache = node('button', 'large-preview-cache', t('large-chart.cache')); this.cache.onclick = () => call('openCache').catch(error => this.error(error)); footer.append(this.stats, this.cache);
     const hint = node('p', 'large-preview-hint', 'PEC · 音乐、音符与判定线预览 · 暂不播放打击音效及特效。相同音符合成绘制，重叠混色可能有差异。关闭后清理缓存。');
     dialog.append(heading, toolbar, this.stage, footer, hint); dialog.addEventListener('cancel', event => { event.preventDefault(); this.close(); });
     dialog.addEventListener('keydown', event => { event.stopPropagation(); if (event.code === 'Space' && !['INPUT', 'SELECT', 'BUTTON'].includes(event.target.tagName)) { event.preventDefault(); this.toggle(); } });
@@ -71,7 +72,7 @@ export class LargeChartPreview {
   }
   async select() {
     if (this.loading || this.summary) return;
-    this.loading = true; this.choose.disabled = true; this.overlay.hidden = false; this.progress.hidden = false; this.message.textContent = '选择文件与 E 盘缓存位置…';
+    this.loading = true; this.choose.disabled = true; this.overlay.hidden = false; this.progress.hidden = false; this.message.textContent = t('large-chart.chooseLocations');
     try {
       const summary = await call('choose'); if (this.disposed) return;
       if (!summary) { this.overlay.hidden = false; this.message.textContent = '选择 PEC 压缩包开始预览'; return; }

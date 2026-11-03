@@ -1,0 +1,15 @@
+{
+  "name": "mediabunny",
+  "version": "1.65.0",
+  "author": {
+    "name": "Vanilagy"
+  },
+  "license": "MPL-2.0",
+  "repository": "https://github.com/Vanilagy/mediabunny",
+  "commit": "cd6612380c7e3f1261d74b9b550e6fc3b65a53bc",
+  "source": "https://github.com/Vanilagy/mediabunny/tree/cd6612380c7e3f1261d74b9b550e6fc3b65a53bc",
+  "tarball": "https://registry.npmjs.org/mediabunny/-/mediabunny-1.65.0.tgz",
+  "integrity": "sha512-TNnDNOmD5Fme4rwMGWuNv485a9iQwd9lgw88PI9zQ0FMnzEUoo6EJpG7ZhdJ2iwZFWo8AzNkP1KPq5IAHaktKw==",
+  "bundleSHA256": "7898aa3e638df09ac3f59bfcbdef2757bbbd1a78f24d3339247a07e674a7877d",
+  "modified": false
+}

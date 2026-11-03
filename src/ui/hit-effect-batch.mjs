@@ -63,6 +63,12 @@ export class HitEffectBatch {
     if (this.texture) this.gl.deleteTexture(this.texture);
     this.texture = null; this.images = new WeakMap(); this.layers = 0;
   }
+  dispose() {
+    const gl = this.gl;
+    if (gl) { this.resetTexture(); gl.deleteBuffer(this.buffer); gl.deleteProgram(this.program); gl.getExtension('WEBGL_lose_context')?.loseContext(); }
+    if (this.canvas) this.canvas.width = this.canvas.height = 1;
+    this.gl = null; this.canvas = null; this.target = null; this.skin = null; this.images = new WeakMap(); this.failed = false;
+  }
   allocate(width, height) {
     this.resetTexture(); const gl = this.gl;
     this.textureWidth = Math.max(256, width); this.textureHeight = Math.max(256, height);

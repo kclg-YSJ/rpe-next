@@ -42,6 +42,9 @@ export function showExportDialog(chart, assets, chartName, onExport, identifier,
   const simplifyLabel = document.createElement('label'); simplifyLabel.className = 'field'; simplifyLabel.append(simplify, t('export-dialog.s8160e72')); simplify.setAttribute('aria-label', t('export-dialog.s8160e72'));
   const tolerance = document.createElement('input'); tolerance.type = 'number'; tolerance.min = '0.001'; tolerance.max = '10000'; tolerance.step = 'any'; tolerance.value = DEFAULT_TRAJECTORY_SPLIT.tolerance; tolerance.setAttribute('aria-label', t('export-dialog.s413683d'));
   const toleranceLabel = document.createElement('label'); toleranceLabel.className = 'field'; toleranceLabel.append(t('export-dialog.s413683d'), tolerance);
+  const bake = document.createElement('input'); bake.type = 'checkbox'; bake.checked = true;
+  const bakeLabel = document.createElement('label'); bakeLabel.className = 'field'; bakeLabel.append(bake, t('animation-curve.bake'));
+  const bakeHint = document.createElement('p'); bakeHint.className = 'hint'; bakeHint.textContent = t('animation-curve.bakeHint'); settings.append(bakeLabel, bakeHint);
   const hint = document.createElement('p'); hint.className = 'hint'; hint.textContent = t('export-dialog.s9f1c3f8');
   settings.append(simplifyLabel, toleranceLabel, hint); host.append(settings);
   const clampBezier = document.createElement('input'); clampBezier.type = 'checkbox'; clampBezier.checked = false;
@@ -58,7 +61,7 @@ export function showExportDialog(chart, assets, chartName, onExport, identifier,
       if (noiseIssues.length && !acknowledgement.checked) throw new Error(t('export-dialog.s4094dae'));
       if (compatibility === 'rpe' && chart.blockAreaList?.length && !removeNoise.checked) throw new Error(t('export-dialog.sac6ba5f'));
       if (compatibility === 'rpe' && hasGlobalEvents && !removeGlobal.checked) throw Error(t('export-dialog.se25f82b'));
-      const result = createChartExport(chart, assets, chartName, { includeUnusedFiles: unused.checked, includeBackupCharts, compatibility, format: container, compact: compact.checked, name: name.value, identifier, clampBezier: compatibility === 'rpe' && clampBezier.checked, bezierMargin: Number(margin.value), removeNoiseAreas: compatibility === 'rpe' && removeNoise.checked, removeGlobalEvents: compatibility === 'rpe' && removeGlobal.checked, split: { simplify: simplify.checked, tolerance: Number(tolerance.value) } });
+      const result = createChartExport(chart, assets, chartName, { bakeCustomEasing: bake.checked, includeUnusedFiles: unused.checked, includeBackupCharts, compatibility, format: container, compact: compact.checked, name: name.value, identifier, clampBezier: compatibility === 'rpe' && clampBezier.checked, bezierMargin: Number(margin.value), removeNoiseAreas: compatibility === 'rpe' && removeNoise.checked, removeGlobalEvents: compatibility === 'rpe' && removeGlobal.checked, split: { simplify: simplify.checked, tolerance: Number(tolerance.value) } });
       const filename = download(result.blob, result.name); document.querySelector('#modal').close(); onExport(filename, container);
     } catch (error) { document.querySelector('#modal-error').textContent = error.message; }
   };

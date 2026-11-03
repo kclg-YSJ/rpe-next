@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { stat, readFile, writeFile, open, rename, unlink } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { largeChartSpace } from './large-chart-paths.mjs';
 import { DatabaseSync, backup } from 'node:sqlite';
 import { LargeChartStore } from './large-chart-store.mjs';
 import { createNote, assertChart } from '../src/core/chart.mjs';
@@ -8,6 +9,7 @@ import { beatValue, fromNumber } from '../src/core/beat.mjs';
 import { TempoMap } from '../src/core/tempo.mjs';
 import { LineRuntime } from '../src/core/scene.mjs';
 import { DiskNoteSelection } from './large-chart-selection.mjs';
+import { chartHasAnimationCurves, ANIMATION_CURVE_VERSION } from '../src/core/chart-animation-curves.mjs';
 
 const REF = '_rpenLargeRef', LINE = '_rpenLargeLine';
 const columns = ['id','k','l','t','b','z','x','a','f','v','w','n','o','s','e','p','q','h','tick','j','u','d','alpha'];
@@ -24,6 +26,7 @@ export function largeChartHeader(chart) {
   const header = { ...chart, judgeLineList: (chart.judgeLineList ?? []).map(line => ({ ...line, notes: [], numOfNotes: 0 })) };
   if (header.judgeLineList.length > 256) throw Error('超大谱工程当前最多支持 256 条判定线');
   delete header.rpeNextLargeChart;
+  if (chartHasAnimationCurves(header)) header.META = { ...header.META, RPEVersion: Math.max(header.META.RPEVersion ?? 0, ANIMATION_CURVE_VERSION) };
   if (Buffer.byteLength(JSON.stringify(header)) > 8 * 1024 ** 2) throw Error('谱面事件与元数据超过超大谱工程的内存预算');
   assertChart(header); return header;
 }
@@ -188,6 +191,14 @@ export class LargeChartDocument extends LargeChartStore {
     let bytes=0;for(const entry of notes){bytes+=Buffer.byteLength(JSON.stringify(entry));if(bytes>24*1024**2)throw Error('编辑页属性超过内存传输预算');}
     return {revision:this.revision,header:this.chart,notes,start,end,lines};
   }
+  soundNames() {
+    const names = new Set(['tap','drag','flick']);
+    for (const row of this.db.prepare("SELECT DISTINCT COALESCE(NULLIF(json_extract(j,'$.hitsound'),''),NULLIF(json_extract(j,'$.hitSound'),'')) AS sound FROM notes WHERE n>0 AND f=0 AND j IS NOT NULL").iterate()) {
+      if (row.sound) names.add(row.sound);
+      if (names.size > 512) throw Error('谱面打击音效种类超过渲染资源预算');
+    }
+    return [...names];
+  }
   hits({ start, end, line = null, delays = {} }) {
     if (![start,end].every(Number.isFinite) || end < start || end - start > 2 || line !== null && !this.chart.judgeLineList[line]) throw Error('打击音效区间无效');
     const groups = new Map(), limit = this.limits.windowGroups;
@@ -271,10 +282,11 @@ export class LargeChartDocument extends LargeChartStore {
   }
   async saveDatabase(destination) {
     if(!this.enabled)throw Error('超大谱尚未进入编辑模式');await this.diskBudget();
-    await this.budget(Number(this.db.prepare('PRAGMA page_count').get().page_count)*4096);
+    await this.budget();
     const pending=destination+'.'+randomUUID()+'.partial';
     try{
       await this.persistMedia();
+      await largeChartSpace(dirname(destination), Number(this.db.prepare('PRAGMA page_count').get().page_count) * 4096 + 1024 ** 3);
       this.setState('summary',JSON.stringify({...this.summary,chart:this.chart,media:this.media}));
       this.db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
       await backup(this.db,pending,{rate:128,progress:async({totalPages,remainingPages})=>{this.progress({phase:'save',ratio:1-remainingPages/Math.max(1,totalPages)});}});

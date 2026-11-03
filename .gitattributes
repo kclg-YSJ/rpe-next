@@ -1,0 +1,2 @@
+# Preserve pinned third-party runtime and model checksums across platforms.
+assets/vendor/** -text whitespace=-blank-at-eol,-blank-at-eof

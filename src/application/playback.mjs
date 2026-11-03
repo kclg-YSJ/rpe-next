@@ -28,7 +28,12 @@ export class EditorPlayback {
     const request = ++this.request; this.pending = true;
     try {
       this.sounds.chart = chart; await this.sounds.prepare();
-      if (this.request === request) await this.audio.play();
+      if (this.request === request) {
+        // AudioTransport also restarts at its end, but editing views must see
+        // the rewind before playback so effect windows and disk pages reset.
+        if (Number.isFinite(this.audio.duration) && this.audio.time >= this.audio.duration) this.seek(0, false);
+        await this.audio.play();
+      }
     } finally { if (this.request === request) this.pending = false; }
   }
   wheel(event, settings, now) {

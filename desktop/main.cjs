@@ -89,6 +89,8 @@ else {
     const audioOnsets = new AudioOnsetService(audioRoots.onsets, { script: resolve(__dirname, 'detect-onsets.py'), python: smokeAudio ? process.env.RPE_ONSET_TEST_PYTHON : undefined, progress: value => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('rpen-audio-onsets-progress', value); } });
     audioStorage.attach('onsets', audioOnsets); if (!audioStorage.error) await audioOnsets.initialize();
     installAudioOnsets({ ipcMain, service: audioOnsets, origin, window: () => mainWindow, dialog });
+    const { installAudioPitchCache } = await import(pathToFileURL(resolve(__dirname, 'audio-pitch-cache.mjs')).href);
+    installAudioPitchCache({ ipcMain, storage: audioStorage, origin, window: () => mainWindow });
     app.on('before-quit', () => audioOnsets.close());
     const { AudioMapperService, installAudioMapper } = await import(pathToFileURL(resolve(__dirname, 'audio-mapper.mjs')).href);
     const audioMapper = new AudioMapperService(audioRoots.mapper, { script: resolve(__dirname, 'map-audio.py'), python: smokeAudio || smokeMapper ? process.env.RPE_MAPPER_TEST_PYTHON : undefined, source: smokeAudio || smokeMapper ? process.env.RPE_MAPPER_TEST_SOURCE : undefined, progress: value => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('rpen-audio-mapper-progress', value); } });
@@ -99,6 +101,18 @@ else {
     const agentCredentials = new AgentCredentialVault(resolve(app.getPath('userData'), 'agent-credentials.json'), { safeStorage, writeJson: atomicJson });
     installAgentCredentials({ ipcMain, vault: agentCredentials, origin, window: () => mainWindow });
     const configPath = resolve(app.getPath('userData'), 'native-storage.json');
+    const { RenderOutputService } = require('./render-output.cjs');
+    const renderOutputs = new RenderOutputService(async name => {
+      const chosen = await dialog.showSaveDialog(mainWindow, { title: '渲染视频', defaultPath: resolve(app.getPath('videos'), name), filters: [{ name: 'Video', extensions: [name.split('.').at(-1)] }] });
+      return chosen.canceled ? null : chosen.filePath;
+    }, { openFolder: async path => { const error = await shell.openPath(path); if (error) throw Error(error); } });
+    ipcMain.handle('rpen-render-output', async (event, request) => {
+      try {
+        if (event.sender !== mainWindow?.webContents || event.senderFrame !== event.sender.mainFrame || !event.senderFrame.url.startsWith(origin + '/')) throw Error('无权限');
+        return { ok: true, result: await renderOutputs.call(event.sender.id, request.action, request.value) };
+      } catch (error) { return { ok: false, error: error.message }; }
+    });
+    app.on('before-quit', () => { void renderOutputs.dispose(); });
     let config; try { config = JSON.parse(await readFile(configPath, 'utf8')); } catch (error) { if (error.code !== 'ENOENT') throw error; }
     let nativeRoot = config?.root ?? (smoke ? resolve(app.getPath('userData'), 'Library') : resolve(app.getPath('documents'), 'RePhiEdit Next', 'Library'));
     for (;;) {
@@ -179,14 +193,15 @@ else {
           if (!agentSourceBundle) agentSourceBundle = import(pathToFileURL(resolve(root, 'desktop/agent-source.mjs')).href).then(module => module.createAgentSourceBundle(root)).then(bundle => JSON.stringify(bundle)).catch(error => { agentSourceBundle = null; throw error; });
           const content = await agentSourceBundle; return new Response(request.method === 'HEAD' ? null : content, { headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
         }
-        if (!['index.html', 'styles.css', 'protocols/MOD-PROTOCOL.zh-CN.md', 'protocols/GLOBAL-EVENTS-PROTOCOL.zh-CN.md', 'protocols/EDITOR-SKIN-PROTOCOL.zh-CN.md', 'protocols/DESKTOP-STORAGE.zh-CN.md', 'protocols/AUDIO-SEPARATION.zh-CN.md', 'schemas/editor-skin-v1.schema.json', 'schemas/editor-skin-components.v1.json', 'schemas/mod-v1.schema.json', 'schemas/mod-api-v1.d.ts'].includes(relative) && !relative.startsWith('src/') && !relative.startsWith('assets/')) return new Response('Not found', { status: 404 });
+        if (!['index.html', 'styles.css', 'protocols/MOD-PROTOCOL.zh-CN.md', 'protocols/GLOBAL-EVENTS-PROTOCOL.zh-CN.md', 'protocols/ANIMATION-CURVES-PROTOCOL.zh-CN.md', 'protocols/VIDEO-RENDER.zh-CN.md', 'protocols/EDITOR-SKIN-PROTOCOL.zh-CN.md', 'protocols/DESKTOP-STORAGE.zh-CN.md', 'protocols/AUDIO-SEPARATION.zh-CN.md', 'schemas/editor-skin-v1.schema.json', 'schemas/editor-skin-components.v1.json', 'schemas/mod-v1.schema.json', 'schemas/mod-api-v1.d.ts'].includes(relative) && !relative.startsWith('src/') && !relative.startsWith('assets/')) return new Response('Not found', { status: 404 });
         const path = await realpath(resolve(root, relative));
         if (!path.startsWith(root + sep)) return new Response('Not found', { status: 404 });
         const response = await net.fetch(pathToFileURL(path).href);
         const headers = new Headers(response.headers);
-        headers.set('Content-Security-Policy', `default-src 'self'; script-src 'self' blob:; script-src-elem 'self' blob: 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self' blob:; media-src 'self' blob: data:; connect-src ${connectSources}; object-src 'none'; base-uri 'none'; frame-ancestors 'none'`);
+        headers.set('Content-Security-Policy', `default-src 'self'; script-src 'self' blob:${relative === 'src/platform/audio-pitch-worker.mjs' ? " 'wasm-unsafe-eval'" : ''}; script-src-elem 'self' blob: 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self' blob:; media-src 'self' blob: data:; connect-src ${connectSources}; object-src 'none'; base-uri 'none'; frame-ancestors 'none'`);
         headers.set('X-Content-Type-Options', 'nosniff');
         if (path.endsWith('.mjs')) headers.set('Content-Type', 'text/javascript; charset=utf-8');
+        if (path.endsWith('.wasm')) headers.set('Content-Type', 'application/wasm');
         return new Response(request.method === 'HEAD' ? null : response.body, { status: response.status, headers });
       } catch { return new Response('Not found', { status: 404 }); }
     });
@@ -219,7 +234,7 @@ else {
         else updater.cancelInstall();
       });
     });
-    const abortTokens = () => { rendererGeneration++; for (const token of tokens) native.call('abort', token).catch(() => {}); tokens.clear(); largePreview.close().catch(console.error); };
+    const abortTokens = () => { rendererGeneration++; for (const token of tokens) native.call('abort', token).catch(() => {}); tokens.clear(); largePreview.close().catch(console.error); void renderOutputs.dispose(); };
     mainWindow.webContents.on('render-process-gone', abortTokens);
     mainWindow.webContents.on('destroyed', abortTokens);
     mainWindow.webContents.on('did-start-navigation', (_event, _url, _inPlace, isMainFrame) => { if (isMainFrame) abortTokens(); });

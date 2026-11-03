@@ -12,6 +12,8 @@ for (const name of ['src/core', 'src/application', 'src/platform', 'src/ui', 'sr
   await mkdir(join(output, name, '..'), { recursive: true });
   if (pages && name === 'protocols') {
     await mkdir(join(output, name), { recursive: true });
+    await cp(join(root, name, 'ANIMATION-CURVES-PROTOCOL.zh-CN.md'), join(output, name, 'ANIMATION-CURVES-PROTOCOL.zh-CN.md'));
+    await cp(join(root, name, 'VIDEO-RENDER.zh-CN.md'), join(output, name, 'VIDEO-RENDER.zh-CN.md'));
     for (const protocol of ['EDITOR-SKIN', 'MOD', 'GLOBAL-EVENTS', 'AI-AGENT']) await cp(join(root, name, protocol + '-PROTOCOL.zh-CN.md'), join(output, name, protocol + '-PROTOCOL.zh-CN.md'));
     await cp(join(root, name, 'CHART-VERSION-CONTROL.zh-CN.md'), join(output, name, 'CHART-VERSION-CONTROL.zh-CN.md'));
     await cp(join(root, name, 'AUDIO-SEPARATION.zh-CN.md'), join(output, name, 'AUDIO-SEPARATION.zh-CN.md'));

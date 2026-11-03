@@ -2,6 +2,9 @@ import { beatValue, formatBeat, parseBeat, fromNumber } from '../core/beat.mjs';
 import { SHADER_NAMES } from '../core/shader.mjs';
 import { shaderIdentity, shaderTypeFields, shaderParameterTrack, shaderParameters, parseShaderValue, alignShaderTrack } from '../core/shader-events.mjs';
 import { selectedEvents, transformEvents, deleteEvents } from '../application/event-commands.mjs';
+import { createCustomEasingControls } from './custom-easing-controls.mjs';
+import { previewSelectedCurve, previewCurveEvent } from '../application/animation-curve-preview.mjs';
+import { withStandardEasing, rebaseCustomEventValues } from '../core/event-easing.mjs';
 import { EASING_NAMES, createEasingPicker } from './easing-picker.mjs';
 import { numericWheel } from './numeric-wheel.mjs';
 import { assetUrl } from '../core/asset-url.mjs';
@@ -101,7 +104,8 @@ export function renderShaderInspector(container, session, reportError, refresh) 
     if (!current) return;
     const track = shaderParameterTrack(current, definition.name, definition.value);
     const updateTrack = (label, transform) => change(label, current => {
-      const next = transform(structuredClone(shaderParameterTrack(current, definition.name, definition.value)));
+      const before = shaderParameterTrack(current, definition.name, definition.value);
+      const next = transform(structuredClone(before)).map((e, i) => before[i] ? rebaseCustomEventValues(before[i], e) : e);
       for (const segment of next) {
         if (beatValue(segment.endTime) < beatValue(segment.startTime)) throw new Error(t('shader-inspector.sccd5f6c'));
       }
@@ -123,9 +127,10 @@ export function renderShaderInspector(container, session, reportError, refresh) 
       }
       const easing = document.createElement('select');
       EASING_NAMES.forEach((name, index) => { const option = document.createElement('option'); option.value = index + 1; option.textContent = `${index + 1} · ${name}`; easing.append(option); });
-      const setEasing = value => updateTrack(t('shader-inspector.sc646243'), segments => segments.map((entry, position) => position === index ? { ...entry, easingType: value, bezier: 0 } : entry));
-      easing.value = segment.easingType ?? 1; easing.onchange = () => safely(() => setEasing(Number(easing.value))); field(card, t('shader-inspector.sc68a591'), easing);
-      card.append(createEasingPicker(segment.easingType ?? 1, value => safely(() => setEasing(value)), state.gallery).element);
+      const setEasing = value => updateTrack(t('shader-inspector.sc646243'), segments => segments.map((entry, position) => position === index ? withStandardEasing(entry, value) : entry));
+      easing.value = segment.easingType ?? 1; easing.onchange = () => safely(() => setEasing(Number(easing.value))); field(card, t('shader-inspector.sc68a591'), easing); easing.closest('label').hidden = Boolean(segment.customEasing);
+      card.append(createEasingPicker(segment.customEasing ? 0 : segment.easingType ?? 1, value => safely(() => setEasing(value)), state.gallery).element);
+      card.append(createCustomEasingControls(segment, transform => updateTrack(t('animation-curve.edit'), segments => segments.map((entry, position) => position === index ? transform(entry) : entry)), { report: reportError, previewChart: curve => previewSelectedCurve(session, selectedEvents(session).filter(e => e.type === 'paintEvents'), curve, current => ({ ...current, vars: { ...current.vars, [definition.name]: shaderParameterTrack(current, definition.name, definition.value).map((entry, position) => position === index ? previewCurveEvent(entry, curve) : entry) } })), signature: () => JSON.stringify([session.lineIndex, session.eventLayer, [...session.eventSelection], state.parameter]), timing: { BPMList: session.chart.BPMList, factor: session.line.bpmfactor ?? 1 }, read: () => { const current = selectedEvents(session).find(e => e.type === 'paintEvents')?.event; return current ? shaderParameterTrack(current, definition.name, definition.value)[index] : null; } }));
       const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'wide-button'; remove.textContent = t('shader-inspector.sb575fe9'); remove.disabled = track.length <= 1;
       remove.onclick = () => safely(() => updateTrack(t('shader-inspector.s05f57a9'), segments => segments.filter((entry, position) => position !== index))); card.append(remove);
     });

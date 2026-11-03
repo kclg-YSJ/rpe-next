@@ -1,0 +1,61 @@
+{
+  "basicPitch": {
+    "package": "@spotify/basic-pitch",
+    "version": "1.0.1",
+    "license": "Apache-2.0",
+    "source": "https://github.com/spotify/basic-pitch-ts",
+    "npm": "https://registry.npmjs.org/@spotify/basic-pitch/-/basic-pitch-1.0.1.tgz"
+  },
+  "tensorflow": {
+    "version": "4.22.0",
+    "license": "Apache-2.0",
+    "packages": [
+      "@tensorflow/tfjs",
+      "@tensorflow/tfjs-backend-wasm"
+    ],
+    "source": "https://github.com/tensorflow/tfjs/tree/tfjs-v4.22.0"
+  },
+  "build": "esbuild 0.25.12; browser ESM; unmodified upstream input, bundled and minified; no application or machine paths embedded",
+  "files": {
+    "inference.upstream.js": {
+      "bytes": 5013,
+      "sha256": "d0bceb71ee6d35aa50575dea0b09bf9ef324353f1dc862ddc30450bdcfa65d6a"
+    },
+    "LICENSE-Apache-2.0.txt": {
+      "bytes": 11357,
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+    },
+    "LICENSE-basic-pitch.txt": {
+      "bytes": 11357,
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+    },
+    "README.md": {
+      "bytes": 1849,
+      "sha256": "24fa95c14061a4852017b4254e28bbb4c0e6775f3e5ceb3ef2256a72fe1fa021"
+    },
+    "runtime.mjs": {
+      "bytes": 1254944,
+      "sha256": "42b357d7d0bd60c354d844cb06a11a60ea3da269d69c9d18fc0a1a6b962d0027"
+    },
+    "runtime.mjs.LEGAL.txt": {
+      "bytes": 90937,
+      "sha256": "592b17d0f26cc76409aa6d3aa155bbd4f085df008b9e709c8e147eec917243f1"
+    },
+    "tfjs-backend-wasm-simd.wasm": {
+      "bytes": 424594,
+      "sha256": "77ebb28a6d34f371dbbf2086b7f2de8994acd8ea5a3cf1fa24d2c26c840cac7b"
+    },
+    "tfjs-backend-wasm.wasm": {
+      "bytes": 311123,
+      "sha256": "70a5d516060464e5269f01c74bac1772d6b8ab6cb612acf16b5cdaf61f78d892"
+    },
+    "model/group1-shard1of1.bin": {
+      "bytes": 742392,
+      "sha256": "b142a95737a52e1e412d5f92e73d8bb80dfe8d04941acc0702f11f4524fb377c"
+    },
+    "model/model.json": {
+      "bytes": 174537,
+      "sha256": "1ed1aaee3409ec1dc098c8b01f430c0911f6fe9412e7af8086750f9e8f302f68"
+    }
+  }
+}

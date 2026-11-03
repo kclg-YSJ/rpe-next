@@ -3,10 +3,12 @@ import { alignShaderParameters } from '../core/shader-events.mjs';
 import { chartWithEventLists, eventKey, eventList, eventListAt } from './event-commands.mjs';
 import { captureSelection, commitSelectionEdit, shiftedTime } from './batch-edit.mjs';
 import { t } from '../i18n.mjs';
+import { expandXyEntries } from './xy-binding.mjs';
 
-export function copyObjects(session) {
+export function copyObjects(session, { xy = false } = {}) {
   if (session.largeDocument?.logicalSelection && session.focus === 'notes') return session.largeDocument.copySelected();
   const snapshot = captureSelection(session);
+  if (xy && session.xyBinding === true) snapshot.events = expandXyEntries(session.chart, session.eventLayer, snapshot.events);
   const count = snapshot.notes.reduce((sum,entry)=>sum+(session.largeDocument?session.largeDocument.quantity(entry.note):1),0) + snapshot.events.length;
   if (!count) return 0;
   session.clipboard = structuredClone(snapshot.notes.map(entry => session.largeDocument ? session.largeDocument.copyNote(entry.note) : entry.note));
@@ -19,7 +21,7 @@ export function copyObjects(session) {
 
 export function cutObjects(session) {
   if (session.largeDocument?.logicalSelection && session.focus === 'notes') return session.largeDocument.copySelected().then(count => { if (count) { session.largeDocument.transformSelected(t('clipboard.s67ac29d'), null, { remove: true }); return session.largeDocument.flush().then(() => count); } return 0; });
-  const count = copyObjects(session);
+  const count = copyObjects(session, { xy: true });
   if (!count) return 0;
   deleteObjects(session, t('clipboard.s67ac29d'));
   return count;
@@ -28,13 +30,13 @@ export function cutObjects(session) {
 export function deleteObjects(session, label = t('clipboard.s324b30a')) {
   if (session.largeDocument?.logicalSelection && session.focus === 'notes') return session.largeDocument.transformSelected(label, null, { remove: true });
   const snapshot = captureSelection(session);
+  if (session.xyBinding === true && snapshot.events.length) snapshot.events = expandXyEntries(session.chart, session.eventLayer, snapshot.events);
   const count = snapshot.notes.length + snapshot.events.length;
   if (!count) return 0;
   const updatesByLine = new Map();
   for (const entry of snapshot.events) {
     const lineIndex = Number.isInteger(entry.lineIndex) ? entry.lineIndex : session.lineIndex;
-    const key = `${lineIndex}:${entry.type}`;
-    if (updatesByLine.has(key)) continue;
+    if (updatesByLine.get(lineIndex)?.has(entry.type)) continue;
     const selected = new Set(snapshot.events.filter(item => (item.lineIndex ?? session.lineIndex) === lineIndex && item.type === entry.type).map(item => item.index));
     const original = eventListAt(session, lineIndex, entry.type);
     if (!original) continue;

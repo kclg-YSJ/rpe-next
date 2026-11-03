@@ -4,6 +4,9 @@ import { selectedEvents, transformEvents, deleteEvents, eventList, eventListAt, 
 import { captureSelection, editCapturedSelection, commitSelectionEdit } from '../application/batch-edit.mjs';
 import { t } from '../i18n.mjs';
 
+import { createCustomEasingControls } from './custom-easing-controls.mjs';
+import { previewSelectedCurve } from '../application/animation-curve-preview.mjs';
+import { withStandardEasing, eventEasing, withCustomEasing } from '../core/event-easing.mjs';
 import { EASING_NAMES, createEasingPicker } from './easing-picker.mjs';
 import { numericWheel } from './numeric-wheel.mjs';
 import { attachDraggableValue } from './draggable-value.mjs';
@@ -209,26 +212,27 @@ export function renderEventInspector(session, tempo, currentBeat, reportError, n
   const select = document.createElement('select'); select.setAttribute('aria-label', t('event-inspector.sa310d73'));
   EASING_NAMES.forEach((name, index) => { const option = document.createElement('option'); option.value = index + 1; option.textContent = `${index + 1} · ${name}`; select.append(option); });
   select.value = event.easingType ?? 1;
-  select.onchange = () => safely(() => applyEventTransform(session, t('event-inspector.s4f19fa7'), current => ({ ...current, easingType: Number(select.value), bezier: 0 })));
-  label.append(select); container.append(label);
-  container.append(createEasingPicker(event.easingType ?? 1, value => safely(() => applyEventTransform(session, t('event-inspector.s4f19fa7'), current => ({ ...current, easingType: value, bezier: 0 }))), galleryState).element);
+  select.onchange = () => safely(() => applyEventTransform(session, t('event-inspector.s4f19fa7'), current => withStandardEasing(current, Number(select.value))));
+  label.append(select); label.hidden = Boolean(event.customEasing); container.append(label);
+  container.append(createEasingPicker(event.customEasing ? 0 : event.easingType ?? 1, value => safely(() => applyEventTransform(session, t('event-inspector.s4f19fa7'), current => withStandardEasing(current, value))), galleryState).element);
+  container.append(createCustomEasingControls(event, change => safely(() => applyEventTransform(session, t('animation-curve.edit'), change)), { report: reportError, previewChart: curve => previewSelectedCurve(session, inspectorEntries(session), curve), capture: () => inspectorEntries(session).map(e => e.event), signature: () => JSON.stringify([session.lineIndex, session.eventLayer, inspectorEntries(session).map(e => [e.lineIndex ?? session.lineIndex,e.type,e.index,e.event])]), timing: { BPMList: session.chart.BPMList, factor: session.chart.judgeLineList[entries[0].lineIndex ?? session.lineIndex]?.bpmfactor ?? 1 }, preview: entries.length === 1 && sampler ? curve => { const e = entries[0]; const original = inspectorEntries(session)[0]?.event; if (!original) return; sampler.updateValueDraft({ type: e.type, index: e.index, lineIndex: e.lineIndex ?? session.lineIndex, field: 'customEasing' }, original.customEasing ? { ...original.customEasing, curve } : withCustomEasing(original, curve).customEasing); } : undefined, cancelPreview: () => { if (sampler?.valueDraft) sampler.finishValue(false); }, read: entries.length === 1 ? () => { const current = inspectorEntries(session); return current.length === 1 && current[0].type === eventType && current[0].index === entries[0].index && (current[0].lineIndex ?? session.lineIndex) === (entries[0].lineIndex ?? session.lineIndex) ? current[0].event : null; } : undefined }));
   const curve = document.createElement('canvas'); curve.width = 260; curve.height = 100; curve.className = 'easing-preview'; curve.setAttribute('aria-label', t('event-inspector.sa33a2cb'));
   const context = editorSkinContext(curve.getContext('2d'), 'easing'); context.strokeStyle = '#ffd76a'; context.lineWidth = 2; context.beginPath();
   for (let index = 0; index <= 100; index++) {
     const progress = index / 100;
-    const value = event.bezier ? bezier(progress, event.bezierPoints) : easing(progress, event.easingType, event.easingLeft ?? 0, event.easingRight ?? 1);
+    const value = eventEasing(event, progress);
     const horizontal = 10 + progress * 240; const vertical = 80 - value * 60;
     if (index === 0) context.moveTo(horizontal, vertical); else context.lineTo(horizontal, vertical);
   } context.stroke(); container.append(curve);
   context.save(); context.strokeStyle = '#8da4c7'; context.setLineDash([3, 3]);
   for (const boundary of [event.easingLeft ?? 0, event.easingRight ?? 1]) { const x = 10 + Math.max(0, Math.min(1, boundary)) * 240; context.beginPath(); context.moveTo(x, 10); context.lineTo(x, 88); context.stroke(); }
   context.restore();
-  container.append(...boundaryFields);
+  if (!event.customEasing) container.append(...boundaryFields);
   const bezierLabel = document.createElement('label'); bezierLabel.className = 'field'; bezierLabel.append('Bezier');
   const enabled = document.createElement('input'); enabled.type = 'checkbox'; enabled.checked = Boolean(event.bezier); enabled.setAttribute('aria-label', t('event-inspector.sde81b79'));
   enabled.onchange = () => safely(() => applyEventTransform(session, t('event-inspector.s4b025f7'), current => ({ ...current, bezier: Number(enabled.checked), bezierPoints: Array.isArray(current.bezierPoints) && current.bezierPoints.length === 4 && current.bezierPoints.slice(2).some(Number) ? current.bezierPoints : [0, 0, 1, 1] })));
-  bezierLabel.append(enabled); container.append(bezierLabel);
-  if (event.bezier) {
+  bezierLabel.append(enabled); if (!event.customEasing) container.append(bezierLabel);
+  if (event.bezier && !event.customEasing) {
     const bezierPoints = Array.isArray(event.bezierPoints) && event.bezierPoints.length === 4 && event.bezierPoints.slice(2).some(Number) ? event.bezierPoints : [0, 0, 1, 1];
     const points = document.createElement('input'); points.setAttribute('aria-label', t('event-inspector.sb1f6d6a')); points.value = bezierPoints.join(', '); points.className = 'wide-field';
     points.onchange = () => safely(() => applyEventTransform(session, t('event-inspector.sa5b4516'), current => ({ ...current, bezierPoints: points.value.split(',').map(Number) })));

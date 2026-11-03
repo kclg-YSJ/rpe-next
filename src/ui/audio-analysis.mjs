@@ -2,6 +2,7 @@ import { editorSkinContext, editorCanvasRevision, editorCanvasOpacity } from './
 import { AudioSourcesPanel } from './audio-sources.mjs';
 import { WaveformEnvelope } from '../core/waveform.mjs';
 import { t } from '../i18n.mjs';
+import { AudioPitchView } from './audio-pitch.mjs';
 
 const clamp = (value, minimum = 0, maximum = 1) => Math.max(minimum, Math.min(maximum, value));
 
@@ -138,7 +139,7 @@ export class AudioAnalysis {
     const enabled = document.createElement('label'); enabled.className = 'field'; enabled.append(t('audio-analysis.s1ca3ef1'));
     const enabledInput = document.createElement('input'); enabledInput.type = 'checkbox'; enabledInput.checked = this.enabled;
     this.enabledInput = enabledInput;
-    enabledInput.oninput = () => { this.enabled = enabledInput.checked; this.onChange(); this.draw(this.lastOffsetSeconds ?? 0); }; enabled.append(enabledInput); host.append(enabled);
+    enabledInput.oninput = () => { this.enabled = enabledInput.checked; this.pitchView?.syncState(); this.onChange(); this.draw(this.lastOffsetSeconds ?? 0); }; enabled.append(enabledInput); host.append(enabled);
     const alpha = document.createElement('label'); alpha.className = 'field'; alpha.append(t('audio-analysis.s61b101b'));
     const alphaInput = document.createElement('input'); alphaInput.type = 'range'; alphaInput.min = '0.02'; alphaInput.max = '1'; alphaInput.step = '0.01'; alphaInput.value = this.alpha;
     alphaInput.oninput = () => { this.alpha = Number(alphaInput.value); this.onChange(); this.draw(this.lastOffsetSeconds ?? 0); }; alpha.append(alphaInput); host.append(alpha);
@@ -151,6 +152,8 @@ export class AudioAnalysis {
       button.onclick = () => { this.mode = value; this.enabled = true; this.render(host); this.onChange(); this.draw(this.lastOffsetSeconds ?? 0); }; mode.append(button);
     }
     host.append(mode);
+    this.pitchView ??= new AudioPitchView(this, () => this.requestFrame?.());
+    const pitchHost = document.createElement('div'); pitchHost.className = 'audio-pitch-panel'; this.pitchView.render(pitchHost); host.append(pitchHost);
     if (!this.data) { const empty = document.createElement('p'); empty.className = 'hint'; empty.textContent = t('audio-analysis.s9463632'); host.append(empty); }
     if (this.sourcePanel?.onsetPanel) host.append(this.sourcePanel.onsetPanel.host);
   }
@@ -174,18 +177,23 @@ export class AudioAnalysis {
     const cropStyle = [cropLeft, pixelWidth, ratio, editorCanvasRevision()];
     if (!this.cropStyle || cropStyle.some((value, index) => value !== this.cropStyle[index])) { canvas.style.left = cropLeft / ratio + 'px'; canvas.style.right = 'auto'; canvas.style.width = pixelWidth / ratio + 'px'; this.cropStyle = cropStyle; }
     const timelineHeight = Math.min(height, notesRect.height), viewHeight = timeline.viewHeight(), factor = timeline.factor, preview = this.onsets?.preview;
-    const frame = [width, height, left, right, ratio, canvas.width, canvas.height, timelineHeight, viewHeight, timeline.origin, timeline.tempo, timeline.scale, timeline.judgementOffset, factor, offsetSeconds, this.mode, this.width, this.alpha, this.layers, this.data, this.getAudio()?.buffer, editorCanvasRevision(), preview];
+    const pitchId = this.pitchView?.active && this.pitchView.position === 'inline' ? this.pitchView.id : null;
+    const laneCount = this.layers.length + (pitchId && !this.layers.some(layer => layer.id === pitchId) ? 1 : 0);
+    const frame = [width, height, left, right, ratio, canvas.width, canvas.height, timelineHeight, viewHeight, timeline.origin, timeline.tempo, timeline.scale, timeline.judgementOffset, factor, offsetSeconds, this.mode, this.width, this.alpha, this.layers, this.data, this.getAudio()?.buffer, editorCanvasRevision(), preview, pitchId];
     if (this.lastFrame?.length === frame.length && frame.every((value, index) => value === this.lastFrame[index])) return;
     if (canvas.width !== pixelWidth || canvas.height !== Math.round(height * ratio)) { canvas.width = pixelWidth; canvas.height = Math.round(height * ratio); frame[5] = canvas.width; frame[6] = canvas.height; }
     this.lastFrame = frame;
-    const nativeContext = canvas.getContext('2d'), context = editorSkinContext(nativeContext); context.setTransform(ratio, 0, 0, ratio, -cropLeft, 0); context.clearRect(0, 0, width, height);
+    const nativeContext = canvas.getContext('2d'), context = editorSkinContext(nativeContext);
+    nativeContext.setTransform(1, 0, 0, 1, 0, 0); nativeContext.clearRect(0, 0, canvas.width, canvas.height);
+    context.setTransform(ratio, 0, 0, ratio, -cropLeft, 0);
     const originSeconds = timeline.tempo.seconds(timeline.origin, factor), judgementY = viewHeight - timeline.judgementOffset, scale = timeline.scale;
     const rowCount = Math.ceil(timelineHeight);
     if (!this.rowSeconds || this.rowSeconds.length < rowCount) this.rowSeconds = new Float64Array(rowCount);
     if (this.mode === 'waveform') for (let row = 0; row < rowCount; row++) this.rowSeconds[row] = originSeconds + (judgementY - row) / scale + offsetSeconds;
     context.save(); context.lineWidth = 1;
     for (const [layerIndex, layer] of this.layers.entries()) {
-      const source = layer.data, laneWidth = half * 2 / this.layers.length, laneCenter = center - half + laneWidth * (layerIndex + .5), laneHalf = laneWidth / 2; context.globalAlpha = clamp(this.alpha); context.strokeStyle = layer.color; context.fillStyle = layer.color;
+      if (layer.id === pitchId) continue;
+      const source = layer.data, laneWidth = half * 2 / laneCount, laneCenter = center - half + laneWidth * (layerIndex + .5), laneHalf = laneWidth / 2; context.globalAlpha = clamp(this.alpha); context.strokeStyle = layer.color; context.fillStyle = layer.color;
       const duration = Math.min(source.duration, this.getAudio()?.buffer?.duration ?? source.duration);
       if (this.mode === 'spectrum') {
         const start = Math.max(0, originSeconds + (judgementY - timelineHeight) / scale + offsetSeconds), end = Math.min(duration, originSeconds + judgementY / scale + offsetSeconds);

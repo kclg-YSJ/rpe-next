@@ -1,3 +1,4 @@
+import { assertEventEasing } from './event-easing.mjs';
 import { beatValue, fromNumber, upperBound } from './beat.mjs';
 import { EventTrack } from './events.mjs';
 import { NOISE_LAYER_VERSION } from './noise-skin.mjs';
@@ -164,6 +165,7 @@ function validateTrack(events, path, type) {
       if (event.transformStep !== undefined && (typeof event.transformStep !== 'boolean' || !noiseHasAnchor(type) || event.transformStep && start !== end)) throw new Error(eventPath + t('noise-areas.s65ab131'));
       for (const flag of ['inst', 'bezier']) if (event[flag] !== undefined && ![0, 1, false, true].includes(event[flag])) throw new Error(eventPath + '.' + flag + t('noise-areas.s7cf6903'));
       if (event.inst && event.start !== event.end) throw new Error(eventPath + t('noise-areas.s51d2bdc'));
+      assertEventEasing(event);
       if (!Number.isInteger(event.easingType ?? 1) || (event.easingType ?? 1) < 1 || (event.easingType ?? 1) > 29) throw new Error(eventPath + t('noise-areas.s123949d'));
       const left = event.easingLeft ?? 0; const right = event.easingRight ?? 1;
       if (!Number.isFinite(left) || !Number.isFinite(right) || left < 0 || right > 1 || left >= right) throw new Error(eventPath + t('noise-areas.s030f9c3'));

@@ -3,6 +3,7 @@ import { beatValue } from '../core/beat.mjs';
 import { snapTime } from '../core/edit-grid.mjs';
 import { usesNativeTextShortcut } from './keyboard.mjs';
 import { t } from '../i18n.mjs';
+import { expandXyEntries, retainXySelection } from '../application/xy-binding.mjs';
 
 const configurations = {
   notes: [['note-move', t('batch-controls.s630b77a'), '#ff0088'], ['note-scale', t('batch-controls.sf072b96'), '#00aabb'], ['note-line', t('batch-controls.s27b1657'), '#b400ff']],
@@ -110,6 +111,11 @@ export class BatchControls {
     const multiIntent = session.multiSelectionIntent === area;
     if (selectedEntries.length < (multiMode ? (multiIntent ? 1 : Number.POSITIVE_INFINITY) : (multiIntent ? 1 : 2))) return;
     if (area === 'notes') snapshot.events = []; else snapshot.notes = [];
+    let xySelected;
+    if (area === 'events' && session.xyBinding === true) {
+      xySelected = snapshot.events;
+      snapshot.events = expandXyEntries(snapshot.chart, snapshot.eventLayer, snapshot.events);
+    }
     this.timeline.cancelPlacement();
     for (const animation of button.getAnimations()) animation.cancel();
     button.style.transform = '';
@@ -119,7 +125,7 @@ export class BatchControls {
     const firstEntry = (area === 'notes' ? snapshot.notes : snapshot.events)[0];
     const activeLineIndex = Number.isInteger(firstEntry?.lineIndex) ? firstEntry.lineIndex : session.lineIndex;
     const point = this.clampPoint(rawPoint, bounds, canvas);
-    this.active = { session, snapshot, kind, button, area, lineIndex: activeLineIndex, bounds, signature: this.signature(area, session), pointerId: event.pointerId, start: point, point, canvas,
+    this.active = { session, snapshot, xySelected, kind, button, area, lineIndex: activeLineIndex, bounds, signature: this.signature(area, session), pointerId: event.pointerId, start: point, point, canvas,
       unit: Math.max(0.35, canvas.clientHeight / 1080), factor: session.chart.judgeLineList?.[activeLineIndex]?.bpmfactor ?? 1,
       side: this.timeline.noteView?.sideAt?.(point.y),
       startBeat: this.timeline.tempo.beat(this.timeline.noteView?.flow ? this.timeline.timeAt(point.y) : this.timeline.tempo.seconds(this.timeline.origin, session.chart.judgeLineList?.[activeLineIndex]?.bpmfactor ?? 1) + ((this.timeline.baseline?.(canvas.clientHeight) ?? canvas.clientHeight - (this.timeline.judgementOffset ?? 42)) - point.y) / this.timeline.scale, session.chart.judgeLineList?.[activeLineIndex]?.bpmfactor ?? 1), startX: typeof this.timeline.notePositionAt === 'function' ? this.timeline.notePositionAt(point.x, activeLineIndex) : point.x };
@@ -161,6 +167,7 @@ export class BatchControls {
     const contentWidth = Math.max(1, panelWidth - inset * 2);
     const logicalDeltaX = active.area === 'notes' ? deltaX / (this.timeline.horizontalScale?.() ?? contentWidth / 1350) : 0;
     const result = controlSelection(snapshot, kind, { deltaBeat, deltaBeatByLine, deltaX: logicalDeltaX, dragX: deltaX / active.unit, anchorMode: this.anchorMode, snapX: this.timeline.snapX, gridCount: this.timeline.gridCount });
+    if (active.xySelected) retainXySelection(result, active.xySelected);
     active.result = result;
     const view = Object.create(active.session);
     Object.defineProperty(view, 'chart', { value: result.chart });

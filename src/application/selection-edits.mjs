@@ -1,8 +1,10 @@
+import { rebaseCustomEventValues } from '../core/event-easing.mjs';
 import { chartWithEventLists, eventKey, eventListAt } from './event-commands.mjs';
 
 // Source line + track + index identify an object. Destination line is separate:
 // build all removals/replacements from the original lists before appending moves.
 export function assembleSelectionEdits(snapshot, changes, { lineIndex = snapshot.lineIndex, removeSource = false } = {}) {
+  changes = changes.map(change => change.kind === 'events' && change.before && change.after ? { ...change, after: rebaseCustomEventValues(change.before, change.after) } : change);
   const tracks = new Map();
   const keyFor = (kind, line, type) => `${kind}:${line}:${type ?? ''}`;
   const trackFor = (kind, line, type) => {

@@ -68,6 +68,56 @@ test('分离不替换音乐，懒加载共享解码，取消与换音乐不写�
   await assert.rejects(sources.separate({}, controller.signal), { name: 'AbortError' }); assert.equal(sources.busy, false);
 });
 
+function separationResult(model, generation = 1) {
+  const names = ['vocals', 'drums', 'bass', 'other', ...(model === 'htdemucs_6s' ? ['guitar', 'piano'] : [])];
+  return { cacheId: `cache-${model}-${generation}`, sources: names.map(id => ({ id, frames: 24000, sampleRate: 12000, bytes: 20 })) };
+}
+test('重新分离整组替换旧结果，四六声部往返不叠加，保留导入声部和同类试听选择', async () => {
+  const { sources, separator, transport, original } = fixture(); let generation = 0;
+  separator.separate = async (input, options) => separationResult(options.model, ++generation);
+  const imported = await sources.import(new Uint8Array(4), 'keep.wav');
+  await sources.separate({ model: 'htdemucs' }); const oldDrums = sources.entry('htdemucs/drums');
+  await sources.select(['htdemucs/drums', imported]); const beforeMix = await sources.resolveSelection();
+  await sources.separate({ model: 'htdemucs_6s' });
+  assert.equal(sources.list().filter(v => v.kind === 'separated').length, 6);
+  assert.ok(sources.list().every(v => v.kind !== 'separated' || v.model === 'htdemucs_6s'));
+  assert.deepEqual(sources.selectedIds, ['htdemucs_6s/drums', imported]); assert.notEqual((await sources.resolveSelection()).buffer, beforeMix.buffer);
+  assert.equal(sources.isCurrent(oldDrums), false); assert.equal(sources.entry('htdemucs_6s/drums').color, oldDrums.color);
+  for (const key of sources.mixCache.keys()) assert.ok(sources.mixCache.peek(key).members.every(v => v.kind !== 'separated' || v.model === 'htdemucs_6s'));
+  await sources.select('htdemucs_6s/piano'); await sources.separate({ model: 'htdemucs' });
+  assert.equal(sources.list().filter(v => v.kind === 'separated').length, 4); assert.deepEqual(sources.selectedIds, ['original']); assert.equal(transport.playbackBuffer, original);
+  assert.ok(sources.entries.has(imported)); assert.ok(!sources.entries.has('htdemucs_6s/piano'));
+  await sources.select(['htdemucs/vocals', imported]); const old = sources.entry('htdemucs/vocals'); await sources.separate({ model: 'htdemucs', shifts: 4 });
+  assert.equal(sources.list().filter(v => v.kind === 'separated').length, 4); assert.notEqual(sources.entry('htdemucs/vocals'), old); assert.deepEqual(sources.selectedIds, ['htdemucs/vocals', imported]);
+});
+
+test('新分离计算失败、试听准备失败或取消时，保留原结果和播放；不暴露半套新声部', async () => {
+  const { sources, separator, transport } = fixture(); separator.separate = async (input, options) => separationResult(options.model);
+  await sources.separate({ model: 'htdemucs' }); await sources.select('htdemucs/vocals');
+  const entries = sources.entries, selection = sources.selectedIds, playback = transport.playbackBuffer;
+  const same = () => { assert.equal(sources.entries, entries); assert.deepEqual(sources.selectedIds, selection); assert.equal(transport.playbackBuffer, playback); assert.equal(sources.replacing, false); };
+  separator.separate = async () => { throw Error('separation failure'); }; await assert.rejects(sources.separate({ model: 'htdemucs_6s' }), /separation failure/); same();
+  separator.separate = async (input, options) => separationResult(options.model);
+  const apply = transport.setPlaybackBuffer; transport.setPlaybackBuffer = async () => { throw Error('prepare failure'); };
+  await assert.rejects(sources.separate({ model: 'htdemucs_6s' }), /prepare failure/); same(); transport.setPlaybackBuffer = apply;
+  let release; separator.bytes = async () => new Promise(resolve => { release = resolve; });
+  const controller = new AbortController(), pending = sources.separate({ model: 'htdemucs_6s' }, controller.signal);
+  while (!release) await new Promise(resolve => setImmediate(resolve));
+  assert.equal(sources.entries, entries); assert.equal(sources.replacing, true);
+  await assert.rejects(sources.select('original'), /声部分离/); controller.abort(); release(new Uint8Array(20)); await assert.rejects(pending, { name: 'AbortError' }); same();
+});
+
+test('重新分离不会因同名旧缓冲或未完成的选择请求而复用过期声部', async () => {
+  const { sources, separator } = fixture(); separator.separate = async (input, options) => separationResult(options.model);
+  await sources.separate({ model: 'htdemucs' });
+  let release; separator.bytes = async () => new Promise(resolve => { release = resolve; });
+  const selecting = sources.select('htdemucs/vocals'); selecting.catch(() => {});
+  while (!release) await new Promise(resolve => setImmediate(resolve));
+  separator.bytes = async () => new Uint8Array(20);
+  await sources.separate({ model: 'htdemucs_6s' }); release(new Uint8Array(20)); await assert.rejects(selecting, { name: 'AbortError' });
+  assert.deepEqual(sources.selectedIds, ['htdemucs_6s/vocals']); assert.ok(sources.isCurrent(await sources.resolveSelection()));
+});
+
 test('声部和多选混音采音只应用一次谱面延迟及线倍率，选区变化使审批失效', async () => {
   const { original, transport, sources } = fixture(), id = await sources.import(new Uint8Array(4), 'drums.wav');
   const session = new EditorSession(); session.chart.META.offset = 250; session.chart.judgeLineList[0].bpmfactor = 2;

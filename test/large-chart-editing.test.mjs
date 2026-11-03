@@ -15,6 +15,7 @@ import { createNote, createEvent } from '../src/core/chart.mjs';
 import { copyObjects, pasteObjects, cutObjects } from '../src/application/clipboard.mjs';
 import { duplicateLine, reorderLine, deleteLine } from '../src/application/line-commands.mjs';
 import { beatValue } from '../src/core/beat.mjs';
+import { insertEventAt, selectEvent, deleteEvents } from '../src/application/event-commands.mjs';
 
 async function fixture(run) {
   const root = await mkdtemp(join(tmpdir(), 'rpen-large-edit-')), workspace = join(root, 'work');
@@ -48,6 +49,21 @@ async function fixture(run) {
     await run({ root, document, editor, session, errors, call });
   } finally { document.close(); await rm(root, { recursive: true, force: true }); }
 }
+
+test('XY event transactions persist both axes together in large-chart storage and history', () => fixture(async ({ session, editor, document, errors }) => {
+  session.selectLine(1); session.focus = 'events'; session.xyBinding = true;
+  const before = document.revision;
+  insertEventAt(session, 1, 'moveXEvents', createEvent(10, 20, 5, 6)); await editor.flush();
+  const tracks = () => document.chart.judgeLineList[1].eventLayers[0];
+  assert.deepEqual(tracks().moveXEvents.map(event => [beatValue(event.startTime), beatValue(event.endTime)]), [[5, 6]]);
+  assert.deepEqual(tracks().moveYEvents.map(event => [beatValue(event.startTime), beatValue(event.endTime)]), [[5, 6]]);
+  assert.equal(document.revision, before + 1); assert.equal(document.total, 4);
+  session.travel('undo'); await editor.flush(); assert.equal((tracks().moveXEvents ?? []).length, 0); assert.equal((tracks().moveYEvents ?? []).length, 0);
+  session.travel('redo'); await editor.flush(); selectEvent(session, 1, 'moveYEvents', 0, { replace: true }); deleteEvents(session); await editor.flush();
+  assert.equal(tracks().moveXEvents.length, 0); assert.equal(tracks().moveYEvents.length, 0);
+  session.travel('undo'); await editor.flush(); assert.equal(tracks().moveXEvents.length, 1); assert.equal(tracks().moveYEvents.length, 1);
+  assert.equal(document.page({ lines: [1], start: 9999, end: 10001 }).notes.length, 1); assert.deepEqual(errors, []);
+}));
 
 test('ordinary placement, drag/property transforms, copy/cut/paste and history preserve unloaded notes', () => fixture(async ({ session, editor, document, errors }) => {
   assert.equal(session.notes.length, 2); assert.equal(document.total, 4);
@@ -224,8 +240,8 @@ test('unchanged logical transforms do not add history, and selection history rem
   session.travel('undo');await editor.flush();assert.equal(document.total,4);
 }));
 
-test('crash recovery includes the last committed edit from an uncheckpointed WAL', { skip: process.platform !== 'win32' }, () => fixture(async ({ document, root: fixtureRoot }) => {
-  const parent = resolve('.local-tools'); await mkdir(parent, { recursive: true });
+test('crash recovery includes the last committed edit from an uncheckpointed WAL', () => fixture(async ({ document, root: fixtureRoot }) => {
+  const parent = tmpdir(); await mkdir(parent, { recursive: true });
   const root = await mkdtemp(join(parent, 'large-wal-recovery-'));
   const service = new LargeChartPreviewService(join(root, 'config.json'));
   const originalExec = document.db.exec.bind(document.db);

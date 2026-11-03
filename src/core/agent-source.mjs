@@ -2,7 +2,7 @@ import { checkAgentSignal } from './agent-commands.mjs';
 import { t } from '../i18n.mjs';
 
 export const AGENT_SOURCE_ROOTS = Object.freeze(['src/core', 'src/application', 'src/platform', 'src/ui', 'src/locales', 'desktop', 'assets/mods', 'assets/editor-skins', 'schemas']);
-export const AGENT_SOURCE_DOCUMENTS = Object.freeze(['protocols/EDITOR-SKIN-PROTOCOL.zh-CN.md', 'protocols/MOD-PROTOCOL.zh-CN.md', 'protocols/GLOBAL-EVENTS-PROTOCOL.zh-CN.md', 'protocols/AI-AGENT-PROTOCOL.zh-CN.md', 'protocols/CHART-VERSION-CONTROL.zh-CN.md']);
+export const AGENT_SOURCE_DOCUMENTS = Object.freeze(['protocols/EDITOR-SKIN-PROTOCOL.zh-CN.md', 'protocols/MOD-PROTOCOL.zh-CN.md', 'protocols/GLOBAL-EVENTS-PROTOCOL.zh-CN.md', 'protocols/ANIMATION-CURVES-PROTOCOL.zh-CN.md', 'protocols/VIDEO-RENDER.zh-CN.md', 'protocols/AI-AGENT-PROTOCOL.zh-CN.md', 'protocols/CHART-VERSION-CONTROL.zh-CN.md']);
 export const AGENT_SOURCE_FILES = Object.freeze(['src/i18n.mjs', 'index.html', 'styles.css', 'package.json', 'README.md', 'LICENSE', 'NOTICE', ...AGENT_SOURCE_DOCUMENTS]);
 
 export function isAgentSourcePath(path) {

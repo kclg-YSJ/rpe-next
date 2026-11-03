@@ -1,3 +1,4 @@
+import { chartHasAnimationCurves } from './chart-animation-curves.mjs';
 import { diagnostic } from './chart-diagnostics.mjs';
 import { canonicalShaderName } from './shader.mjs';
 
@@ -63,6 +64,7 @@ export function compatibilityDiagnostics(chart, target = 'next') {
   const issues = [], where = { target, path: 'compatibility' };
   if (chart.blockAreaList?.length) issues.push(diagnostic('compatNoise', 'error', where, { target }));
   if (Object.values(chart.globalEvents?.types ?? {}).some(type => Object.values(type.columns ?? {}).some(column => column.events?.length))) issues.push(diagnostic('compatGlobal', 'error', where, { target }));
+  if (chartHasAnimationCurves(chart)) issues.push(diagnostic('compatCustomCurve', 'info', where, { target }));
   if (chart.judgeLineList?.some(line => line.eventLayers?.some(layer => layer?.moveXEvents?.some(event => event.trajectory)))) issues.push(diagnostic('compatTrajectory', 'info', where, { target }));
   if (target === 'phira') for (const [line, value] of (chart.judgeLineList ?? []).entries()) for (const [layer, tracks] of [...(value.eventLayers ?? []), value.extended].entries()) for (const [type, events] of Object.entries(tracks ?? {})) {
     for (const [index, event] of (Array.isArray(events) ? events : []).entries()) if (event.bezier && event.bezierPoints && (event.bezierPoints[0] < 0 || event.bezierPoints[0] > 1 || event.bezierPoints[2] < 0 || event.bezierPoints[2] > 1 || event.bezierPoints[0] > .95 && event.bezierPoints[2] < .05 || event.bezierPoints[0] < .05 && event.bezierPoints[2] < .05 || event.bezierPoints[0] > .95 && event.bezierPoints[2] > .95)) issues.push(diagnostic('compatBezier', 'warning', { ...where, line, layer, extended: layer === (value.eventLayers?.length ?? 0), index, path: `${type}[${index}]` }));

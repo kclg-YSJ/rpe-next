@@ -38,13 +38,21 @@ export class Preview {
     this.invalidateOverflow = () => { this.overflowRevision++; this.invalidate?.(); };
     this.lineTextLayouts = new Map();
     this.guideTextCache = new Map();
-    if (typeof document !== 'undefined') document.fonts?.addEventListener('loadingdone', () => { this.lineTextLayouts.clear(); this.guideTextCache.clear(); this.invalidateOverflow(); });
+    this.fontsChanged = () => { this.lineTextLayouts.clear(); this.guideTextCache.clear(); this.invalidateOverflow(); };
+    if (typeof document !== 'undefined') document.fonts?.addEventListener('loadingdone', this.fontsChanged);
     if (typeof document === 'undefined') { this.overlayCanvas = null; this.shaderCanvas = null; return; }
     this.overlayCanvas = document.createElement('canvas'); this.shaderCanvas = document.createElement('canvas');
     for (const [layer, canvasLayer] of [['shader', this.shaderCanvas], ['overlay', this.overlayCanvas]]) {
       canvasLayer.className = `preview-${layer}-layer`; canvasLayer.setAttribute('aria-hidden', 'true'); canvasLayer.style.position = 'absolute'; canvasLayer.style.inset = '0'; canvasLayer.style.width = '100%'; canvasLayer.style.height = '100%'; canvasLayer.style.pointerEvents = 'none'; canvasLayer.style.visibility = 'hidden'; canvasLayer.style.zIndex = layer === 'shader' ? '1' : '2';
       canvas.parentElement?.insertBefore(canvasLayer, canvas.nextSibling);
     }
+  }
+
+  dispose() {
+    if (typeof document !== 'undefined') document.fonts?.removeEventListener('loadingdone', this.fontsChanged);
+    for (const value of [this.noteBatch, this.hitBatch, this.shaderPipeline, this.overflowShaderPipeline, this.noisePreview?.gpu, this.overflowNoisePreview?.gpu]) value?.dispose?.();
+    for (const canvas of [this.shaderCanvas, this.overlayCanvas, this.overflowLayer, this.overflowSourceCanvas, this.overflowShaderCanvas]) { canvas?.remove?.(); if (canvas?.getContext) canvas.width = canvas.height = 1; }
+    this.scene = null; this.chart = null; this.images = null; this.skin = null; this.preparedChart = null; this.drawUi = null; this.drawRenderHits = null;
   }
 
   draw(chart, tempo, seconds, selectedLine) {
@@ -117,6 +125,7 @@ export class Preview {
       context.clearRect(viewport.left, viewport.top, viewport.width, viewport.height);
       context.drawImage(this.shaderCanvas, 0, 0, width, height);
     }
+    this.drawRenderHits?.(context, chart, tempo, seconds, selectedLine, { width, height, viewport, scale, divisor, states, positionScale });
     if (this.showGameUI) this.drawUi(context, chart, tempo, seconds, selectedLine, { width, height, viewport, scale, divisor, states });
     this.drawGuides(context, scale, selectedLine);
     if (captureComplete) context.restore();
@@ -441,9 +450,9 @@ export class Preview {
     if (this.showHitEffects) this.drawHits(context, seconds, order, originX, originY, scale, positionScale, renderViewport, width, height);
   }
 
-  drawHits(context, seconds, order, originX, originY, scale, positionScale, renderViewport, width, height, allowBatch = true) {
+  drawHits(context, seconds, order, originX, originY, scale, positionScale, renderViewport, width, height, allowBatch = true, style = null) {
     const buckets = order.map(index => {
-      const runtime = this.noteDraft.runtime(this.scene, index), lifetime = this.skin?.hitLifetime ?? Math.max(HIT_DURATION, 2 / 3);
+      const runtime = this.noteDraft.runtime(this.scene, index), lifetime = style?.lifetime ?? this.skin?.hitLifetime ?? Math.max(HIT_DURATION, 2 / 3);
       return [index, runtime ? runtime.previewHits ? runtime.previewHits(seconds, this.effectsSince, lifetime) : recentHits(runtime, seconds, this.effectsSince, lifetime) : []];
     });
     const target = allowBatch && this.skin?.hitBatchCompatible && buckets.reduce((total, bucket) => total + bucket[1].length, 0) > 128 ? this.hitBatch.begin(context, width, height, this.skin) ?? context : context;
@@ -462,8 +471,13 @@ export class Preview {
           });
           const horizontal = originX + geometry.x * scale, vertical = originY + geometry.y * scale, angle = geometry.angle;
           const size = this.noteSize * 1.4 * scale;
-          const radius = this.skin?.hitRadius?.(size) ?? (this.skin?.drawHit ? Infinity : size * 2);
+          const radius = style ? style.radius(size) : this.skin?.hitRadius?.(size) ?? (this.skin?.drawHit ? Infinity : size * 2);
           if (horizontal + radius < renderViewport.left || horizontal - radius > renderViewport.left + renderViewport.width || vertical + radius < renderViewport.top || vertical - radius > renderViewport.top + renderViewport.height) continue;
+          if (style) {
+            style.draw(target, { age: seconds-time, x: horizontal, y: vertical, size, rotation: angle, color:entry.note.tintHitEffects, seed:index*65537+seed });
+            target.globalAlpha = 1;
+            continue;
+          }
           if (this.skin?.drawHit?.(target, { age: seconds-time, x: horizontal, y: vertical, size, rotation: angle, color:entry.note.tintHitEffects, seed:index*65537+seed })) continue;
           const frame = hitFrame(seconds - time);
           const picture = frame === null ? null : this.skin?.tinted(`img-${frame}`, entry.note.tintHitEffects ?? [255, 236, 160]);
@@ -477,10 +491,10 @@ export class Preview {
         }
       }
       this.hitGeometry.end();
-      if (target !== context && !this.hitBatch.end()) this.drawHits(context, seconds, order, originX, originY, scale, positionScale, renderViewport, width, height, false);
+      if (target !== context && !this.hitBatch.end()) this.drawHits(context, seconds, order, originX, originY, scale, positionScale, renderViewport, width, height, false, style);
     } catch (error) {
       if (target === context) throw error;
-      this.hitBatch.failed = true; this.drawHits(context, seconds, order, originX, originY, scale, positionScale, renderViewport, width, height, false);
+      this.hitBatch.failed = true; this.drawHits(context, seconds, order, originX, originY, scale, positionScale, renderViewport, width, height, false, style);
     }
   }
 

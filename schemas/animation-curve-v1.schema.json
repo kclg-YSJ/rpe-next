@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Re:PhiEdit Next custom event easing v1",
+  "type": "object",
+  "required": [
+    "curve"
+  ],
+  "additionalProperties": true,
+  "properties": {
+    "curve": {
+      "$ref": "#/$defs/curve"
+    },
+    "domain": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1
+      }
+    },
+    "sourceStart": {
+      "$ref": "#/$defs/value"
+    },
+    "sourceEnd": {
+      "$ref": "#/$defs/value"
+    }
+  },
+  "dependentRequired": {
+    "sourceStart": [
+      "sourceEnd"
+    ],
+    "sourceEnd": [
+      "sourceStart"
+    ]
+  },
+  "$defs": {
+    "value": {
+      "oneOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        }
+      ]
+    },
+    "handle": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        {
+          "type": "number",
+          "minimum": -10000,
+          "maximum": 10000
+        }
+      ]
+    },
+    "curve": {
+      "type": "object",
+      "required": [
+        "version",
+        "nodes"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "nodes": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 256,
+          "items": {
+            "$ref": "#/$defs/node"
+          }
+        }
+      }
+    },
+    "node": {
+      "type": "object",
+      "required": [
+        "x",
+        "y"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "x": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "y": {
+          "type": "number",
+          "minimum": -10000,
+          "maximum": 10000
+        },
+        "mode": {
+          "enum": [
+            "auto",
+            "smooth",
+            "corner",
+            "linear",
+            "hold"
+          ],
+          "default": "corner"
+        },
+        "in": {
+          "$ref": "#/$defs/handle"
+        },
+        "out": {
+          "$ref": "#/$defs/handle"
+        }
+      }
+    }
+  }
+}

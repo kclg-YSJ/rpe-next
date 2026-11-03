@@ -1,4 +1,6 @@
 const { contextBridge, ipcRenderer } = require('electron');
+contextBridge.exposeInMainWorld('rpenAudioPitchCache', { version: 1, call: (action, key, bytes) => ipcRenderer.invoke('rpen-audio-pitch-cache', { action, key, bytes }) });
+contextBridge.exposeInMainWorld('rpenRenderOutput', { version: 1, call: (action, value) => ipcRenderer.invoke('rpen-render-output', { action, value }) });
 contextBridge.exposeInMainWorld('rpenLargePreview', {
   version: 1,
   platform: process.platform,

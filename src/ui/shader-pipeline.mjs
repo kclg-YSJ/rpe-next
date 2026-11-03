@@ -121,6 +121,11 @@ function normaliseUniformValue(name, value) {
 }
 
 export class ShaderPipeline {
+  dispose() {
+    this.gl?.getExtension('WEBGL_lose_context')?.loseContext();
+    if (this.canvas) this.canvas.width = this.canvas.height = 1;
+    this.programs.clear(); this.gl = null; this.canvas = null; this.sourceTexture = this.pingTexture = this.pongTexture = this.framebuffer = this.buffer = null;
+  }
   constructor(invalidate = () => {}) { this.invalidate = invalidate; this.gl = null; this.canvas = null; this.programs = new Map(); this.sourceTexture = null; this.pingTexture = null; this.pongTexture = null; this.framebuffer = null; this.buffer = null; this.disabled = false; }
 
   ensure(canvas) {

@@ -41,6 +41,7 @@ export const DEFAULT_EDITOR_PREFERENCES = Object.freeze({
   "includeBackupCharts": false,
   "pairedMovementSampling": true,
   "rpeEventDrag": false,
+  "xyBinding": false,
   "scale": 600,
   "division": 4,
   "snapX": true,

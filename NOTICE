@@ -15,3 +15,7 @@ Required Notice: Re:PhiEdit Next is reconstructed from the original Re:PhiEdit (
 可选的学习型起音检测使用 Chris Donahue 的 ddc_onset（MIT）；模型来自 Donahue、Lipton、McAuley 的 Dance Dance Convolution（ICML 2017），通过独立 Python 环境安装，不捆绑运行库与模型。
 可选的节奏生成使用 OliBomby 的 Mapperatorinator 及其预训练模型（MIT），推理源码、依赖与模型在独立本机环境按需安装，不随程序包捆绑。
 本项目采用 PolyForm Noncommercial License 1.0.0，商业用途需另行取得授权。
+
+感谢 @柠喵酱 提供的视频渲染模块，基于原包署名 NyamonZone 的 Autoplay Studio 1.1.7 改编与维护。
+Mediabunny 1.65.0 © Vanilagy and contributors，MPL-2.0；未修改的官方浏览器模块、许可及对应源码取得说明见 assets/vendor/mediabunny/README.md 和 UPSTREAM.json。
+显著音高分析使用 Spotify Basic Pitch 1.0.1 及 TensorFlow.js/WASM 4.22.0（Apache-2.0）；本地模型、运行时、许可、版权声明和来源校验清单见 assets/vendor/basic-pitch。仅在用户开启分析时加载，不上传音频。

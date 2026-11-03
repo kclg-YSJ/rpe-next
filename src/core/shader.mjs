@@ -1,5 +1,5 @@
 import { beatValue } from './beat.mjs';
-import { easing, bezier } from './easing.mjs';
+import { eventEasing, eventEndpoints } from './event-easing.mjs';
 import { assetUrl } from './asset-url.mjs';
 
 export const SHADER_NAMES = [
@@ -66,8 +66,8 @@ function sampleValue(events, seconds, tempo, factor, fallback) {
   const startSeconds = tempo?.seconds(startBeat, factor) ?? startBeat;
   const endSeconds = tempo?.seconds(endBeat, factor) ?? endBeat;
   const progress = endSeconds <= startSeconds ? (seconds >= endSeconds ? 1 : 0) : Math.max(0, Math.min(1, (seconds - startSeconds) / (endSeconds - startSeconds)));
-  const amount = selected.bezier ? bezier(progress, selected.bezierPoints) : easing(progress, selected.easingType ?? 1, selected.easingLeft ?? 0, selected.easingRight ?? 1);
-  return interpolate(selected.start, selected.end, amount);
+  const amount = eventEasing(selected, progress);
+  return selected.customEasing ? interpolate(...eventEndpoints(selected), amount) : interpolate(selected.start, selected.end, amount);
 }
 
 function normaliseVars(vars) {
