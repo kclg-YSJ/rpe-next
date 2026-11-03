@@ -122,9 +122,13 @@ test('带锚点变换的噪域只在显示阶段适配比例，皮肤和几何�
     preview.aspectRatio = ratio; preview.draw(chart, tempo, 1, 0);
     const positionScale = previewPositionScale(ratio);
     assert.equal(material, geometry);
-    geometry.points.forEach((point, index) => { near(point.x, original.points[index].x * positionScale.x); near(point.y, original.points[index].y * positionScale.y); });
+    const edge = (points, index) => ({ x: points[index + 1].x - points[index].x, y: points[index + 1].y - points[index].y });
+    const first = edge(geometry.points, 0), second = edge(geometry.points, 1);
+    near(first.x * second.x + first.y * second.y, 0);
+    near(Math.hypot(first.x, first.y), Math.hypot(...Object.values(edge(original.points, 0))) * positionScale.x);
+    near(Math.hypot(second.x, second.y), Math.hypot(...Object.values(edge(original.points, 1))) * positionScale.y);
     near(geometry.center.x, original.center.x * positionScale.x); near(geometry.center.y, original.center.y * positionScale.y);
-    near(geometry.rotation, Math.atan2(Math.sin(original.rotation) * positionScale.y, Math.cos(original.rotation) * positionScale.x));
+    near(geometry.rotation, original.rotation);
   }
   assert.deepEqual(runtime.sample(1).points, original.points);
   assert.equal(previewNoiseGeometry(original, { x: 1, y: 1 }), original);

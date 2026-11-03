@@ -283,8 +283,26 @@ export class NoiseFitPanel {
     const positionScale = previewPositionScale(renderer.aspectRatio ?? 1.5);
     const angle = this.options.rotation * Math.PI / 180; const cosine = Math.cos(angle); const sine = Math.sin(angle);
     const center = { x: rectangle.width / 2 + this.options.x * scale * positionScale.x, y: rectangle.height / 2 - this.options.y * scale * positionScale.y };
-    const point = (x, y) => ({ x: center.x + (x * cosine - y * sine) * positionScale.x, y: center.y + (x * sine + y * cosine) * positionScale.y });
-    return { scale, positionScale, center, width, height, corners: [point(-width / 2, -height / 2), point(width / 2, -height / 2), point(width / 2, height / 2), point(-width / 2, height / 2)], resize: point(width / 2, height / 2), rotate: point(0, -height / 2 - 28) };
+    // Each generated area scales around its own centre. Bound those rectangles
+    // in their common rotated axes; a globally squeezed source box is no longer
+    // their outline. Cache the unit bounds across playback and width/position edits.
+    let bounds = this.layoutBounds;
+    if (!bounds || bounds.fit !== this.fit || bounds.angle !== angle || bounds.x !== positionScale.x || bounds.y !== positionScale.y) {
+      bounds = { fit: this.fit, angle, x: positionScale.x, y: positionScale.y, left: Infinity, right: -Infinity, top: Infinity, bottom: -Infinity };
+      for (const item of this.fit.rectangles) {
+        const x = item.x + item.width / 2 - this.fit.width / 2, y = item.y + item.height / 2 - this.fit.height / 2;
+        const dx = (x * cosine - y * sine) * positionScale.x, dy = (x * sine + y * cosine) * positionScale.y;
+        const localX = dx * cosine + dy * sine, localY = -dx * sine + dy * cosine;
+        bounds.left = Math.min(bounds.left, localX - item.width / 2 * positionScale.x);
+        bounds.right = Math.max(bounds.right, localX + item.width / 2 * positionScale.x);
+        bounds.top = Math.min(bounds.top, localY - item.height / 2 * positionScale.y);
+        bounds.bottom = Math.max(bounds.bottom, localY + item.height / 2 * positionScale.y);
+      }
+      this.layoutBounds = bounds;
+    }
+    const unit = width / this.fit.width, left = bounds.left * unit, right = bounds.right * unit, top = bounds.top * unit, bottom = bounds.bottom * unit;
+    const point = (x, y) => ({ x: center.x + x * cosine - y * sine, y: center.y + x * sine + y * cosine });
+    return { scale, positionScale, center, width, height, corners: [point(left, top), point(right, top), point(right, bottom), point(left, bottom)], resize: point(right, bottom), rotate: point(0, -Math.max(Math.abs(top), Math.abs(bottom)) - 28) };
   }
 
   drawLayout(renderer) {
@@ -304,13 +322,13 @@ export class NoiseFitPanel {
     event.preventDefault(); event.stopPropagation(); const point = this.pointer(event); const layout = this.layout(this.renderer);
     const near = handle => Math.hypot(point.x - handle.x, point.y - handle.y) < 16;
     const kind = near(layout.resize) ? 'scale' : near(layout.rotate) ? 'rotate' : 'move';
-    const relative = { x: (point.x - layout.center.x) / layout.positionScale.x, y: (point.y - layout.center.y) / layout.positionScale.y };
+    const relative = { x: point.x - layout.center.x, y: point.y - layout.center.y };
     this.drag = { kind, start: point, x: this.options.x, y: this.options.y, width: this.options.width, rotation: this.options.rotation, center: layout.center, scale: layout.scale, positionScale: layout.positionScale, radius: Math.max(1, Math.hypot(relative.x, relative.y)), angle: Math.atan2(relative.y, relative.x) };
     this.overlay.setPointerCapture(event.pointerId);
   }
   move(event) {
     if (!this.drag) return; event.preventDefault(); const point = this.pointer(event); const drag = this.drag;
-    const relative = { x: (point.x - drag.center.x) / drag.positionScale.x, y: (point.y - drag.center.y) / drag.positionScale.y };
+    const relative = { x: point.x - drag.center.x, y: point.y - drag.center.y };
     if (drag.kind === 'move') { this.options.x = Math.round((drag.x + (point.x - drag.start.x) / (drag.scale * drag.positionScale.x)) * 1000) / 1000; this.options.y = Math.round((drag.y - (point.y - drag.start.y) / (drag.scale * drag.positionScale.y)) * 1000) / 1000; }
     else if (drag.kind === 'scale') this.options.width = limited(drag.width * Math.hypot(relative.x, relative.y) / drag.radius, 1, 20000);
     else this.options.rotation = Math.round((drag.rotation + (Math.atan2(relative.y, relative.x) - drag.angle) * 180 / Math.PI) * 1000) / 1000;

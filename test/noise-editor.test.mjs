@@ -5,7 +5,7 @@ import { createNoiseArea, createNoiseEvent } from '../src/core/noise-areas.mjs';
 import { fromNumber } from '../src/core/beat.mjs';
 import { TempoMap } from '../src/core/tempo.mjs';
 import { noiseSampleHandle, samplingTarget, fitNoiseSampleView } from '../src/core/noise-sampling.mjs';
-import { previewPositionScale } from '../src/core/editor-display.mjs';
+import { previewPositionScale, previewNoiseGeometry } from '../src/core/editor-display.mjs';
 import { createChart } from '../src/core/chart.mjs';
 
 test('噪域编辑只查询可见生命周期，保留原顺序、边界命中及撤销后的索引更新', () => {
@@ -40,11 +40,11 @@ test('噪域取样的屏幕映射与比例适配一致，拖拽反算保留谱�
   for (const ratio of [1.5, 16 / 9, 4 / 3, 1, 9 / 16]) {
     const area = createNoiseArea(0, 8); area.topRight = { x: 675, y: 450 };
     const editor = samplingEditor(area, ratio); editor.sampleMode = { field: 'topRight' };
-    let view = editor.sampleView(); const corner = view.screen(area.topRight);
+    let view = editor.sampleView(); const corner = view.screen(noiseSampleHandle(area, editor.context.tempo, 1, editor.sampleMode, view.positionScale));
     near(corner.x, view.viewport.left + view.viewport.width); near(corner.y, view.viewport.top);
     editor.sampleDown({ clientX: view.left + corner.x, clientY: view.top + corner.y, button: 0, pointerId: 1, preventDefault() {}, stopPropagation() {} });
     assert.ok(editor.sampleDrag);
-    const target = { x: 500, y: 300 }; const screen = view.screen(target);
+    const target = { x: 500, y: 300 }, changed = { ...area, topRight: target }; const screen = view.screen(noiseSampleHandle(changed, editor.context.tempo, 1, editor.sampleMode, view.positionScale));
     editor.sampleMove({ clientX: view.left + screen.x, clientY: view.top + screen.y });
     assert.deepEqual(editor.area().topRight, target); assert.deepEqual(area.topRight, { x: 675, y: 450 });
     view = editor.sampleView();
@@ -56,13 +56,41 @@ test('带锚点旋转缩放的取样控制点和自动视野使用相同的比�
   for (const type of ['rotateEvents', 'scaleXEvents', 'scaleYEvents']) for (const ratio of [16 / 9, 4 / 3]) {
     const area = createNoiseArea(0, 8); area[type] = [createNoiseEvent(type === 'rotateEvents' ? 0 : 1, type === 'rotateEvents' ? 120 : 5, 0, 4, { x: -700, y: 800 })];
     const editor = samplingEditor(area, ratio, 1.3); editor.sampleMode = samplingTarget(area, type, 0, 'end');
-    const handle = noiseSampleHandle(area, editor.context.tempo, 1, editor.sampleMode), positionScale = previewPositionScale(ratio);
-    const projected = { x: handle.x * positionScale.x, y: handle.y * positionScale.y };
+    const positionScale = previewPositionScale(ratio), projected = noiseSampleHandle(area, editor.context.tempo, 1, editor.sampleMode, positionScale);
     const expected = fitNoiseSampleView(projected, 960, 640, ratio, 1.3, 64);
     editor.fitSampleView(); near(editor.context.preview.viewDivisor, expected);
-    const view = editor.sampleView(), point = view.screen(handle);
+    const view = editor.sampleView(), point = view.screen(projected);
     near(point.x, 480 + projected.x * view.scale); near(point.y, 320 - projected.y * view.scale);
-    const world = view.world(point); near(world.x, handle.x); near(world.y, handle.y);
+    const world = view.world(point); near(world.x, projected.x); near(world.y, projected.y);
+  }
+});
+
+test('旋转及负缩放噪域的角点、事件值和锚点取样跟随可见几何，点击不改值', () => {
+  for (const ratio of [1.5, 16 / 9, 4 / 3, 9 / 16]) for (const mirrored of [false, true]) {
+    const area = createNoiseArea(0, 8);
+    area.bottomLeft = { x: -180, y: -90 }; area.topRight = { x: 260, y: 170 };
+    area.moveXEvents = [createNoiseEvent(120, 190, 0, 4)]; area.moveYEvents = [createNoiseEvent(-40, 80, 0, 4)];
+    area.rotateEvents = [createNoiseEvent(15, 52, 0, 4, { x: -220, y: 310 })];
+    area.scaleXEvents = [createNoiseEvent(1, mirrored ? -1.7 : 1.7, 0, 4, { x: -300, y: 190 })];
+    area.scaleYEvents = [createNoiseEvent(1, .75, 0, 4, { x: 270, y: -210 })];
+    const targets = [{ field: 'bottomLeft' }, { field: 'topRight' }, ...['moveXEvents', 'moveYEvents', 'rotateEvents', 'scaleXEvents', 'scaleYEvents'].flatMap(type => ['start', 'end', ...(type.startsWith('move') ? [] : ['anchor'])].map(field => samplingTarget(area, type, 0, field)))];
+    for (const target of targets) {
+      const editor = samplingEditor(area, ratio); editor.sampleMode = target; editor.context.sampleAutoFit = false;
+      const view = editor.sampleView(), first = view.screen(noiseSampleHandle(area, editor.context.tempo, 1, target, view.positionScale));
+      const input = point => ({ clientX: view.left + point.x, clientY: view.top + point.y, button: 0, pointerId: 1, preventDefault() {}, stopPropagation() {} });
+      const snapshot = JSON.stringify(editor.area()); editor.sampleDown(input(first)); assert.ok(editor.sampleDrag); assert.equal(JSON.stringify(editor.area()), snapshot); assert.equal(editor.draftChart, undefined);
+      const changed = structuredClone(area);
+      if (target.field === 'anchor') { changed[target.type][0].anchor.x += 31; changed[target.type][0].anchor.y -= 23; }
+      else if (target.type) changed[target.type][0][target.field] += target.type.startsWith('scale') ? .12 : 6;
+      else { changed[target.field].x += 27; changed[target.field].y -= 19; }
+      const wanted = noiseSampleHandle(changed, editor.context.tempo, 1, target, view.positionScale);
+      editor.sampleMove(input(view.screen(wanted)));
+      const actual = editor.area(), handle = noiseSampleHandle(actual, editor.context.tempo, 1, target, view.positionScale);
+      assert.ok(Math.hypot(handle.x - wanted.x, handle.y - wanted.y) < .001, `${ratio} ${mirrored} ${JSON.stringify(target)}`);
+      if (target.field === 'anchor') assert.deepEqual(actual[target.type][0].anchor, changed[target.type][0].anchor);
+      else if (target.type) assert.ok(Math.abs(actual[target.type][0][target.field] - changed[target.type][0][target.field]) < .001);
+      else assert.deepEqual(actual[target.field], changed[target.field]);
+    }
   }
 });
 

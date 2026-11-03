@@ -34,11 +34,26 @@ export function previewPositionScale(ratio = 1.5) {
   return { x: Math.min(1, ratio / 1.5), y: Math.min(1, 1.5 / ratio) };
 }
 
+// Centres follow the stage axes; dimensions follow the area's own axes so
+// aspect adaptation never shears a rotated rectangle or changes its angle.
+function noisePointProjector(sample, positionScale) {
+  const rotation = Number(sample.rotation) || 0, cos = Math.cos(rotation), sin = Math.sin(rotation);
+  const xx = cos * cos * positionScale.x + sin * sin * positionScale.y;
+  const xy = cos * sin * (positionScale.y - positionScale.x), yy = sin * sin * positionScale.x + cos * cos * positionScale.y;
+  const centerX = sample.center.x * positionScale.x, centerY = sample.center.y * positionScale.y;
+  return point => { const dx = point.x - sample.center.x, dy = point.y - sample.center.y;
+    return { x: centerX + xx * dx + xy * dy, y: centerY + xy * dx + yy * dy }; };
+}
+
+export function previewNoisePoint(point, sample, positionScale) {
+  if (!positionScale || positionScale.x === 1 && positionScale.y === 1) return point;
+  return noisePointProjector(sample, positionScale)(point);
+}
+
 export function previewNoiseGeometry(sample, positionScale) {
-  if (positionScale.x === 1 && positionScale.y === 1) return sample;
-  const project = point => ({ x: point.x * positionScale.x, y: point.y * positionScale.y });
-  return { ...sample, points: sample.points.map(project), center: project(sample.center),
-    rotation: Math.atan2(Math.sin(sample.rotation) * positionScale.y, Math.cos(sample.rotation) * positionScale.x) };
+  if (!sample || !positionScale || positionScale.x === 1 && positionScale.y === 1) return sample;
+  return { ...sample, points: sample.points.map(noisePointProjector(sample, positionScale)),
+    center: { x: sample.center.x * positionScale.x, y: sample.center.y * positionScale.y } };
 }
 
 export function previewNotePosition(position, line, positionScale) {

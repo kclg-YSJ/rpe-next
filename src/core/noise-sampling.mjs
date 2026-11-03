@@ -1,5 +1,5 @@
 import { noiseRuntime } from './noise-areas.mjs';
-import { previewViewport } from './editor-display.mjs';
+import { previewViewport, previewNoisePoint } from './editor-display.mjs';
 import { t } from '../i18n.mjs';
 
 const sampleNumber = value => Math.round(value * 10000) / 10000;
@@ -18,12 +18,15 @@ export function sampleEditingArea(area, tempo, seconds, target) {
   return noiseRuntime(area, tempo).sample(seconds, overrides);
 }
 
-export function noiseSampleHandle(area, tempo, seconds, target) {
-  if (target.field === 'anchor') return { ...area[target.type][target.index].anchor };
+export function noiseSampleHandle(area, tempo, seconds, target, positionScale) {
+  if (target.field === 'anchor') {
+    const anchor = area[target.type][target.index].anchor;
+    return { x: anchor.x * (positionScale?.x ?? 1), y: anchor.y * (positionScale?.y ?? 1) };
+  }
   const sample = sampleEditingArea(area, tempo, seconds, target);
-  if (['bottomLeft', 'topRight'].includes(target.field)) return sample.transform(area[target.field]);
-  if (target.reference) return sample.transform(target.reference);
-  return sample.center;
+  const point = ['bottomLeft', 'topRight'].includes(target.field) ? sample.transform(area[target.field])
+    : target.reference ? sample.transform(target.reference) : sample.center;
+  return previewNoisePoint(point, sample, positionScale);
 }
 
 export function samplingTarget(area, type, index, field) {
@@ -41,13 +44,14 @@ function setValue(area, target, value) {
   const event = area[target.type][target.index]; event[target.field] = value;
   if (event.inst) event[target.field === 'start' ? 'end' : 'start'] = value;
 }
-export function applyNoiseSample(area, tempo, seconds, target, point) {
+export function applyNoiseSample(area, tempo, seconds, target, point, positionScale) {
   const result = structuredClone(area);
-  if (target.field === 'anchor') { result[target.type][target.index].anchor = { x: sampleNumber(point.x), y: sampleNumber(point.y) }; return result; }
-  const original = noiseSampleHandle(area, tempo, seconds, target);
+  if (target.field === 'anchor') { result[target.type][target.index].anchor = { x: sampleNumber(point.x / (positionScale?.x ?? 1)), y: sampleNumber(point.y / (positionScale?.y ?? 1)) }; return result; }
+  const handleAt = source => noiseSampleHandle(source, tempo, seconds, target, positionScale);
+  const original = handleAt(area);
   const delta = { x: point.x - original.x, y: point.y - original.y };
   if (['bottomLeft', 'topRight'].includes(target.field)) {
-    const sampleAxis = axis => { const changed = structuredClone(area); changed[target.field][axis] += 1; const handle = noiseSampleHandle(changed, tempo, seconds, target); return { x: handle.x - original.x, y: handle.y - original.y }; };
+    const sampleAxis = axis => { const changed = structuredClone(area); changed[target.field][axis] += 1; const handle = handleAt(changed); return { x: handle.x - original.x, y: handle.y - original.y }; };
     const horizontal = sampleAxis('x'); const vertical = sampleAxis('y');
     const determinant = horizontal.x * vertical.y - horizontal.y * vertical.x;
     if (Math.abs(determinant) < 1e-8) throw new Error(t('noise-sampling.s778af80'));
@@ -57,9 +61,9 @@ export function applyNoiseSample(area, tempo, seconds, target, point) {
     let value = area[target.type][target.index][target.field];
     for (let iteration = 0; iteration < 8; iteration++) {
       setValue(result, target, value);
-      const current = noiseSampleHandle(result, tempo, seconds, target);
+      const current = handleAt(result);
       const probe = structuredClone(area); setValue(probe, target, value + 0.01);
-      const derivative = noiseSampleHandle(probe, tempo, seconds, target);
+      const derivative = handleAt(probe);
       const dx = derivative.x - current.x; const dy = derivative.y - current.y;
       const length = dx * dx + dy * dy;
       if (length < 1e-10) throw new Error(t('noise-sampling.s40e6478'));
@@ -71,7 +75,7 @@ export function applyNoiseSample(area, tempo, seconds, target, point) {
     setValue(result, target, value);
   } else {
     const changed = structuredClone(area); setValue(changed, target, area[target.type][target.index][target.field] + 1);
-    const handle = noiseSampleHandle(changed, tempo, seconds, target); const axis = { x: handle.x - original.x, y: handle.y - original.y };
+    const handle = handleAt(changed); const axis = { x: handle.x - original.x, y: handle.y - original.y };
     const length = axis.x * axis.x + axis.y * axis.y;
     if (length < 1e-8) throw new Error(t('noise-sampling.s898e322'));
     setValue(result, target, area[target.type][target.index][target.field] + (delta.x * axis.x + delta.y * axis.y) / length);

@@ -7,7 +7,7 @@ import { HitGeometryCache } from '../src/core/hit-effects.mjs';
 import { HIT_DURATION } from '../src/core/visual-constants.mjs';
 import { Preview } from '../src/ui/preview.mjs';
 import { AutoplayScene } from '../src/ui/render-studio/renderer.mjs';
-import { hitParticles as renderParticles, HIT_PARTICLE_SECONDS } from '../src/core/render-particles.mjs';
+import { hitParticles as renderParticles, HIT_PARTICLE_SECONDS, HIT_PARTICLE_SCALE, HIT_PARTICLE_REACH, HIT_PARTICLE_SHRINK, particleEasing, shrinkEasing } from '../src/core/render-particles.mjs';
 import { hitFrame } from '../src/core/visual-constants.mjs';
 
 function fixture(lines, { policy='render', skinLife, batch=false }={}) {
@@ -47,16 +47,16 @@ test('跟随皮肤复用普通播放的特效寿命，不追加渲染器粒子',
   assert.equal(f.native.length,1);assert.ok(Math.abs(f.native[0].age-.1)<1e-8);assert.equal(f.particles.length,0);
 });
 
-test('渲染粒子默认参数与 Autoplay Studio 1.1.8 一致，命中贴图保持不变', () => {
+test('渲染器使用 PR 调整后的粒子参数，命中贴图和普通播放保持原有路径', () => {
   const seed = 42, size = 175;
   for (const age of [.05, .2, .4 / 1.5, .3, .45, .65]) {
-    const progress = age * 1.5, spread = 1 - (1 - progress) ** 2;
-    const shrink = progress < .4 ? 1 : 1 - .253 * ((progress - .4) / .6) ** 2;
+    const progress = age * 1.5, spread = particleEasing(progress), scale = HIT_PARTICLE_SCALE, reach = HIT_PARTICLE_REACH;
+    const shrink = progress < .4 ? 1 : 1 - HIT_PARTICLE_SHRINK * shrinkEasing((progress - .4) / .6);
     const particles = renderParticles(age, seed, size);
     assert.equal(particles.length, 4);
     for (const particle of particles) {
-      assert.ok(Math.abs(Math.hypot(particle.x, particle.y) / (size * 1.1 * spread) - 1) < 1e-12);
-      assert.ok(Math.abs(particle.radius / (size * .0907 * spread * shrink) - 1) < 1e-12);
+      assert.ok(Math.abs(Math.hypot(particle.x, particle.y) / (size * reach * spread) - 1) < 1e-12);
+      assert.ok(Math.abs(particle.radius / (size * .0907 * spread * shrink * scale) - 1) < 1e-12);
       assert.equal(particle.alpha, 1 - progress);
     }
     const sprites = [], renderer = Object.assign(Object.create(AutoplayScene.prototype), {

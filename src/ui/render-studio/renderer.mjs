@@ -12,6 +12,7 @@ import { builtinNoteSkins, readNoteSkins } from '../../platform/note-skins.mjs';
 import { parseNoteSkin } from '../../core/note-skin.mjs';
 import { hitFrame } from '../../core/visual-constants.mjs';
 import { drawAutoplayHud } from './hud.mjs';
+import { attachStudioNoise } from './noise.mjs';
 import { LargeChartView } from '../large-chart-view.mjs';
 import { attachRenderExtensions } from '../render-extensions.mjs';
 import { emitModHook } from '../../core/mod-hooks.mjs';
@@ -151,6 +152,10 @@ export class AutoplayScene {
     this.preview.noisePreview.seamless = true;
     this.preview.noisePreview.invalidate = () => {};
     this.preview.noisePreview.report = message => console.warn(t('render.ui.a530991cd') + message);
+    // overlay 合成和默认皮肤仅用于渲染；几何缩放与普通预览共用。
+    this.noise = attachStudioNoise(this.preview, {
+      report: message => console.warn(t('render.ui.a530991cd') + message),
+    });
     // HUD 交给 Preview 的 drawUi 画：它的调用点正好在「普通 shader 之后、噪域之前」，
     // 于是合成顺序天然是 场景 → 普通 shader → HUD → 噪域 → 全局 shader，
     // 和编辑器预览 / 试玩完全一致（HUD 之上压噪域，噪域之上再吃全局 shader）。
@@ -188,7 +193,7 @@ export class AutoplayScene {
     if (this.project.largeCover) this.images.background = this.project.largeCover;
     await this.preloadImages();
     if ((this.chart.blockAreaList?.length ?? 0) > 0) {
-      try { this.preview.noisePreview.defaultSkin = await installNoiseFieldSkin(this.noiseAssets); }
+      try { this.noise?.setDefaultSkin(await installNoiseFieldSkin(this.noiseAssets)); }
       catch (error) { console.warn(t('render.ui.961c21531'), error); }
     }
     await this.setNoteSkin(noteSkinRecord);

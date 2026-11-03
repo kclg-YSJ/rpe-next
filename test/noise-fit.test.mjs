@@ -9,6 +9,7 @@ import { EditorSession } from '../src/application/session.mjs';
 import { TempoMap } from '../src/core/tempo.mjs';
 import { beatValue } from '../src/core/beat.mjs';
 import { NoiseFitPanel } from '../src/ui/noise-fit.mjs';
+import { previewNoiseGeometry } from '../src/core/editor-display.mjs';
 
 const defaults = { first: 4, last: 8, duration: 6, width: 800, x: 100, y: -80, rotation: 0, layerId: 'default', reveal: 'left', easingType: 1 };
 function raster(rows) { return { mask: Uint8Array.from(rows.join(''), Number), width: rows[0].length, height: rows.length }; }
@@ -139,8 +140,8 @@ test('图案拟合的旋转布局轮廓随比例适配，与生成噪域的渲�
   for (const ratio of [1.5, 16 / 9, 4 / 3, 9 / 16]) {
     const panel = layoutPanel(ratio), layout = panel.layout(panel.renderer);
     const area = fittedNoiseAreas(panel.fit, panel.options)[0], sample = noiseRuntime(area, tempo).sample(0);
-    for (const point of sample.points) {
-      const horizontal = 480 + point.x * layout.scale * layout.positionScale.x, vertical = 320 - point.y * layout.scale * layout.positionScale.y;
+    for (const point of previewNoiseGeometry(sample, layout.positionScale).points) {
+      const horizontal = 480 + point.x * layout.scale, vertical = 320 - point.y * layout.scale;
       assert.ok(layout.corners.some(corner => Math.hypot(corner.x - horizontal, corner.y - vertical) < 1e-7));
     }
   }
@@ -156,12 +157,27 @@ test('不同比例下图案布局拖动、旋转及缩放反算均保留原坐�
     if (kind === 'move') target = { x: start.x + 100 * layout.scale * layout.positionScale.x, y: start.y - 70 * layout.scale * layout.positionScale.y };
     else if (kind === 'scale') target = { x: layout.center.x + (start.x - layout.center.x) * 2, y: layout.center.y + (start.y - layout.center.y) * 2 };
     else {
-      const horizontal = (start.x - layout.center.x) / layout.positionScale.x, vertical = (start.y - layout.center.y) / layout.positionScale.y, angle = Math.PI / 4;
-      target = { x: layout.center.x + (horizontal * Math.cos(angle) - vertical * Math.sin(angle)) * layout.positionScale.x, y: layout.center.y + (horizontal * Math.sin(angle) + vertical * Math.cos(angle)) * layout.positionScale.y };
+      const horizontal = start.x - layout.center.x, vertical = start.y - layout.center.y, angle = Math.PI / 4;
+      target = { x: layout.center.x + horizontal * Math.cos(angle) - vertical * Math.sin(angle), y: layout.center.y + horizontal * Math.sin(angle) + vertical * Math.cos(angle) };
     }
     panel.move(pointer(target));
     if (kind === 'move') { assert.equal(panel.options.x, original.x + 100); assert.equal(panel.options.y, original.y + 70); }
     else if (kind === 'scale') assert.ok(Math.abs(panel.options.width - original.width * 2) < 1e-7);
     else assert.equal(panel.options.rotation, original.rotation + 45);
+  }
+});
+
+test('多块图案的布局框包住按各自中心缩放的真实噪域，播放中复用边界缓存', () => {
+  const tempo = new TempoMap([{ startTime: [0, 0, 1], bpm: 120 }]);
+  for (const ratio of [16 / 9, 4 / 3, 9 / 16]) for (const rotation of [0, 37, -80, 145]) {
+    const panel = layoutPanel(ratio); panel.fit = fit(['1011', '0110', '1101']); panel.options.rotation = rotation;
+    const layout = panel.layout(panel.renderer), cache = panel.layoutBounds, angle = rotation * Math.PI / 180;
+    const local = point => { const x = point.x - layout.center.x, y = point.y - layout.center.y; return { x: x * Math.cos(angle) + y * Math.sin(angle), y: -x * Math.sin(angle) + y * Math.cos(angle) }; };
+    const box = layout.corners.map(local), points = fittedNoiseAreas(panel.fit, panel.options).flatMap(area => previewNoiseGeometry(noiseRuntime(area, tempo).sample(0), layout.positionScale).points).map(point => local({ x: 480 + point.x * layout.scale, y: 320 - point.y * layout.scale }));
+    for (const axis of ['x', 'y']) {
+      assert.ok(Math.abs(Math.min(...points.map(point => point[axis])) - Math.min(...box.map(point => point[axis]))) < 1e-7);
+      assert.ok(Math.abs(Math.max(...points.map(point => point[axis])) - Math.max(...box.map(point => point[axis]))) < 1e-7);
+    }
+    panel.options.width *= 1.1; panel.options.x += 20; panel.layout(panel.renderer); assert.equal(panel.layoutBounds, cache);
   }
 });

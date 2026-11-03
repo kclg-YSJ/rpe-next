@@ -1,7 +1,7 @@
 import { createNoiseArea, createNoiseEvent, noiseCenter, noiseHasAnchor, noiseRuntime, noiseActivationIntervals, NOISE_TRACKS, withNoiseAreas, shiftNoiseArea } from '../core/noise-areas.mjs';
 import { samplingTarget, sampleEditingArea, noiseSampleHandle, applyNoiseSample, fitNoiseSampleView } from '../core/noise-sampling.mjs';
 import { beatValue, fromNumber, parseBeat, formatBeat } from '../core/beat.mjs';
-import { previewViewport, previewPositionScale, strokeIntersects } from '../core/editor-display.mjs';
+import { previewViewport, previewPositionScale, previewNoiseGeometry, strokeIntersects } from '../core/editor-display.mjs';
 import { prepareCanvas } from './timeline.mjs';
 import { createCustomEasingControls } from './custom-easing-controls.mjs';
 import { previewCurveEvent } from '../application/animation-curve-preview.mjs';
@@ -488,16 +488,15 @@ export class NoiseAreaEditor {
   fitSampleView() {
     const previousView = this.sampleView();
     const rect = this.overlay.getBoundingClientRect(); const controlsBottom = this.sampleBar.getBoundingClientRect().bottom - rect.top;
-    const handle = noiseSampleHandle(this.area(), this.context.tempo, this.sampleSeconds, this.sampleMode);
     for (const zoom of this.sampleZoom ?? []) {
       const positionScale = previewPositionScale(zoom.renderer.aspectRatio ?? 1.5);
-      const position = { x: handle.x * positionScale.x, y: handle.y * positionScale.y };
+      const position = noiseSampleHandle(this.area(), this.context.tempo, this.sampleSeconds, this.sampleMode, positionScale);
       if (this.context.sampleAutoFit !== false) zoom.divisor = fitNoiseSampleView(position, rect.width, rect.height, zoom.renderer.aspectRatio ?? 1.5, zoom.divisor, controlsBottom);
       zoom.renderer.viewDivisor = this.context.sampleAutoFit === false ? zoom.original : zoom.divisor;
     }
     const view = this.sampleView();
     if (this.sampleDrag && view.scale !== previousView.scale) {
-      const position = view.screen(handle); const pointer = this.sampleDrag.pointer;
+      const position = view.screen(noiseSampleHandle(this.area(), this.context.tempo, this.sampleSeconds, this.sampleMode, view.positionScale)); const pointer = this.sampleDrag.pointer;
       this.sampleDrag.offset = { x: pointer.x - view.left - position.x, y: pointer.y - view.top - position.y };
     }
   }
@@ -505,11 +504,11 @@ export class NoiseAreaEditor {
     const rect = this.overlay.getBoundingClientRect(); const renderer = this.context.previewVisible ? this.context.preview : this.context.realtimePreview;
     const viewport = previewViewport(rect.width, rect.height, renderer.aspectRatio ?? 1.5); const scale = viewport.scale / (renderer.viewDivisor ?? 1);
     const positionScale = previewPositionScale(renderer.aspectRatio ?? 1.5);
-    return { ...rect.toJSON(), viewport, scale, world: point => ({ x: (point.x - rect.width / 2) / (scale * positionScale.x), y: (rect.height / 2 - point.y) / (scale * positionScale.y) }), screen: point => ({ x: rect.width / 2 + point.x * scale * positionScale.x, y: rect.height / 2 - point.y * scale * positionScale.y }) };
+    return { ...rect.toJSON(), viewport, scale, positionScale, world: point => ({ x: (point.x - rect.width / 2) / scale, y: (rect.height / 2 - point.y) / scale }), screen: point => ({ x: rect.width / 2 + point.x * scale, y: rect.height / 2 - point.y * scale }) };
   }
   sampleDown(event) {
     if (!this.sampleMode || event.button !== 0) return; event.preventDefault(); event.stopPropagation();
-    const view = this.sampleView(); const point = { x: event.clientX - view.left, y: event.clientY - view.top }; const handle = view.screen(noiseSampleHandle(this.area(), this.context.tempo, this.sampleSeconds, this.sampleMode));
+    const view = this.sampleView(); const point = { x: event.clientX - view.left, y: event.clientY - view.top }; const handle = view.screen(noiseSampleHandle(this.area(), this.context.tempo, this.sampleSeconds, this.sampleMode, view.positionScale));
     if (Math.hypot(point.x - handle.x, point.y - handle.y) > 26) return;
     this.overlay.setPointerCapture(event.pointerId); this.sampleDrag = { pointer: { x: event.clientX, y: event.clientY }, offset: { x: point.x - handle.x, y: point.y - handle.y } };
   }
@@ -517,7 +516,7 @@ export class NoiseAreaEditor {
     if (!this.sampleDrag) return;
     this.sampleDrag.pointer = { x: event.clientX, y: event.clientY };
     const view = this.sampleView(); const point = view.world({ x: event.clientX - view.left - this.sampleDrag.offset.x, y: event.clientY - view.top - this.sampleDrag.offset.y });
-    try { const area = applyNoiseSample(this.area(), this.context.tempo, this.sampleSeconds, this.sampleMode, point); this.draftChart = this.replaceArea(area); this.fitSampleView(); this.invalidate(); } catch (error) { this.notify(error.message, 'warning'); this.sampleDrag = null; }
+    try { const area = applyNoiseSample(this.area(), this.context.tempo, this.sampleSeconds, this.sampleMode, point, view.positionScale); this.draftChart = this.replaceArea(area); this.fitSampleView(); this.invalidate(); } catch (error) { this.notify(error.message, 'warning'); this.sampleDrag = null; }
   }
   previewState() {
     if (!this.sampleMode) return { chart: this.chart };
@@ -539,11 +538,11 @@ export class NoiseAreaEditor {
   drawSample() {
     if (!this.sampleMode) return;
     const { context, width, height } = prepareCanvas(this.overlay); const view = this.sampleView(); const area = this.area();
-    const sample = sampleEditingArea(area, this.context.tempo, this.sampleSeconds, this.sampleMode); const points = sample.points.map(view.screen);
+    const sample = previewNoiseGeometry(sampleEditingArea(area, this.context.tempo, this.sampleSeconds, this.sampleMode), view.positionScale); const points = sample.points.map(view.screen);
     context.strokeStyle = '#67efa4'; context.lineWidth = 2; context.beginPath(); points.forEach((point, index) => index ? context.lineTo(point.x, point.y) : context.moveTo(point.x, point.y)); context.closePath(); context.stroke();
     const anchor = this.sampleMode.type && noiseHasAnchor(this.sampleMode.type) ? area[this.sampleMode.type][this.sampleMode.index].anchor : null;
-    if (anchor) { const point = view.screen(anchor); context.strokeStyle = '#f0ca67'; context.beginPath(); context.moveTo(point.x - 9, point.y); context.lineTo(point.x + 9, point.y); context.moveTo(point.x, point.y - 9); context.lineTo(point.x, point.y + 9); context.stroke(); context.fillStyle = '#f0ca67'; context.fillText(t('noise-area.sc7d0648'), point.x + 12, point.y); }
-    const handle = view.screen(noiseSampleHandle(area, this.context.tempo, this.sampleSeconds, this.sampleMode)); context.fillStyle = '#5cffa1'; context.beginPath(); context.arc(handle.x, handle.y, 9, 0, Math.PI * 2); context.fill(); context.strokeStyle = '#152a1d'; context.stroke();
+    if (anchor) { const point = view.screen({ x: anchor.x * view.positionScale.x, y: anchor.y * view.positionScale.y }); context.strokeStyle = '#f0ca67'; context.beginPath(); context.moveTo(point.x - 9, point.y); context.lineTo(point.x + 9, point.y); context.moveTo(point.x, point.y - 9); context.lineTo(point.x, point.y + 9); context.stroke(); context.fillStyle = '#f0ca67'; context.fillText(t('noise-area.sc7d0648'), point.x + 12, point.y); }
+    const handle = view.screen(noiseSampleHandle(area, this.context.tempo, this.sampleSeconds, this.sampleMode, view.positionScale)); context.fillStyle = '#5cffa1'; context.beginPath(); context.arc(handle.x, handle.y, 9, 0, Math.PI * 2); context.fill(); context.strokeStyle = '#152a1d'; context.stroke();
     context.fillStyle = '#c8ffdf'; context.font = '14px sans-serif'; context.fillText(t('noise-area.s7872d97') + round(this.context.tempo.beat(this.sampleSeconds)), 18, height - 20);
     if (handle.x < 0 || handle.x > width || handle.y < 0 || handle.y > height) context.fillText(t('noise-area.s3d7275e'), 18, height - 42);
   }
