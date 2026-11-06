@@ -3,6 +3,7 @@ import { parseShortcut } from './shortcut-spec.mjs';
 import { t } from '../i18n.mjs';
 
 export const HOTKEY_GROUPS = [
+  [t('editor-recording.title'), { EditorRecording: t('editor-recording.toggle'), KeyDisplay: t('key-display.toggle') }],
   [t('hotkey-settings.s543601b'), { Save: t('hotkey-settings.s1930d92'), Undo: t('hotkey-settings.s9fcefd8'), Redo: t('hotkey-settings.s1238f0d'), SelectAll: t('hotkey-settings.s3e44b2a'), Delete: t('hotkey-settings.s01aa288'), QuickDelete: t('hotkey-settings.s59ce6c1'), Esc: t('hotkey-settings.s412413e') }],
   [t('hotkey-settings.s7554709'), { AddTap: t('hotkey-settings.s2ffab83'), AddDrag: t('hotkey-settings.s0894698'), AddFlick: t('hotkey-settings.sa4a5186'), AddHold: t('hotkey-settings.s8e61bdb'), AddEvent: t('hotkey-settings.s46a8a14'), NumberMirror: t('hotkey-settings.se77c350'), NumberFill: t('hotkey-settings.sf40b87f'), CurveBegin: t('hotkey-settings.s073a755'), CurveEnd: t('hotkey-settings.seb4b576'), DirectPlacement: t('direct-placement.toggle') }],
   [t('hotkey-settings.sc4eb94d'), { Copy: t('hotkey-settings.s4edd1d0'), Shear: t('hotkey-settings.s29b653b'), Paste: t('hotkey-settings.sde7fb7d'), PasteMirror: t('hotkey-settings.sa64e503'), KeepTimePaste: t('hotkey-settings.s4c0862f'), KeepTimePasteMirror: t('hotkey-settings.sdbbd5a4'), ClipboardHistory: t('hotkey-settings.sb377bb5') }],

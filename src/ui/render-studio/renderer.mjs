@@ -219,6 +219,8 @@ export class AutoplayScene {
       while(this.preview.shaderRuntime.loading.size&&performance.now()<deadline) await renderAwait(new Promise(resolve=>setTimeout(resolve,10)),signal);
       if (this.preview.shaderRuntime.loading.size) throw Error(t('render.resourcesTimeout'));
     }
+    if (this.settings.shaders !== false && this.preview.shaderRuntime.errors.size) throw Error([...this.preview.shaderRuntime.errors.values()][0]);
+    if (this.settings.shaders !== false && this.preview.shaderPipeline.activeError) throw Error(this.preview.shaderPipeline.activeError);
     for (const skin of this.preview.noisePreview.gpu?.skins?.values() ?? []) if (skin.ready) { await renderAwait(skin.ready,signal); if(skin.error)throw skin.error; }
     if (typeof document !== 'undefined') await renderAwait(document.fonts.ready,signal);
   }

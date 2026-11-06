@@ -15,7 +15,7 @@ export class EventInteraction {
     this.canvas.addEventListener('pointerdown', event => this.down(event));
     this.canvas.addEventListener('pointermove', event => this.move(event));
     this.canvas.addEventListener('pointerup', event => this.up(event));
-    this.canvas.addEventListener('pointercancel', () => { const tracing = this.drag?.kind === 'stroke' && this.drag.tracing; this.drag = null; if (tracing) timeline.getSession().notify(); timeline.changed(); });
+    this.canvas.addEventListener('pointercancel', event => { if (timeline.endRectanglePan(event)) return; const tracing = this.drag?.kind === 'stroke' && this.drag.tracing; this.drag = null; if (tracing) timeline.getSession().notify(); timeline.changed(); });
     this.canvas.addEventListener('pointerleave', () => { if (!this.drag) this.timeline.eventCursor = null; });
   }
 
@@ -133,6 +133,7 @@ export class EventInteraction {
   down(event) {
     if (![0, 1, 2].includes(event.button)) return;
     event.preventDefault?.();
+    if (this.timeline.rectangleSelection()) { if (!this.timeline.finishRectangle(event)) this.timeline.beginRectanglePan(event, this.canvas); return; }
     this.suppressContextMenu = false;
     const endpoint = [0, 2].includes(event.button) && this.endpointTarget();
     if (endpoint) {
@@ -144,7 +145,6 @@ export class EventInteraction {
       this.suppressContextMenu = event.button === 2; this.updateCursor(point); this.timeline.changed(); return;
     }
     if (event.button === 2) return;
-    if (this.timeline.finishRectangle(event)) return;
     const session = this.timeline.getSession(); const point = this.timeline.point(event, this.canvas); const rectangle = this.hit(point);
     if (event.ctrlKey || event.shiftKey || event.button === 1) session.multiSelectionIntent = 'events';
     else session.multiSelectionIntent = null;
@@ -183,6 +183,7 @@ export class EventInteraction {
   }
 
   move(event) {
+    if (this.timeline.rectangleSelection()?.drag.pan) this.timeline.updateRectangle(event);
     const point = this.timeline.point(event, this.canvas);
     this.timeline.eventCursor = point;
     this.timeline.clipboardPointer = point;
@@ -223,6 +224,7 @@ export class EventInteraction {
   }
 
   up(event) {
+    if (this.timeline.endRectanglePan(event)) return;
     if (!this.drag) return;
     if (this.drag.endpoint) {
       this.move(event); const drag = this.drag, session = this.timeline.getSession(), next = this.previewEvent(drag.event); this.drag = null;

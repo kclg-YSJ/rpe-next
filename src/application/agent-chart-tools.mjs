@@ -48,6 +48,7 @@ export const AGENT_CHART_TOOLS = Object.freeze([
   { id: 'noise-areas-tool', name: t('agent-chart-tools.s0f8a536'), commands: ['chart_templates', 'chart_patch', 'chart_generate', 'chart_transform', 'noise_circle'] },
   { id: 'curve-notes', name: t('agent-chart-tools.sae195fe'), commands: ['curve_notes'] },
   { id: 'curve-trajectory', name: t('agent-chart-tools.sf8e5bf7'), commands: ['trajectory_presets', 'trajectory_generate', 'trajectory_split'] },
+  { id: 'spatial-tool', name: t('spatial.title'), commands: ['ui_inspect', 'ui_action', 'chart_query', 'chart_patch'] },
   { id: 'text-lines-tool', name: t('agent-chart-tools.s23acb5a'), commands: ['text_fit'] },
   { id: 'noise-fit-tool', name: t('agent-chart-tools.s9835372'), commands: ['noise_fit'] },
   { id: 'noise-tracking-tool', name: t('agent-chart-tools.sd5825e9'), commands: ['noise_track'] },

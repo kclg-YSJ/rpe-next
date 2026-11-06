@@ -14,16 +14,16 @@ const multiply=(m,a,b,c,d,e,f)=>[m[0]*a+m[2]*b,m[1]*a+m[3]*b,m[0]*c+m[2]*d,m[1]*
 const dimension=image=>[image.naturalWidth??image.videoWidth??image.width,image.naturalHeight??image.videoHeight??image.height];
 
 export class SpriteProjection {
-  constructor(gl,canvas){
+  constructor(gl,canvas,{vertexSource=vertex}={}){
     this.gl=gl;this.canvas=canvas;this.textures=new Map();this.text=new Map();this.colors=new Map();this.bytes=0;this.tick=0;this.uploads=0;this.drawCalls=0;
     const compile=(kind,source)=>{const shader=gl.createShader(kind);gl.shaderSource(shader,source);gl.compileShader(shader);if(!gl.getShaderParameter(shader,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(shader));return shader;};
-    const vs=compile(gl.VERTEX_SHADER,vertex),fs=compile(gl.FRAGMENT_SHADER,fragment);this.program=gl.createProgram();gl.attachShader(this.program,vs);gl.attachShader(this.program,fs);gl.linkProgram(this.program);gl.deleteShader(vs);gl.deleteShader(fs);if(!gl.getProgramParameter(this.program,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(this.program));
+    const vs=compile(gl.VERTEX_SHADER,vertexSource),fs=compile(gl.FRAGMENT_SHADER,fragment);this.program=gl.createProgram();gl.attachShader(this.program,vs);gl.attachShader(this.program,fs);gl.linkProgram(this.program);gl.deleteShader(vs);gl.deleteShader(fs);if(!gl.getProgramParameter(this.program,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(this.program));
     this.uniforms=Object.fromEntries(['eye','right','up','forward','extent','planes','focal',...Array.from({length:8},(_,i)=>'image'+i)].map(key=>[key,gl.getUniformLocation(this.program,key)]));this.attributes=Object.fromEntries(['world','uv','tint','slot'].map(key=>[key,gl.getAttribLocation(this.program,key)]));
     this.buffer=gl.createBuffer();this.vertices=new Float32Array(54*2048);this.white=typeof OffscreenCanvas==='function'?new OffscreenCanvas(1,1):document.createElement('canvas');this.white.width=this.white.height=1;this.white.getContext('2d').fillStyle='#fff';this.white.getContext('2d').fillRect(0,0,1,1);
     this.context=new SpriteContext(this);this.maximum=gl.getParameter(gl.MAX_TEXTURE_SIZE);
   }
   begin(camera,raw,frame){
-    const gl=this.gl,v=frame.viewport,ratio=devicePixelRatio||1,width=Math.max(1,Math.round(v.width*ratio)),height=Math.max(1,Math.round(v.height*ratio));if(this.canvas.width!==width||this.canvas.height!==height){this.canvas.width=width;this.canvas.height=height;}
+    const gl=this.gl,v=frame.viewport,ratio=this.pixelRatio??(devicePixelRatio||1),width=Math.max(1,Math.round(v.width*ratio)),height=Math.max(1,Math.round(v.height*ratio));if(this.canvas.width!==width||this.canvas.height!==height){this.canvas.width=width;this.canvas.height=height;}
     this.camera=camera;this.frame=frame;this.count=0;this.batchTextures=[];this.slots=new Map();this.tick++;this.drawCalls=0;this.uploads=0;this.context.reset(raw);
     gl.viewport(0,0,width,height);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);gl.disable(gl.DEPTH_TEST);gl.disable(gl.CULL_FACE);gl.enable(gl.BLEND);gl.blendFunc(gl.ONE,gl.ONE_MINUS_SRC_ALPHA);gl.useProgram(this.program);
     gl.bindBuffer(gl.ARRAY_BUFFER,this.buffer);gl.bufferData(gl.ARRAY_BUFFER,this.vertices.byteLength,gl.DYNAMIC_DRAW);

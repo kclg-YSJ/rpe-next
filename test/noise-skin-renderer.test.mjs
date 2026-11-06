@@ -27,6 +27,20 @@ test('全屏顶点不会逐 Pass 上传，几何缓冲仅在容量增长时重�
   renderer.bind({ position: 0 }, null, new Float32Array(512)); assert.equal(allocations.length, 2);
 });
 
+test('皮肤仅裁剪无依赖方向的余量，最终合成恢复完整视口且不影响几何模板', () => {
+  const calls=[],uniforms=[];
+  const gl={SCISSOR_TEST:1,ARRAY_BUFFER:2,FLOAT:3,FRAMEBUFFER:4,bindFramebuffer(){},viewport(){},useProgram(){},enableVertexAttribArray(){},vertexAttribPointer(){},bindBuffer(){},enable:v=>calls.push(['enable',v]),disable:v=>calls.push(['disable',v]),scissor:(...rect)=>calls.push(['rect',...rect])};
+  const renderer=Object.assign(Object.create(NoiseSkinRenderer.prototype),{gl,canvas:{width:400,height:300},quad:new Float32Array(12),guardSides:1|8,uniform:(program,name,value)=>uniforms.push([name,value])});
+  const target={width:464,height:364,padding:[32,32],logicalSize:[400,300],outputRect:[-.08,-32/300,1.16,364/300]};
+  renderer.bind({position:0,guarded:true,uniforms:new Map()},target);
+  assert.deepEqual(calls,[['enable',1],['rect',0,32,432,332]]);
+  assert.deepEqual(uniforms.find(([name])=>name==='rpenGuardLogicalSize'),['rpenGuardLogicalSize',[400,300]]);
+  renderer.bind({position:0,guarded:false},target);
+  assert.deepEqual(calls.at(-1),['disable',1]);
+  renderer.bind({position:0,guarded:true},null);
+  assert.deepEqual(calls.at(-1),['disable',1]);
+});
+
 test('播放复用捕获画布和历史纹理，同刻重绘恢复历史输入，跳转和参数变化清空历史', () => {
   const events = [], sizes = []; let allocated = 0;
   const capture = { getContext() { assert.fail('稳定播放不应反复获取上下文'); } };

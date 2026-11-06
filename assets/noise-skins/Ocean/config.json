@@ -1,5 +1,6 @@
 {
   "version": 1,
+  "padding": { "pixels": 32, "screenWidth": 0.071, "screenHeight": 0.071, "screen": false, "geometryOnly": true },
   "targets": {
     "activeCompose": {
       "scaleX": 0.125,

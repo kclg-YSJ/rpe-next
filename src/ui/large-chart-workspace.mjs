@@ -104,11 +104,22 @@ export class LargeChartWorkspace {
     const overlap = this.view.buffer ? Math.min(.25, (this.view.buffer.end - this.view.buffer.seconds) / 2) : 0;
     if (!this.view.contains(seconds) || this.audio.playing && seconds > this.view.buffer.end - overlap) this.readPreview(seconds).catch(this.reportError);
   }
-  async readPreview(seconds) {
+  async prepareRecordingFrame(seconds) {
+    const preview = this.previews[0];
+    const footprint = `${preview.aspectRatio}:${preview.viewDivisor}:${this.previews.some(view => view.visible && view.showHitEffects)}`;
+    if (this.windowFootprint !== footprint) { this.windowFootprint = footprint; this.view.set(null); this.failedWindow = null; }
+    await this.document.pending;
+    await this.document.ensurePage(this.range());
+    if (!this.document.covers(this.range())) throw Error('超大谱当前编辑页尚未就绪，请结束拖拽或等待数据加载');
+    if (this.windowRequest) await this.windowRequest;
+    if (!this.view.contains(seconds)) await this.readPreview(seconds, { recording: true });
+    if (!this.view.contains(seconds)) throw Error('超大谱预览数据尚未就绪');
+  }
+  async readPreview(seconds, { recording = false } = {}) {
     if (this.windowRequest) return this.windowRequest;
     if (this.failedWindow === `${this.document.revision}:${seconds}`) return;
     const revision = this.document.revision, footprint = this.windowFootprint;
-    if (!this.view.contains(seconds)) this.playback.waitForData();
+    if (!recording && !this.view.contains(seconds)) this.playback.waitForData();
     this.windowRequest = (async () => {
       try {
         const preview = this.previews[0], scale = previewPositionScale(preview.aspectRatio ?? 1.5);
@@ -125,7 +136,7 @@ export class LargeChartWorkspace {
         if (this.disposed || this.closing || revision !== this.document.revision || footprint !== this.windowFootprint) return;
         this.view.set(value); this.invalidate();
         const current = this.audio.time - (this.document.header.META.offset ?? 0) / 1000;
-        if (this.view.contains(current) && (!this.playback.sounds.enabled || this.hitSounds.contains(current))) await this.playback.resumeWhenReady();
+        if (!recording && this.view.contains(current) && (!this.playback.sounds.enabled || this.hitSounds.contains(current))) await this.playback.resumeWhenReady();
       } catch (error) { if (this.disposed || this.closing) return; this.failedWindow = `${revision}:${seconds}`; this.playback.pause(); throw error; }
       finally { this.windowRequest = null; }
     })();

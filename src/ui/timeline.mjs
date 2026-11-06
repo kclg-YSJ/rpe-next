@@ -93,7 +93,7 @@ export class Timeline {
     notesCanvas.addEventListener('pointerleave', () => { if (!this.drag) this.cursor = null; this.onNoteHover?.(null); changed(); });
     notesCanvas.addEventListener('pointerdown', event => this.down(event));
     notesCanvas.addEventListener('pointerup', event => this.up(event));
-    notesCanvas.addEventListener('pointercancel', () => { const tracing = this.drag?.kind === 'stroke' && this.drag.tracing; this.drag = null; if (tracing) this.getSession().notify(); changed(); });
+    notesCanvas.addEventListener('pointercancel', event => { if (this.endRectanglePan(event)) return; const tracing = this.drag?.kind === 'stroke' && this.drag.tracing; this.drag = null; if (tracing) this.getSession().notify(); changed(); });
   }
 
   point(event, canvas = this.notesCanvas) {
@@ -125,15 +125,43 @@ export class Timeline {
 
   updateRectangle(event) {
     const selection = this.rectangleSelection(); if (!selection) return;
+    const pan = selection.drag.pan;
+    if (pan && event.pointerId === pan.pointerId) {
+      const point = this.point(event, selection.canvas);
+      if (Math.abs(point.x - pan.startX) > 3 || pan.moved) {
+        pan.moved = true; this.multiLineScroll[selection.area] = pan.offset - (point.x - pan.startX);
+        this.multiLineViewportOffset(selection.canvas.clientWidth, selection.area); selection.canvas.style.cursor = 'grabbing';
+      }
+    }
     selection.drag.current = this.point(event, selection.canvas);
     selection.drag.currentWorldX = selection.drag.current.x + this.multiLineViewportOffset(selection.canvas.clientWidth, selection.area);
     if (selection.drag.startFactor !== undefined) selection.drag.currentSeconds = this.noteView?.flow && selection.area === 'notes' ? this.timeAt(selection.drag.current.y) : this.tempo.seconds(this.origin, selection.drag.startFactor) + (this.baseline() - selection.drag.current.y) / this.scale;
     this.changed();
   }
 
+  beginRectanglePan(event, canvas) {
+    const selection = this.rectangleSelection(), session = this.getSession();
+    if (!selection || event.button !== 0 || event.shiftKey || event.ctrlKey || event.altKey || event.metaKey || !session.multiLineActive || canvas !== selection.canvas) return false;
+    const width = canvas.clientWidth, count = this.panelCount(selection.area), panelWidth = this.panelWidth(width, selection.area), gap = this.panelGap(width, selection.area);
+    if (count <= 1 || count * panelWidth + (count - 1) * gap <= width) return false;
+    this.endRectanglePan();
+    selection.drag.pan = { pointerId: event.pointerId, startX: this.point(event, canvas).x, offset: this.multiLineViewportOffset(width, selection.area) };
+    canvas.setPointerCapture?.(event.pointerId); return true;
+  }
+
+  endRectanglePan(event) {
+    const selection = this.rectangleSelection(), pan = selection?.drag.pan;
+    if (!pan || event && event.pointerId !== pan.pointerId) return false;
+    if (event && event.type !== 'pointercancel') this.updateRectangle(event);
+    delete selection.drag.pan;
+    if (selection.canvas.hasPointerCapture?.(pan.pointerId)) selection.canvas.releasePointerCapture(pan.pointerId);
+    selection.canvas.style.cursor = 'default'; this.changed(); return true;
+  }
+
   finishRectangle(event) {
     const selection = this.rectangleSelection();
-    if (!selection || ![0, 1, 2].includes(event.button)) return false;
+    if (!selection || !(event.button === 1 || event.button === 0 && event.shiftKey)) return false;
+    this.endRectanglePan();
     selection.drag.finished = true;
     if (selection.area === 'notes') this.up(event); else this.eventInteraction.up(event);
     return true;
@@ -373,7 +401,7 @@ export class Timeline {
     }
   }
 
-  cancelPlacement() { this.pendingHold = null; this.eventInteraction.pending = null; this.drag = null; this.eventInteraction.drag = null; this.changed(); }
+  cancelPlacement() { this.endRectanglePan(); this.pendingHold = null; this.eventInteraction.pending = null; this.drag = null; this.eventInteraction.drag = null; this.changed(); }
 
   previewNotes() {
     if (this.bulkPreview || !['move', 'startTime', 'endTime'].includes(this.drag?.kind)) { this.noteDragPreview = null; return null; }
@@ -472,6 +500,7 @@ export class Timeline {
   }
 
   move(event) {
+    if (this.rectangleSelection()?.drag.pan) this.updateRectangle(event);
     this.cursor = this.point(event);
     this.cursorLineIndex = this.lineIndexAt(this.cursor.x, this.notesCanvas.clientWidth, 'notes');
     this.clipboardPointer = this.cursor;
@@ -521,7 +550,7 @@ export class Timeline {
     if (![0, 1, 2].includes(event.button)) return;
     event.preventDefault?.();
     if (event.button === 2) return;
-    if (this.finishRectangle(event)) return;
+    if (this.rectangleSelection()) { if (!this.finishRectangle(event)) this.beginRectanglePan(event, this.notesCanvas); return; }
     this.notesCanvas.focus();
     this.notesCanvas.setPointerCapture(event.pointerId);
     const position = this.point(event);
@@ -581,6 +610,7 @@ export class Timeline {
   }
 
   up(event) {
+    if (this.endRectanglePan(event)) return;
     if (!this.drag) return;
     if (this.drag.kind === 'stroke') this.move(event);
     if (this.drag.kind === 'multi-pan') { this.drag = null; this.changed(); return; }
@@ -1312,7 +1342,7 @@ export class Timeline {
     for (const entry of entries) {
       const placement = this.shaderLanes.get(entry.index);
       const laneWidth = bounds.width / placement.count;
-      const name = shaderIdentity(entry.item);
+      const name = this.shaderLabel?.(entry.item) ?? shaderIdentity(entry.item);
       const top = Math.max(23, this.eventVertical(entry.end, 'paintEvents'));
       const bottom = Math.min(height, this.eventVertical(entry.start, 'paintEvents'));
       if (bottom < top) continue;

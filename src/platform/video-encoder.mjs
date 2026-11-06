@@ -5,6 +5,21 @@ import { renderFrames } from '../application/render-frames.mjs';
 import { t } from '../i18n.mjs';
 
 let mediaPromise = null;
+let frameBufferTransfer;
+function rawEditorVideoFrame(image, timestamp, duration) {
+  if (frameBufferTransfer === undefined) {
+    frameBufferTransfer = false;
+    try {
+      const pixel = new Uint8Array([0, 0, 0, 255]);
+      const probe = new VideoFrame(pixel, { format: 'RGBA', codedWidth: 1, codedHeight: 1, timestamp: 0, transfer: [pixel.buffer] });
+      frameBufferTransfer = pixel.byteLength === 0; probe.close();
+    } catch { /* Older engines copy the pixels instead. */ }
+  }
+  return new VideoFrame(image.bytes, { format: image.format, codedWidth: image.width, codedHeight: image.height,
+    layout: [{ offset: 0, stride: image.stride }], timestamp: Math.round(timestamp * 1e6), duration: Math.round(duration * 1e6),
+    colorSpace: { primaries: 'bt709', transfer: 'iec61966-2-1', matrix: 'rgb', fullRange: true },
+    ...(frameBufferTransfer ? { transfer: [image.bytes.buffer] } : {}) });
+}
 export function loadMediaBunny() {
   mediaPromise ??= import('../../assets/vendor/mediabunny/mediabunny.min.mjs');
   return mediaPromise;
@@ -88,6 +103,67 @@ function outputFormat(media, format, streaming = false) {
   if (format === 'mkv') return new media.MkvOutputFormat();
   if (format === 'webm') return new media.WebMOutputFormat();
   throw new Error(t('render.ui.1b4ae3939') + format);
+}
+
+/** Incremental, backpressured encoding; stopping finalizes the frames already added. */
+export async function createVideoEncodingSession({ canvas, sampleFrames = false, audioTrack, settings, stream, signal }) {
+  checkRenderAbort(signal);
+  const media = await renderAwait(loadMediaBunny(), signal);
+  const videoCodec = await renderAwait(chooseVideo(media, settings), signal);
+  const audioChoice = await renderAwait(chooseAudio(media, { ...settings, __hasAudio: Boolean(audioTrack) }), signal);
+  const output = new media.Output({ format: outputFormat(media, settings.format, true), target: new media.StreamTarget(stream.writable, { chunked: true, chunkSize: 1 << 19 }) });
+  const config = { codec: videoCodec, bitrate: Math.round(settings.videoBitrate * 1e6) };
+  const video = sampleFrames ? new media.VideoSampleSource(config) : new media.CanvasSource(canvas, config);
+  output.addVideoTrack(video, { frameRate: settings.fps });
+  const audio = audioChoice && new media.AudioSampleSource({ codec: audioChoice.codec, ...(audioChoice.codec.startsWith('pcm-') ? {} : { bitrate: audioChoice.bitrate }) });
+  if (audio) output.addAudioTrack(audio);
+  let frames = 0, audioFrames = 0, done = false;
+  const cancel = () => { void output.cancel().catch(() => {}); };
+  signal?.addEventListener('abort', cancel, { once: true });
+  const release = () => signal?.removeEventListener('abort', cancel);
+  const addAudio = async final => {
+    checkRenderAbort(signal);
+    const total = Math.round(frames / settings.fps * settings.sampleRate);
+    while (audio && total > audioFrames && (final || total - audioFrames >= settings.sampleRate / 2)) {
+      const count = Math.min(Math.floor(settings.sampleRate / 2), total - audioFrames);
+      const data = await renderAwait(audioTrack.read(audioFrames / settings.sampleRate, count), signal);
+      const sample = new media.AudioSample({ data, format: 'f32-planar', numberOfChannels: 2, sampleRate: settings.sampleRate, timestamp: audioFrames / settings.sampleRate });
+      try { await renderAwait(audio.add(sample), signal); } finally { sample.close(); }
+      audioFrames += count;
+    }
+  };
+  try { await renderAwait(output.start(), signal); }
+  catch (error) { release(); await output.cancel().catch(() => {}); throw error; }
+  return { get frames() { return frames; },
+    async add(image) {
+      checkRenderAbort(signal);
+      if (done) throw Error('Video encoder is closed');
+      const timestamp = frames / settings.fps, duration = 1 / settings.fps;
+      if (sampleFrames) {
+        let sample;
+        try {
+          if (image.format === 'BGRA' || image.format === 'RGBA') {
+            // Transfer native pixels when supported, otherwise copy in native
+            // code. Avoid PNG, JS swizzling, canvas upload and readback.
+            const frame = rawEditorVideoFrame(image, timestamp, duration);
+            try { sample = new media.VideoSample(frame); } catch (error) { frame.close(); throw error; }
+          } else sample = new media.VideoSample(image.bitmap, { timestamp, duration });
+          await renderAwait(video.add(sample), signal);
+        } finally { sample?.close(); }
+      } else await renderAwait(video.add(timestamp, duration), signal);
+      frames++; await addAudio(false);
+    },
+    async finish() {
+      checkRenderAbort(signal);
+      if (done) throw Error('Video encoder is closed');
+      try {
+        await addAudio(true); await renderAwait(output.finalize(), signal); done = true;
+        if (!stream.bytes()) throw Error(t('render.ui.25dac2f47'));
+        return { frames, duration: frames / settings.fps, bytes: stream.bytes(), videoCodec, audioCodec: audioChoice?.codec ?? null };
+      } finally { release(); }
+    },
+    async abort() { if (done) return; done = true; release(); await output.cancel().catch(() => {}); }
+  };
 }
 
 /**

@@ -1,5 +1,5 @@
 import { ShaderPipeline } from '../ui/shader-pipeline.mjs';
-import { SHADER_NAMES } from '../core/shader.mjs';
+import { SHADER_NAMES, builtinShaderSource } from '../core/shader.mjs';
 import { previewViewport } from '../core/editor-display.mjs';
 import { assetUrl } from '../core/asset-url.mjs';
 import { t } from '../i18n.mjs';
@@ -16,11 +16,11 @@ const check = (condition, description) => { messages.push(`${condition ? 'PASS' 
 try {
   if (!pipeline.ensure(output)) throw new Error(t('preview-regression.s652bd05'));
   const sources = new Map();
-  const names = [...SHADER_NAMES, ...SHADER_NAMES.slice(20).map(name => `pr/${name}_pr`)];
+  const names = SHADER_NAMES;
   for (const name of names) {
     const response = await fetch(assetUrl(`rpe/shaders/${name}.glsl`));
     if (!response.ok) throw new Error(t('preview-regression.sd7823f5', { p0: name }));
-    sources.set(name, await response.text());
+    sources.set(name, builtinShaderSource(await response.text()));
     const compiled = pipeline.compile(name, sources.get(name));
     check(Boolean(compiled), t('preview-regression.s9a7b508', { p0: name, p1: compiled ? '' : ': ' + pipeline.lastError }));
   }
@@ -54,13 +54,13 @@ try {
     }
     if (view.left > 2 || view.top > 2) check(pixel(0, 0)[3] === 0, t('preview-regression.s4dbae3f', { p0: ratio.toFixed(3) }));
     context.fillStyle = '#0000ff'; context.fillRect(300, view.top, view.width / 2, view.height);
-    for (const shader of ['camera', 'pr/camera_pr']) {
+    for (const shader of ['camera']) {
       pipeline.render(source, output, [{ shader, values: { zoom: 1, offset: [0, 0], rotation: 0 } }], 0, pass => sources.get(pass.shader), view);
       const left = pixel(300 - view.width / 4, 200); const right = pixel(300 + view.width / 4, 200);
       check(left[0] > 200 && left[2] < 5 && right[2] > 200 && right[0] < 5, t('preview-regression.s6a2122e', { p0: ratio.toFixed(3), p1: shader }));
     }
     check(gl.getError() === gl.NO_ERROR, t('preview-regression.s4b59a2a', { p0: ratio.toFixed(3) }));
-    const chain = [{ shader: 'vignette', values: { extend: 0.25, radius: 10 } }, { shader: 'pr/rain_pr', values: { density: 5, rainColor: [127, 127, 255, 255] } }, { shader: 'chromatic', values: { power: 0.0031 } }];
+    const chain = [{ shader: 'vignette', values: { extend: 0.25, radius: 10 } }, { shader: 'rain', values: { density: 5, rainColor: [127, 127, 255, 255] } }, { shader: 'chromatic', values: { power: 0.0031 } }];
     for (let count = 1; count <= chain.length; count++) {
       pipeline.render(source, output, chain.slice(0, count), 37.93, pass => sources.get(pass.shader), view);
       const color = pixel(300 - view.width / 4, 200);

@@ -138,6 +138,8 @@ export interface Editor {
   /** Advanced floating panel; edits native line speed events using distance easing. */
   speedCurve: { active: boolean; open(anchor?: { x: number; y: number }): boolean; close(): void; saveView(immediate?: boolean): void };
   trajectoryPanel: any; textLinesPanel: any; noiseFitPanel: any;
+  /** Lazily loaded spatial trajectory editor. Disabled views create no scene indexes. */
+  spatialTool: { readonly enabled: boolean; open(): Promise<void>; reset(): void };
   noiseTrackingPanel: any; multiEdit: any; batchControls: any; collaboration: any;
   globalEvents: any; globalEventRegistry: any; openGlobalEvents(): void;
   versionControl: any;
@@ -155,6 +157,8 @@ export interface Editor {
   setPreview(visible: boolean, options?: {stay?: boolean; autoplay?: boolean}): void;
   play(): Promise<void>; pause(): void;
   addAsset(path: string, bytes: Uint8Array): void; removeAsset(path: string): void;
+  /** After replacing shader resource bytes: marks assets dirty, refreshes diagnostics and shader caches without reloading images. */
+  shaderAssetsChanged(): void;
   /** Changes preview state temporarily; returned function restores view and pauses. */
   beginPreviewSession(): Dispose;
   raw: {

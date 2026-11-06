@@ -126,7 +126,7 @@ void main() {
     vec2 w=shoreWarp(p,f,time*edgeWaveSpeed);
     float aspectCorrection=(screenSize.x/max(screenSize.y,1.0))/(1920.0/1080.0);
     vec2 waveUV=referencePixelOffset(w*vec2(1.18*aspectCorrection,0.73),edgeWavePixels);
-    vec2 shapeUV=clamp(uv+waveUV,vec2(0.0),vec2(1.0));
+    vec2 shapeUV=uv+waveUV;
     float m=texture2D(composeRT,shapeUV).r;
     vec2 bands=texture2D(edgeBandRT,shapeUV).rg;
     // Touch belongs to its own camera/target. It is deliberately NOT

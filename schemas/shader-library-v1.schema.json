@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "RPEN shared shader library v1",
+  "description": "Local editor preferences, not chart data. Runtime additionally validates GLSL 1.00, unique IDs/names, uniform defaults, UTF-8 byte limits and GPU compilation before interactive save. Applying a template creates a chart-local GLSL snapshot; later library edits never mutate existing chart copies. Optional source-comment metadata is described in $defs.chartSourceMetadata.",
+  "$defs": {
+    "chartSourceMetadata": {
+      "description": "JSON in the optional // @rpen-template comment after #version. Ignored by GLSL consumers; not part of the chart event format. Unknown fields are preserved on source edits.",
+      "type": "object", "required": ["version", "name", "chart"],
+      "properties": {
+        "version": {"const": 1},
+        "name": {"type": "string", "maxLength": 100},
+        "chart": {"type": "string", "maxLength": 6},
+        "origin": {"type": "string"},
+        "revision": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+      }
+    }
+  },
+  "type": "object",
+  "required": ["format", "version", "templates"],
+  "properties": {
+    "format": {"const": "rpen-shaders"},
+    "version": {"const": 1},
+    "templates": {
+      "type": "array", "maxItems": 256,
+      "items": {
+        "type": "object", "required": ["id", "name", "source"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,100}$"},
+          "name": {"type": "string", "minLength": 1, "maxLength": 100},
+          "source": {"type": "string", "maxLength": 262144}
+        }
+      }
+    }
+  }
+}

@@ -177,5 +177,9 @@ const compiledEvents = new WeakMap();
 export function trajectoryEventValue(event, progress, axis = event.trajectoryAxis ?? 'x') {
   let evaluate = compiledEvents.get(event);
   if (!evaluate) { evaluate = compileTrajectory(event.trajectory.options); compiledEvents.set(event, evaluate); }
-  return evaluate(progress)[axis];
+  if(!event.trajectory.domain&&!event.trajectory.offsets&&!event.inst)return evaluate(progress)[axis];
+  const [a,b] = event.trajectory.domain ?? [0,1];
+  const unit=a+(b-a)*Math.max(0,Math.min(1,event.inst?0:progress));
+  const offsets=event.trajectory.offsets?.[axis] ?? [0,0];
+  return evaluate(unit)[axis]+offsets[0]+(offsets[1]-offsets[0])*unit;
 }

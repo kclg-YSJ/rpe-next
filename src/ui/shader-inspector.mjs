@@ -1,30 +1,29 @@
 import { beatValue, formatBeat, parseBeat, fromNumber } from '../core/beat.mjs';
 import { SHADER_NAMES } from '../core/shader.mjs';
+import { shaderAssetPath, chartShaderChoices } from '../core/shader-assets.mjs';
+import { shaderAssetLabel, chartNamePrefix, inferShaderAssetNames } from '../core/shader-source-info.mjs';
+import { shaderReferenceCount } from '../application/shader-resource-commands.mjs';
+import { readShaderSource } from '../platform/shader-sources.mjs';
+import { readShaderLibrary, materializeShader } from '../platform/shader-library.mjs';
+import { shaderWorkspaceContext, openShaderWorkspace } from './shader-tool.mjs';
 import { shaderIdentity, shaderTypeFields, shaderParameterTrack, shaderParameters, parseShaderValue, alignShaderTrack } from '../core/shader-events.mjs';
-import { selectedEvents, transformEvents, deleteEvents } from '../application/event-commands.mjs';
+import { selectedEventEntries, transformEvents, deleteEvents } from '../application/event-commands.mjs';
 import { createCustomEasingControls } from './custom-easing-controls.mjs';
 import { previewSelectedCurve, previewCurveEvent } from '../application/animation-curve-preview.mjs';
 import { withStandardEasing, rebaseCustomEventValues } from '../core/event-easing.mjs';
 import { EASING_NAMES, createEasingPicker } from './easing-picker.mjs';
 import { numericWheel } from './numeric-wheel.mjs';
-import { assetUrl } from '../core/asset-url.mjs';
 import { t } from '../i18n.mjs';
 
-const sources = new Map();
 const states = new WeakMap();
 
 async function parametersFor(event) {
-  const name = shaderIdentity(event);
-  const portable = /(?:_pr\.glsl|\/pr\/)/i.test(event.shader ?? '');
-  const path = portable ? `pr/${name}_pr` : name;
-  if (!sources.has(path)) sources.set(path, fetch(assetUrl(`rpe/shaders/${path}.glsl`)).then(async response => {
-    if (!response.ok) throw new Error(t('shader-inspector.sa91901d'));
-    return shaderParameters(await response.text());
-  }).catch(error => { sources.delete(path); throw error; }));
-  return sources.get(path);
+  const context = shaderWorkspaceContext();
+  return shaderParameters(await readShaderSource(event.shader ?? shaderIdentity(event), context?.assets, context?.chartName));
 }
 
 export function renderShaderInspector(container, session, reportError, refresh) {
+  const selectedEvents = selectedEventEntries;
   const entries = selectedEvents(session).filter(entry => entry.type === 'paintEvents');
   const event = entries[0]?.event;
   if (!event) return;
@@ -68,13 +67,39 @@ export function renderShaderInspector(container, session, reportError, refresh) 
     });
   }
   const shader = document.createElement('select');
-  for (const name of SHADER_NAMES) { const option = document.createElement('option'); option.value = name; option.textContent = name; shader.append(option); }
-  shader.value = shaderIdentity(event);
-  shader.onchange = () => safely(() => {
-    state.parameter = ''; state.open = false;
-    change(t('shader-inspector.s26cfe8a'), current => ({ ...current, ...shaderTypeFields(shader.value), vars: {} }));
-  });
+  shader.id = 'shader-choice';
+  const group = (label, choices) => { const root = document.createElement('optgroup'); root.label = t('shader-editor.' + label); for (const [value, name] of choices) root.append(new Option(name, value)); shader.append(root); };
+  group('builtins', SHADER_NAMES.map(name => [name, name]));
+  let templates = [];
+  try { templates = readShaderLibrary(); } catch (error) { reportError(error); }
+  group('library', templates.map(template => ['library:' + template.id, template.name]));
+  const context = shaderWorkspaceContext(), files = chartShaderChoices(session.chart, context?.assets, context?.chartName);
+  inferShaderAssetNames(files, context?.assets, templates);
+  group('chartOnly', files.map(path => ['/' + path, shaderAssetLabel(path, context?.assets, session.chart, context?.chartName)]));
+  const ownPath = shaderAssetPath(context?.assets, event.shader, context?.chartName), selected = ownPath ? '/' + ownPath : shaderIdentity(event);
+  if (![...shader.options].some(option => option.value === selected)) group('chartOnly', [[selected, event.shader || selected]]);
+  shader.value = selected;
+  shader.onchange = async () => {
+    const before = session.chart, snapshot = () => JSON.stringify(selectedEvents(session).map(entry => [entry.lineIndex, entry.type, entry.index])), selection = snapshot(), selected = shader.value;
+    shader.disabled = true;
+    try {
+      let fields;
+      if (selected.startsWith('library:')) {
+        const current = shaderWorkspaceContext();
+        if (current?.session !== session) throw Error(t('shader-editor.stale'));
+        const template = templates.find(entry => entry.id === selected.slice(8));
+        const resource = await materializeShader(template, current.assets, chartNamePrefix(session.chart, current.chartName));
+        if (current.session !== session || session.chart !== before || snapshot() !== selection) throw Error(t('shader-editor.stale'));
+        if (!current.assets.has(resource.path)) current.addAsset(resource.path, resource.bytes); fields = { shader: resource.shader, clone: false };
+      } else fields = selected.startsWith('/') ? { shader: selected, clone: false } : shaderTypeFields(selected);
+      state.parameter = ''; state.open = false;
+      change(t('shader-inspector.s26cfe8a'), current => ({ ...current, ...fields, vars: current.shader === fields.shader ? current.vars : {} }));
+    } catch (error) { reportError(error); refresh(); } finally { shader.disabled = false; }
+  };
   field(container, t('shader-inspector.se4e46c7'), shader);
+  if (ownPath) { const scope = document.createElement('p'); scope.className = 'hint'; scope.textContent = t('shader-editor.chartScope', { count: shaderReferenceCount(session.chart, context.assets, ownPath, context.chartName) }); scope.title = ownPath; container.append(scope); }
+  const code = document.createElement('button'); code.id = 'shader-code-editor'; code.type = 'button'; code.className = 'wide-button'; code.textContent = t('shader-editor.open');
+  code.onclick = () => openShaderWorkspace({ reference: event.shader ?? shaderIdentity(event) }).catch(reportError); container.append(code);
   const global = document.createElement('input'); global.type = 'checkbox'; global.checked = Boolean(event.global);
   global.onchange = () => safely(() => change(t('shader-inspector.s9d4f787'), current => ({ ...current, global: global.checked })));
   field(container, t('shader-inspector.se04a1db'), global);

@@ -90,7 +90,8 @@ test('Shift 框选和左拖轨迹生效，右键保留给上下文菜单；Y 缩
   timeline.scale = 144;
   const start = { button: 0, shiftKey: true, clientX: 100, clientY: 380 };
   timeline.down(start); timeline.up(start); assert.equal(timeline.drag.kind, 'rectangle'); assert.equal(session.selection.size, 0);
-  timeline.down({ button: 0, clientX: 400, clientY: 500 }); assert.equal(session.selection.size, 1);
+  timeline.down({ button: 0, clientX: 400, clientY: 500 }); assert.equal(session.selection.size, 0); assert.equal(timeline.drag.kind, 'rectangle');
+  timeline.down({ button: 0, shiftKey: true, clientX: 400, clientY: 500 }); assert.equal(session.selection.size, 1);
   session.selection.clear(); timeline.down({ button: 0, clientX: 50, clientY: 400 }); timeline.move({ clientX: 400, clientY: 450 }); timeline.up({ clientX: 400, clientY: 450 }); assert.equal(session.selection.size, 1);
   timeline.down({ button: 2, clientX: 50, clientY: 400 }); timeline.up({ button: 2, clientX: 400, clientY: 450 }); assert.equal(session.selection.size, 1);
   timeline.scale = 333;

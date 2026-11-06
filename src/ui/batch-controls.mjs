@@ -61,6 +61,13 @@ export class BatchControls {
     return { x: Math.max(-canvas.clientWidth, Math.min(canvas.clientWidth * 2, point.x)), y: Math.max(-canvas.clientHeight, Math.min(canvas.clientHeight * 2, point.y)) };
   }
 
+  snappedPointerBeat(point, canvas, lineIndex, side, fallback = 1) {
+    const timeline = this.timeline, factor = timeline.factorForLine?.(lineIndex) ?? fallback;
+    const baseline = timeline.baseline?.(canvas.clientHeight) ?? canvas.clientHeight - (timeline.judgementOffset ?? 42);
+    const seconds = timeline.noteView?.flow ? timeline.timeAt(point.y, side) : timeline.tempo.seconds(timeline.origin, factor) + (baseline - point.y) / timeline.scale;
+    return beatValue(snapTime(seconds, timeline.division, timeline.tempo, factor));
+  }
+
   sync() {
     const session = this.getSession();
     if (this.active && (session !== this.active.session || session.chart !== this.active.snapshot.chart || this.signature(this.active.area, session) !== this.active.signature || !this.enabled())) this.cancel();
@@ -128,10 +135,11 @@ export class BatchControls {
     this.active = { session, snapshot, xySelected, kind, button, area, lineIndex: activeLineIndex, bounds, signature: this.signature(area, session), pointerId: event.pointerId, start: point, point, canvas,
       unit: Math.max(0.35, canvas.clientHeight / 1080), factor: session.chart.judgeLineList?.[activeLineIndex]?.bpmfactor ?? 1,
       side: this.timeline.noteView?.sideAt?.(point.y),
-      startBeat: this.timeline.tempo.beat(this.timeline.noteView?.flow ? this.timeline.timeAt(point.y) : this.timeline.tempo.seconds(this.timeline.origin, session.chart.judgeLineList?.[activeLineIndex]?.bpmfactor ?? 1) + ((this.timeline.baseline?.(canvas.clientHeight) ?? canvas.clientHeight - (this.timeline.judgementOffset ?? 42)) - point.y) / this.timeline.scale, session.chart.judgeLineList?.[activeLineIndex]?.bpmfactor ?? 1), startX: typeof this.timeline.notePositionAt === 'function' ? this.timeline.notePositionAt(point.x, activeLineIndex) : point.x };
+      startX: typeof this.timeline.notePositionAt === 'function' ? this.timeline.notePositionAt(point.x, activeLineIndex) : point.x };
+    this.active.startBeatsByLine = new Map([...new Set((area === 'notes' ? snapshot.notes : snapshot.events).map(entry => entry.lineIndex))].map(lineIndex => [lineIndex, this.snappedPointerBeat(point, canvas, lineIndex, this.active.side, this.active.factor)]));
     this.timeline.scaleAxis = kind === 'note-scale' ? selectionScaleAnchor(snapshot, this.anchorMode) : null;
     this.timeline.scaleAxisLine = kind === 'note-scale' ? activeLineIndex : null;
-    button.setPointerCapture(event.pointerId); this.timeline.changed();
+    button.setPointerCapture(event.pointerId); this.update();
   }
 
   move(event) {
@@ -141,23 +149,17 @@ export class BatchControls {
 
   update() {
     const active = this.active; if (!active) return;
-    const { point, start, kind, snapshot, factor } = active;
+    const { point, start, kind, snapshot } = active;
     this.timeline.scaleAxis = kind === 'note-scale' ? selectionScaleAnchor(snapshot, this.anchorMode) : null;
     this.timeline.scaleAxisLine = kind === 'note-scale' ? active.lineIndex : null;
     const deltaX = point.x - start.x; const deltaY = point.y - start.y;
     active.button.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
-    const baseline = this.timeline.baseline?.(active.canvas.clientHeight) ?? active.canvas.clientHeight - (this.timeline.judgementOffset ?? 42);
-    const seconds = this.timeline.noteView?.flow ? this.timeline.timeAt(point.y, active.side) : this.timeline.tempo.seconds(this.timeline.origin, factor) + (baseline - point.y) / this.timeline.scale;
-    const deltaBeat = beatValue(snapTime(seconds, this.timeline.division, this.timeline.tempo, factor)) - active.startBeat;
     const deltaEntries = active.area === 'notes' ? snapshot.notes : snapshot.events;
     const deltaBeatByLine = new Map([...new Set(deltaEntries.map(entry => entry.lineIndex))].map(lineIndex => {
-      const lineFactor = typeof this.timeline.factorForLine === 'function'
-        ? this.timeline.factorForLine(lineIndex)
-        : active.factor;
-      const startSeconds = this.timeline.noteView?.flow ? this.timeline.timeAt(start.y, active.side) : this.timeline.tempo.seconds(this.timeline.origin, lineFactor) + (baseline - start.y) / this.timeline.scale;
-      const currentSeconds = this.timeline.noteView?.flow ? this.timeline.timeAt(point.y, active.side) : this.timeline.tempo.seconds(this.timeline.origin, lineFactor) + (baseline - point.y) / this.timeline.scale;
-      return [lineIndex, beatValue(snapTime(currentSeconds, this.timeline.division, this.timeline.tempo, lineFactor)) - beatValue(snapTime(startSeconds, this.timeline.division, this.timeline.tempo, lineFactor))];
+      const origin = active.startBeatsByLine?.get(lineIndex) ?? this.snappedPointerBeat(start, active.canvas, lineIndex, active.side, active.factor);
+      return [lineIndex, this.snappedPointerBeat(point, active.canvas, lineIndex, active.side, active.factor) - origin];
     }));
+    const deltaBeat = deltaBeatByLine.get(active.lineIndex ?? snapshot.lineIndex) ?? 0;
     const panelWidth = active.area === 'notes'
       ? (typeof this.timeline.panelWidth === 'function' ? this.timeline.panelWidth(active.canvas.clientWidth, 'notes') : active.canvas.clientWidth)
       : 0;

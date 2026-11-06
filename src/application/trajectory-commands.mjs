@@ -1,7 +1,7 @@
 import { cropCustomEvent } from '../core/event-easing.mjs';
 import { beatValue, fromNumber } from '../core/beat.mjs';
 import { createEvent, assertChart } from '../core/chart.mjs';
-import { compileTrajectory, sampleCurveTrajectory, TRAJECTORY_VERSION, trajectoryHasRotation } from '../core/curve-trajectory.mjs';
+import { compileTrajectory, sampleCurveTrajectory, TRAJECTORY_VERSION, trajectoryHasRotation, trajectoryEventValue } from '../core/curve-trajectory.mjs';
 import { simplifyTrajectorySamples, trajectorySplitSettings } from '../core/trajectory-simplify.mjs';
 import { EventTrack } from '../core/events.mjs';
 import { TempoMap } from '../core/tempo.mjs';
@@ -20,6 +20,8 @@ export function createTrajectoryEvent(options, startTime, endTime, segments = 12
 }
 
 export function trajectoryChart(chart, lineIndex, layerIndex, event, editing = null, replace = false) {
+  if(editing?.trajectory && (editing.trajectory.domain || editing.trajectory.offsets)) event={...event,trajectory:{...event.trajectory,...(editing.trajectory.domain?{domain:[...editing.trajectory.domain]}:{}),...(editing.trajectory.offsets?{offsets:structuredClone(editing.trajectory.offsets)}:{})}};
+  if(event.trajectory.domain||event.trajectory.offsets)event={...event,start:trajectoryEventValue(event,0),end:trajectoryEventValue(event,1)};
   if (editing) {
     for (let sourceLine = 0; sourceLine < chart.judgeLineList.length; sourceLine++) {
       for (let sourceLayer = 0; sourceLayer < (chart.judgeLineList[sourceLine].eventLayers ?? []).length; sourceLayer++) {
@@ -65,7 +67,7 @@ export function trajectoryChart(chart, lineIndex, layerIndex, event, editing = n
 }
 
 export function expandTrajectory(event, tempo, factor = 1, overrides = {}) {
-  const evaluate = compileTrajectory(event.trajectory.options);
+  const evaluate = progress => Object.fromEntries(Object.values(TRAJECTORY_AXES).map(axis=>[axis,trajectoryEventValue(event,progress,axis)]));
   const start = tempo.seconds(event.startTime, factor); const end = tempo.seconds(event.endTime, factor);
   const count = overrides.segments ?? event.trajectory.segments ?? 128;
   if (!Number.isInteger(count) || count < 4 || count > 8192) throw new Error(t('trajectory-commands.s7953a23'));

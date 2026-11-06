@@ -17,7 +17,7 @@ void main() {
     for (int y = -2; y <= 2; ++y) {
         for (int x = -2; x <= 2; ++x) {
             vec2 d = vec2(float(x), float(y)) * t * 1.05;
-            float s = texture2D(composeRT, clamp(uv + d, vec2(0.0), vec2(1.0))).r;
+            float s = texture2D(composeRT, uv + d).r;
             hi = max(hi, s);
             lo = min(lo, s);
         }

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, net, protocol, shell, clipboard, ipcMain, safeStorage, utilityProcess, systemPreferences } = require('electron');
+const { app, BrowserWindow, dialog, net, protocol, shell, clipboard, ipcMain, safeStorage, utilityProcess, systemPreferences, nativeImage } = require('electron');
 const { realpath, readFile } = require('node:fs/promises');
 const { mkdirSync } = require('node:fs');
 const { resolve, sep, dirname } = require('node:path');
@@ -28,6 +28,7 @@ else {
   installGraphics({ ipcMain, service: graphics, window: () => mainWindow, origin, shell, clipboard });
   const cancelAgentNetwork = require('./agent-network.cjs').installAgentNetwork({ ipcMain, net, origin, window: () => mainWindow });
   require('./agent-capture.cjs').installAgentCapture({ ipcMain, origin, window: () => mainWindow });
+  const endEditorCapture = require('./editor-capture.cjs').installEditorCapture({ ipcMain, origin, nativeImage, window: () => mainWindow });
   const stopPerformanceMonitor = require('./performance-monitor.cjs').installPerformanceMonitor({ app, ipcMain, origin, window: () => mainWindow });
   app.on('before-quit', cancelAgentNetwork);
   let native, largePreview, closing = false, relocating = false;
@@ -217,6 +218,9 @@ else {
     mainWindow.webContents.on('did-start-loading', cancelAgentNetwork);
     mainWindow.webContents.on('did-start-loading', stopPerformanceMonitor);
     mainWindow.webContents.on('render-process-gone', stopPerformanceMonitor);
+    mainWindow.webContents.on('render-process-gone', endEditorCapture);
+    mainWindow.webContents.on('destroyed', endEditorCapture);
+    mainWindow.webContents.on('did-start-loading', endEditorCapture);
     mainWindow.webContents.on('destroyed', stopPerformanceMonitor);
     mainWindow.webContents.on('did-start-loading', () => audioSeparation.close());
     mainWindow.webContents.on('did-start-loading', () => audioOnsets.close());

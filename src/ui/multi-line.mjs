@@ -1,5 +1,5 @@
 import { formatLineExpression, parseLineExpression } from '../application/multi-line-edit.mjs';
-import { groupLineIndices, groupNames, isDefaultLineName, lineFeatureLabels, lineNameLabel } from '../core/line-groups.mjs';
+import { LineNumberList } from './line-number-list.mjs';
 import { t } from '../i18n.mjs';
 import { EVENT_TYPES } from '../core/chart.mjs';
 import { SPECIAL_TRACKS } from '../core/editor-display.mjs';
@@ -98,62 +98,12 @@ export class MultiLinePanel {
       options.append(label);
     }
     columns.append(options); this.host.append(columns);
-    const list = document.createElement('div'); list.className = 'multi-line-list';
-    this.rows = new Map();
-    list.addEventListener('scroll', () => { this.listScrollTop = list.scrollTop; }, { passive: true });
-    const syncExpression = () => { expression.value = session.multiLineExpression || formatLineExpression(session.multiLineIndices, session.chart); };
-    const setRow = (index, selected) => {
-      const values = new Set(session.multiLineIndices);
-      if (selected) values.add(index); else values.delete(index);
-      session.multiLineIndices = [...values].sort((left, right) => left - right);
-      session.multiLineExpression = '';
-      session.multiLineEnabled = session.multiLineIndices.length > 0;
-      syncExpression();
-      list.querySelectorAll('.multi-line-row').forEach(row => {
-        const rowIndex = Number(row.dataset.lineIndex); const active = session.multiLineIndices.includes(rowIndex);
-        row.classList.toggle('selected', active); const checkbox = row.querySelector('input'); if (checkbox) checkbox.checked = active;
-      });
-    };
-    const lines = session.chart.judgeLineList ?? []; const names = groupNames(session.chart);
-    const createRow = (index, line) => {
-      const row = document.createElement('label'); row.className = 'multi-line-row'; row.dataset.lineIndex = index;
-      const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.checked = session.isTargetLine(index); checkbox.disabled = !session.multiLineEnabled && index !== session.lineIndex;
-      checkbox.onchange = () => { setRow(index, checkbox.checked); session.notify(); this.renderSession(); };
-      const label = document.createElement('span'); label.className = 'multi-line-name'; const name = document.createElement('span'); name.className = 'multi-line-line-name';
-      const lineLabel = lineNameLabel(line, index); name.textContent = isDefaultLineName(line, index) ? lineLabel : t('multi-line.s3ad4a06', { p0: index, p1: lineLabel });
-      const features = lineFeatureLabels(line); const featureText = document.createElement('small'); featureText.className = 'multi-line-features'; featureText.textContent = features.join(' · '); featureText.hidden = !features.length; label.append(name, featureText);
-      const stats = document.createElement('small'); const events = [...(line.eventLayers ?? []), line.extended ?? {}].reduce((sum, layer) => sum + Object.values(layer ?? {}).reduce((total, value) => total + (Array.isArray(value) ? value.length : 0), 0), 0); stats.textContent = t('multi-line.sdf24632', { p0: line.notes?.length ?? 0, p1: events });
-      row.classList.toggle('current', index === session.lineIndex); row.classList.toggle('selected', checkbox.checked); row.append(checkbox, label, stats); this.rows.set(index, { row, checkbox }); return row;
-    };
-    const hasNamedGroups = names.slice(1).some((unused, groupIndex) => groupLineIndices(session.chart, groupIndex + 1).length > 0);
-    if (hasNamedGroups) {
-      for (const [groupIndex, groupName] of names.entries()) {
-        const group = document.createElement('details'); group.className = 'multi-line-group'; group.open = true;
-        const summary = document.createElement('summary'); const label = document.createElement('span'); label.className = 'multi-line-group-name'; label.textContent = groupName; const count = document.createElement('small'); count.textContent = t('multi-line.s1dd4cc9', { p0: groupLineIndices(session.chart, groupIndex).length }); summary.append(label, count); group.append(summary);
-        const rows = document.createElement('div'); rows.className = 'multi-line-group-rows';
-        for (const index of groupLineIndices(session.chart, groupIndex)) rows.append(createRow(index, lines[index]));
-        group.append(rows); list.append(group);
-      }
-    } else {
-      for (const [index, line] of lines.entries()) list.append(createRow(index, line));
-    }
-    const finishDrag = () => { if (!this.drag) return; this.listScrollTop = list.scrollTop; this.drag = null; session.normalizeMultiLine(); session.notify(); this.renderSession(); };
-    list.addEventListener('pointerdown', event => {
-      const row = event.target.closest('.multi-line-row'); if (!row || event.button !== 0) return;
-      event.preventDefault(); this.listScrollTop = list.scrollTop; list.setPointerCapture?.(event.pointerId); const index = Number(row.dataset.lineIndex); this.drag = { selected: !session.multiLineIndices.includes(index), pointerId: event.pointerId }; setRow(index, this.drag.selected);
+    this.lineNumbers ??= new LineNumberList(this.host, {
+      state: () => { const current = this.getSession(); return { chart: current.chart, indices: current.multiLineIndices, lineIndex: current.lineIndex, disabled: index => !current.multiLineEnabled && index !== current.lineIndex }; },
+      change: indices => { const current = this.getSession(); current.multiLineIndices = indices; current.multiLineExpression = ''; current.multiLineEnabled = indices.length > 0; if (this.expression) this.expression.value = formatLineExpression(indices, current.chart); },
+      finish: () => { const current = this.getSession(); current.normalizeMultiLine(); current.notify(); this.renderSession(); },
     });
-    list.addEventListener('pointermove', event => {
-      if (!this.drag || (this.drag.pointerId !== undefined && event.pointerId !== this.drag.pointerId)) return;
-      const rectangle = list.getBoundingClientRect(); const edge = 22;
-      if (event.clientY < rectangle.top + edge) list.scrollTop -= 12;
-      else if (event.clientY > rectangle.bottom - edge) list.scrollTop += 12;
-      const row = document.elementFromPoint(event.clientX, event.clientY)?.closest?.('.multi-line-row');
-      if (row && list.contains(row)) setRow(Number(row.dataset.lineIndex), this.drag.selected);
-    });
-    list.addEventListener('pointerup', finishDrag); list.addEventListener('pointercancel', finishDrag); list.addEventListener('lostpointercapture', finishDrag);
-    this.listScrollTop = Math.max(0, previousScrollTop);
-    list.scrollTop = this.listScrollTop;
-    requestAnimationFrame(() => { if (list.isConnected) list.scrollTop = this.listScrollTop; });
-    this.host.append(list);
+    this.lineNumbers.render(); this.rows = this.lineNumbers.rows;
+
   }
 }

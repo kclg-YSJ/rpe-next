@@ -96,6 +96,27 @@ test('背景预览跳过 Tap 与 Hold 打击特效生成，正常预览仍生成
   preview.draw(chart, tempo, 0.7, 0); assert.ok(effects.length > 0);
 });
 
+test('空间当前面独立隐藏音符、判定线和特效，普通预览忽略空间显示选项', () => {
+  globalThis.devicePixelRatio=1;
+  const chart=createChart(),tempo=new TempoMap(chart.BPMList);chart.judgeLineList[0].notes=[createNote(1,1,0),createNote(2,1,100,4)];
+  const {canvas}=previewSurface(),preview=new Preview(canvas);Object.assign(preview,{visible:true,applyShaders:false,showHitEffects:true});
+  let lines=0,hits=0;preview.drawLine=()=>lines++;preview.drawHits=()=>hits++;
+  preview.draw(chart,tempo,0,0);assert.ok(preview.noteHitAreas.length>0);assert.ok(lines>0&&hits>0);
+  const frame={width:600,height:400,viewport:preview.viewport,scale:preview.viewScale,divisor:1,states:preview.scene.sample(0)};
+  preview.spatialForeground=true;preview.spatialElements={planeLines:false,planeNotes:false,planeHits:false};lines=hits=0;
+  const runtime=preview.scene.lines[0],visible=runtime.visibleNotes;runtime.visibleNotes=()=>{throw Error('hidden notes must not be queried');};
+  preview.drawScene(canvas.getContext('2d'),chart,tempo,0,0,frame);assert.equal(lines,0);assert.equal(hits,0);assert.equal(preview.noteHitAreas.length,0);
+  runtime.visibleNotes=visible;preview.spatialForeground=false;preview.draw(chart,tempo,0,0);assert.ok(preview.noteHitAreas.length>0);assert.ok(lines>0&&hits>0);assert.equal(chart.judgeLineList[0].notes.length,2);
+});
+
+test('空间当前面的线号和箭头可以分别隐藏，原预览偏好保持不变',()=>{
+  const{context,canvas}=previewSurface(),preview=new Preview(canvas);preview.chart=createChart();preview.guides=[{index:0,x:50,y:50,rotation:0,halfWidth:100,alpha:255}];preview.lineNumbers=preview.lineArrows=true;preview.spatialForeground=true;
+  preview.spatialElements={planeNumbers:false,planeArrows:false};preview.drawGuides(context,1,0);assert.equal(context.calls.length,0);
+  preview.spatialElements.planeNumbers=true;preview.drawGuides(context,1,0);assert.ok(context.calls.some(c=>c.method==='fillText'));assert.ok(!context.calls.some(c=>c.method==='fill'));
+  context.calls.length=0;preview.spatialElements={planeNumbers:false,planeArrows:true};preview.drawGuides(context,1,0);assert.ok(!context.calls.some(c=>c.method==='fillText'));assert.ok(context.calls.some(c=>c.method==='fill'));
+  assert.equal(preview.lineNumbers,true);assert.equal(preview.lineArrows,true);
+});
+
 test('普通音符 above=2 与 Hold above=0 均向下，原字段无损保存', () => {
   const chart = createChart();
   chart.judgeLineList[0].notes = [1, 2, 3, 4].flatMap(type => [0, 1, 2].map(above => ({ ...createNote(type, 4, 0, 6), above })));

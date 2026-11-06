@@ -23,6 +23,7 @@ const clamp = value => Math.max(0, Math.min(1, value));
 export class Preview {
   constructor(canvas) {
     this.canvas = canvas; this.scene = new SceneRuntime(); this.shaderRuntime = new ShaderRuntime(() => this.invalidate?.()); this.shaderPipeline = new ShaderPipeline(() => this.invalidate?.());
+    this.shaderPipeline.report = message => this.shaderRuntime.report(message);
     this.backgroundFrame = new PreviewBackground();
     this.noisePreview = new NoisePreview();
     this.allLines = true; this.visible = false; this.noteSize = 175; this.lineScale = 1.5; this.backgroundAlpha = 0.35; this.backgroundBlur = 10.5; this.effectsSince = Infinity; this.applyShaders = true; this.opacity = 1; this.showHitEffects = true;
@@ -57,7 +58,7 @@ export class Preview {
 
   draw(chart, tempo, seconds, selectedLine) {
     if (!this.visible) return;
-    const rectangle = this.canvas.getBoundingClientRect();
+    const rectangle = this.spatialForeground ? this.canvas.parentElement.getBoundingClientRect() : this.canvas.getBoundingClientRect();
     if (!(rectangle.width > 0 && rectangle.height > 0)) {
       // A live preview may be temporarily stashed or hidden by a mod. Keep its backing
       // store intact and avoid feeding zero-size surfaces into background/shader passes.
@@ -71,6 +72,8 @@ export class Preview {
     for (const layer of [this.shaderCanvas, this.overlayCanvas]) if (layer && layer.parentElement !== this.canvas.parentElement) this.canvas.after(layer);
     if (this.overflowLayer && this.overflowLayer.parentElement !== this.canvas.parentElement) this.canvas.after(this.overflowLayer);
     this.chart = chart;
+    this.shaderRuntime.setAssets(this.images?.assets, this.images?.chartName ?? '', this.images?.generation ?? 0, this.images?.shaderRevision ?? 0);
+    this.shaderRuntime.compile(chart, tempo);
     if (this.largeChartView) {
       this.largeChartView.prepare(this, chart, tempo);
       this.passes = renderPasses(chart.judgeLineList, this.scene.order);
@@ -89,20 +92,21 @@ export class Preview {
     const scale = viewport.scale / divisor;
     const positionScale = previewPositionScale(this.aspectRatio ?? 1.5);
     const states = this.scene.sample(seconds, positionScale);
-    const shaderEffects = this.applyShaders ? this.shaderRuntime.active(seconds) : [];
-    const skinScene = noiseRenderingLayers(chart).some(layer => this.noisePreview.usesSkin(layer));
-    const integratedOverflow = Boolean(this.viewportOverflow && viewport.left > 0.5 && shaderEffects.length && !skinScene &&
+    const elements = this.spatialForeground ? this.spatialElements : null;
+    const shaderEffects = this.applyShaders && elements?.planeShaders !== false ? this.shaderRuntime.active(seconds) : [];
+    const skinScene = elements?.planeNoise !== false && noiseRenderingLayers(chart).some(layer => this.noisePreview.usesSkin(layer));
+    const integratedOverflow = Boolean(!this.spatialForeground && this.viewportOverflow && viewport.left > 0.5 && shaderEffects.length && !skinScene &&
       this.drawScene === Preview.prototype.drawScene && this.drawBackground === Preview.prototype.drawBackground && this.drawUi === Preview.prototype.drawUi);
     const overflowFrame = { width, height, viewport, scale, divisor, states, positionScale, shaderEffects };
     this.prepareViewportOverflowFrame(chart, tempo, seconds, selectedLine, overflowFrame);
     this.overflowSceneCaptured = false;
     this.overflowCompleteSceneCaptured = false;
-    const captureOverflow = !shaderEffects.length && this.overflowRefreshRequired && this.drawScene === Preview.prototype.drawScene && this.drawBackground === Preview.prototype.drawBackground;
+    const captureOverflow = !this.spatialForeground && !shaderEffects.length && this.overflowRefreshRequired && this.drawScene === Preview.prototype.drawScene && this.drawBackground === Preview.prototype.drawBackground;
     const captureComplete = captureOverflow && !skinScene && !shaderEffects.length;
     const sceneBounds = captureOverflow ? { left: 0, top: 0, width, height } : viewport;
     context.save(); context.beginPath(); context.rect(sceneBounds.left, sceneBounds.top, sceneBounds.width, sceneBounds.height); context.clip();
     // Screen-sampling skins preserve scene alpha, so supply the same opaque base as shaders.
-    if (this.applyShaders || skinScene) { context.fillStyle = '#111'; context.fillRect(sceneBounds.left, sceneBounds.top, sceneBounds.width, sceneBounds.height); }
+    if (!this.spatialForeground && (this.applyShaders || skinScene)) { context.fillStyle = '#111'; context.fillRect(sceneBounds.left, sceneBounds.top, sceneBounds.width, sceneBounds.height); }
     this.drawBackground(context, chart, tempo, seconds, selectedLine, { width, height, viewport, scale, divisor });
     this.viewScale=scale;
     this.viewport = viewport; this.selectedLine = selectedLine;
@@ -118,28 +122,30 @@ export class Preview {
       const source = integratedOverflow && final ? this.prepareShaderOverflowSource(chart, tempo, seconds, selectedLine, overflowFrame, localEffects.length > 0) : null;
       const filter = source ? { blur: Math.max(0, this.overflowBlur) * (globalThis.devicePixelRatio || 1), brightness: 1 - clamp(Number(this.overflowDarken) || 0), keepInside: true,
         sourceCanvas: source, sourceRevision: this.overflowSourceRevision, overlayCanvas: this.overflowShaderOverlay, effects: shaderEffects, resolution: [width / viewport.scale, height / viewport.scale] } : undefined;
-      return (effects.length > 0 || integratedOverflow && final) && this.shaderPipeline.render(this.canvas, this.shaderCanvas, effects, seconds, effect => this.shaderRuntime.source(effect.shader, effect.sourceName), viewport, undefined, filter);
+      return (effects.length > 0 || integratedOverflow && final) && this.shaderPipeline.render(this.canvas, this.shaderCanvas, effects, seconds, effect => this.shaderRuntime.source(effect.shader, effect.sourceName), viewport, this.spatialForeground ? rectangle : undefined, this.spatialForeground ? { preserveAlpha: true } : filter);
     };
     // Scene → local effects → game UI → noise layers → global effects.
     if (renderShaders(localEffects)) {
       context.clearRect(viewport.left, viewport.top, viewport.width, viewport.height);
       context.drawImage(this.shaderCanvas, 0, 0, width, height);
     }
-    this.drawRenderHits?.(context, chart, tempo, seconds, selectedLine, { width, height, viewport, scale, divisor, states, positionScale });
-    if (this.showGameUI) this.drawUi(context, chart, tempo, seconds, selectedLine, { width, height, viewport, scale, divisor, states });
-    this.drawGuides(context, scale, selectedLine);
+    if(elements?.planeHits !== false)this.drawRenderHits?.(context, chart, tempo, seconds, selectedLine, { width, height, viewport, scale, divisor, states, positionScale });
+    if (this.showGameUI && elements?.planeUI !== false) this.drawUi(context, chart, tempo, seconds, selectedLine, { width, height, viewport, scale, divisor, states });
+    if(!this.spatialForeground)this.drawGuides(context, scale, selectedLine);
     if (captureComplete) context.restore();
-    this.noisePreview.draw(context, chart, tempo, seconds, width, height, scale, this.selectedNoiseArea, viewport, { positionScale });
+    if(elements?.planeNoise !== false)this.noisePreview.draw(context, chart, tempo, seconds, width, height, scale, this.selectedNoiseArea, viewport, { positionScale });
+    else { this.noisePreview.guides=[]; this.noisePreview.hitEntries=[]; }
     if (captureComplete) {
       this.captureOverflowSource(overflowFrame, true); this.overflowCompleteSceneCaptured = true;
       context.save(); context.beginPath(); context.rect(viewport.left, viewport.top, viewport.width, viewport.height); context.clip();
     }
-    this.noisePreview.drawGuides(context, scale, this.selectedNoiseArea, this.lineNumbers);
+    if(!this.spatialForeground)this.noisePreview.drawGuides(context, scale, this.selectedNoiseArea, this.lineNumbers);
     context.restore();
     const shaderRendered = renderShaders(globalEffects, true);
     if (integratedOverflow) { this.overflowReady = false; this.overflowCompositor = null; }
-    else this.drawViewportOverflow(context, chart, tempo, seconds, selectedLine, overflowFrame);
-    const defaultFrame = previewDefaultFrame(viewport, divisor);
+    else if (!this.spatialForeground) this.drawViewportOverflow(context, chart, tempo, seconds, selectedLine, overflowFrame);
+    else { this.overflowReady = false; this.overflowCompositor = null; }
+    const defaultFrame = this.spatialForeground ? null : previewDefaultFrame(viewport, divisor);
     const overflowOverlay = this.overflowReady && !this.overflowCompositor;
     if (shaderRendered && this.overlayCanvas && (overflowOverlay || defaultFrame)) {
       const overlay = prepareCanvas(this.overlayCanvas, rectangle).context;
@@ -148,6 +154,13 @@ export class Preview {
     } else if (!shaderRendered) this.drawDefaultFrame(context, defaultFrame);
     if (this.shaderCanvas) this.shaderCanvas.style.visibility = shaderRendered ? 'visible' : 'hidden';
     if (this.overlayCanvas) this.overlayCanvas.style.visibility = shaderRendered && (overflowOverlay || defaultFrame) ? 'visible' : 'hidden';
+    if (this.spatialForeground) {
+      const guides = prepareCanvas(this.overlayCanvas, rectangle).context;
+      this.drawGuides(guides, scale, selectedLine);
+      if(elements?.planeNoise !== false)this.noisePreview.drawGuides(guides, scale, this.selectedNoiseArea, this.lineNumbers && elements?.planeNumbers !== false);
+      this.overlayCanvas.style.visibility = 'visible';
+      if (this.overflowLayer) this.overflowLayer.hidden = true;
+    }
     this.updateOverflowLayer(overflowFrame);
     if (this.canvas.style) this.canvas.style.opacity = shaderRendered ? '0' : String(clamp(this.opacity));
     for (const layer of [this.shaderCanvas, this.overlayCanvas]) if (layer) layer.style.opacity = String(clamp(this.opacity));
@@ -187,6 +200,7 @@ export class Preview {
     if (!this.overflowCompleteSceneCaptured) {
       this.overflowShaderCanvas ??= document.createElement('canvas');
       this.overflowShaderPipeline ??= new ShaderPipeline(this.invalidateOverflow);
+      this.overflowShaderPipeline.report = message => this.shaderRuntime.report(message);
       this.overflowNoisePreview ??= new NoisePreview();
       for (const key of ['seamless', 'forceSimple', 'hiddenLayers', 'simpleLayers', 'getAssets', 'report', 'transformGeometry']) this.overflowNoisePreview[key] = this.noisePreview[key];
       this.overflowNoisePreview.invalidate = this.invalidateOverflow;
@@ -327,6 +341,7 @@ export class Preview {
   }
 
   drawBackground(context, chart, tempo, seconds, selectedLine, { width, height, scale, center }) {
+    if(this.spatialForeground)return;
     let background = this.images?.background;
     if (background && this.images.texture) background = this.images.texture(this.images.backgroundName, Math.max(1350 / background.naturalWidth, 900 / background.naturalHeight) * scale * (devicePixelRatio || 1)) ?? background;
     if (!background) { this.backgroundFrame.clear(); return; }
@@ -344,12 +359,13 @@ export class Preview {
 
   // Independent world pass, allowing optional modules to project it before screen effects and UI.
   drawScene(context, chart, tempo, seconds, selectedLine, { width, height, viewport, scale, divisor, states, center, cullNotes = false, positionScale = previewPositionScale(this.aspectRatio ?? 1.5), renderViewport = viewport }) {
+    const elements=this.spatialForeground?this.spatialElements:null,showNotes=elements?.planeNotes!==false,showLines=elements?.planeLines!==false;
     const originX = width / 2 - (center?.x ?? 0) * scale, originY = height / 2 + (center?.y ?? 0) * scale;
     const order = this.allLines ? this.scene.order : [selectedLine];
     this.guides = lineGuides(this.forceLineOpacity ? states.map(state => ({ ...state, alpha: 255 })) : states, chart.judgeLineList, order, width, height, scale);
     if (center) for (const guide of this.guides) { guide.x -= center.x * scale; guide.y += center.y * scale; }
     const visibleDivisor = Math.max(divisor, renderViewport.width / scale / 1350);
-    const visibleNotes = new Map(order.map(index => [index, this.noteDraft.runtime(this.scene, index)?.visibleNotes(seconds, states[index], (1600 * visibleDivisor + Math.hypot((states[index]?.x ?? 0) - (center?.x ?? 0), (states[index]?.y ?? 0) - (center?.y ?? 0))) / positionScale.y) ?? []]));
+    const visibleNotes = new Map(showNotes?order.map(index => [index, this.noteDraft.runtime(this.scene, index)?.visibleNotes(seconds, states[index], (1600 * visibleDivisor + Math.hypot((states[index]?.x ?? 0) - (center?.x ?? 0), (states[index]?.y ?? 0) - (center?.y ?? 0))) / positionScale.y) ?? []]):[]);
     const noteAspects = new Map();
     this.noteHitAreas = [];
     this.noteCenters?.clear();
@@ -437,6 +453,7 @@ export class Preview {
       context.restore();
     } };
     for (const pass of this.passes) {
+      if(pass.kind==='line'?!showLines:!showNotes)continue;
       const compatible = !this.noteBatch.failed && this.skin?.noteBatchCompatible;
       const dense = compatible && (this.largeChartView ? pass.kind !== 'line' && CountedNoteBatch.compatible(this.skin) : pass.kind === 'hold' ? holdCount > 512 && holdBatchWithinBudget(visibleNotes, states, seconds, this.noteSize, scale, width, height, this.skin) : pass.kind === 'note' && noteCount > 512);
       const firstHit = this.noteHitAreas.length;
@@ -447,7 +464,7 @@ export class Preview {
       } catch { this.noteBatch.failed = true; }
       if (!batched) { this.noteHitAreas.length = firstHit; drawPass(context, pass); }
     }
-    if (this.showHitEffects) this.drawHits(context, seconds, order, originX, originY, scale, positionScale, renderViewport, width, height);
+    if (this.showHitEffects && elements?.planeHits !== false) this.drawHits(context, seconds, order, originX, originY, scale, positionScale, renderViewport, width, height);
   }
 
   drawHits(context, seconds, order, originX, originY, scale, positionScale, renderViewport, width, height, allowBatch = true, style = null) {
@@ -544,17 +561,18 @@ export class Preview {
   }
 
   drawGuides(context, scale, selectedLine) {
-    if (!this.lineNumbers && !this.lineArrows) return;
+    const elements=this.spatialForeground?this.spatialElements:null,lineNumbers=this.lineNumbers&&elements?.planeNumbers!==false,lineArrows=this.lineArrows&&elements?.planeArrows!==false;
+    if (!lineNumbers && !lineArrows) return;
     if (this.guideChart !== this.chart || this.guideScale !== scale) { this.guideTextCache.clear(); this.guideChart = this.chart; this.guideScale = scale; }
     const matrix = context.getTransform?.(), bounded = matrix && Number.isFinite(matrix.a) && context.canvas?.width > 0 && context.canvas?.height > 0 &&
       !context.shadowBlur && !context.shadowOffsetX && !context.shadowOffsetY && (!context.filter || context.filter === 'none');
     context.save();
-    if (this.lineNumbers) { context.font = `${30 * scale}px RPEGame, sans-serif`; context.textAlign = 'center'; context.textBaseline = 'top'; }
+    if (lineNumbers) { context.font = `${30 * scale}px RPEGame, sans-serif`; context.textAlign = 'center'; context.textBaseline = 'top'; }
     for (const group of mergeGuides(this.guides, scale, this.mergeLineNumbers)) {
       const selected = group.indices.includes(selectedLine);
-      if (!this.lineNumbers && !(this.lineArrows && selected)) continue;
+      if (!lineNumbers && !(lineArrows && selected)) continue;
       let label;
-      if (this.lineNumbers) {
+      if (lineNumbers) {
         const key = group.indices.join(','); label = this.guideTextCache.get(key);
         if (!label || bounded && !label.measured) {
           const text = formatLineNumbers(group.indices, this.chart.judgeLineList), metrics = bounded ? context.measureText(text) : null, fontSize = 30 * scale;
@@ -566,7 +584,7 @@ export class Preview {
       }
       const angle = group.rotation * Math.PI / 180;
       if (bounded) {
-        const arrow = this.lineArrows && selected ? 50 * scale : 0, left = Math.min(label?.left ?? 0, -arrow), right = Math.max(label?.right ?? 0, arrow), top = Math.min(label?.top ?? 0, -arrow), bottom = Math.max(label?.bottom ?? 0, arrow);
+        const arrow = lineArrows && selected ? 50 * scale : 0, left = Math.min(label?.left ?? 0, -arrow), right = Math.max(label?.right ?? 0, arrow), top = Math.min(label?.top ?? 0, -arrow), bottom = Math.max(label?.bottom ?? 0, arrow);
         const cosine = Math.cos(angle), sine = Math.sin(angle), a = matrix.a * cosine + matrix.c * sine, b = matrix.b * cosine + matrix.d * sine,
           c = matrix.c * cosine - matrix.a * sine, d = matrix.d * cosine - matrix.b * sine, x = matrix.a * group.x + matrix.c * group.y + matrix.e, y = matrix.b * group.x + matrix.d * group.y + matrix.f;
         if (x + Math.max(left * a, right * a) + Math.max(top * c, bottom * c) < -1 || x + Math.min(left * a, right * a) + Math.min(top * c, bottom * c) > context.canvas.width + 1 ||
@@ -574,10 +592,10 @@ export class Preview {
       }
       context.save(); context.translate(group.x, group.y); context.rotate(angle);
       context.fillStyle = selected ? '#00c800' : '#fff';
-      if (this.lineNumbers) {
+      if (lineNumbers) {
         context.fillText(label.text, 0, 4 * scale);
       }
-      if (this.lineArrows && selected) {
+      if (lineArrows && selected) {
         const arrow = this.skin?.images.get('Arrow2');
         if (arrow) {
           context.save(); context.rotate(Math.PI); context.drawImage(arrow, -25 * scale, -25 * scale, 50 * scale, 50 * scale); context.restore();

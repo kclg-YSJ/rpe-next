@@ -29,6 +29,9 @@ export const DEFAULT_SETTINGS = Object.freeze({
 });
 
 export const DEFAULT_EDITOR_PREFERENCES = Object.freeze({
+  "editorRenderFps": 60,
+  "editorRenderAutoPlay": true,
+  "keyDisplay": false,
   "overlappingLinePicker": true,
   "directPlacement": false,
   "placementOpacity": 0.5,

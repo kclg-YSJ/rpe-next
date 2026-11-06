@@ -111,6 +111,7 @@ prepare只读地生成确定计划，apply才执行。审批显示摘要与具�
 | bpm_set | 设置完整BPM列表，可附真实来源供审批核验 |
 | event_shake | 正弦乘衰减包络，末端精确回到baseline；跨生成边界的旧事件拒绝覆盖 |
 | noise_circle | 生成X/Y移动轨道的圆周运动噪域，不修改噪域事件变换语义 |
+| ui_inspect/ui_action、chart_query/chart_patch | 空间轨迹面板与原事件数据，共用现有 UI 和事件命令，不创建独立三维谱面数据 |
 | trajectory_presets/trajectory_generate/trajectory_split | 全部内置/自定义预设、参数方程/极坐标轨迹，生成/更新整体轨迹或拆为普通事件 |
 | curve_notes | 沿用原生横线分格、密度、缓动和端点规则填充曲线Tap/Drag/Flick |
 | text_fit | 按字体骨架用现有判定线及零速音符拼字，未达容忍度/覆盖下限不生成 |

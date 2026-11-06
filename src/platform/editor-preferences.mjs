@@ -1,4 +1,5 @@
 import { localPreferences } from './local-preferences.mjs';
+import { validEditorRenderFps } from '../core/editor-recording.mjs';
 import { validFpsLimit } from '../core/frame-timing.mjs';
 import { validSelectionInterval } from '../core/selection-interval.mjs';
 import { normalizeLineDefaults } from '../core/placement-defaults.mjs';
@@ -19,6 +20,8 @@ export function normalizeEditorPreferences(value) {
   if (value.multiLineEventVisibility && typeof value.multiLineEventVisibility === 'object') result.multiLineEventVisibility = Object.fromEntries(multiLineEventTypes.filter(type => typeof value.multiLineEventVisibility[type] === 'boolean').map(type => [type, value.multiLineEventVisibility[type]]));
   if (value.lineEventDefaults && typeof value.lineEventDefaults === 'object' && !Array.isArray(value.lineEventDefaults)) result.lineEventDefaults = normalizeLineDefaults(value.lineEventDefaults);
   if (validFpsLimit(value.fpsLimit)) result.fpsLimit = value.fpsLimit;
+  if (validEditorRenderFps(value.editorRenderFps)) result.editorRenderFps = value.editorRenderFps;
+  for (const key of ['editorRenderAutoPlay', 'keyDisplay']) if (typeof value[key] === 'boolean') result[key] = value[key];
   if (validSelectionInterval(value.selectionInterval)) result.selectionInterval = value.selectionInterval;
   if (typeof value.textSelectionDrag === 'boolean') result.textSelectionDrag = value.textSelectionDrag;
   if (typeof value.judgementColor === 'string' && /^#[0-9a-f]{6}$/i.test(value.judgementColor)) result.judgementColor = value.judgementColor.toLowerCase();

@@ -2,6 +2,8 @@ import { diagnosticPatch } from './diagnostic-patch.mjs';
 import { diagnosticKey } from '../core/chart-diagnostics.mjs';
 import { currentLocale } from '../i18n.mjs';
 import { resourceReferences } from './files.mjs';
+import { chartShaderFiles } from '../core/shader-assets.mjs';
+import { shaderUniformSchema } from '../core/shader-uniforms.mjs';
 
 export class ChartDiagnostics extends EventTarget {
   constructor(getContext, workerFactory = () => new Worker(new URL('./chart-diagnostic-worker.mjs', import.meta.url), { type: 'module' })) {
@@ -21,8 +23,10 @@ export class ChartDiagnostics extends EventTarget {
     const options = { locale: currentLocale().locale, duration: c.duration, chartName: c.chartName, assetPaths: [...c.assets.keys()], media,
       globalTypes: c.registry ? [...c.registry.types.values()].map(type => ({ id: type.id, source: type.source, columns: type.columns.map(column => Object.fromEntries(['id', 'name', 'valueType', 'min', 'max', 'overlap'].filter(key => column[key] !== undefined).map(key => [key, column[key]]))) })) : undefined,
       activeMods: c.activeMods, ratio: c.ratio, target: this.target };
+    const shaders = new Set(chartShaderFiles(c.chart, c.assets, c.chartName));
+    options.shaderUniforms = Object.fromEntries([...shaders].filter(path => c.assets.get(path)?.byteLength <= 256 * 1024).map(path => [path, shaderUniformSchema(c.assets.get(path))]));
     if (deep) {
-      options.assetTexts = Object.fromEntries([...c.assets].filter(([path]) => /(?:config\.json|\.(?:glsl|vert|frag))$/i.test(path)).map(([path, bytes]) => [path, new TextDecoder().decode(bytes)]));
+      options.assetTexts = Object.fromEntries([...c.assets].filter(([path]) => shaders.has(path) || /(?:config\.json|\.(?:glsl|vert|frag|fs|fsh))$/i.test(path)).map(([path, bytes]) => [path, new TextDecoder().decode(bytes)]));
       options.customGlobalChecks = c.registry ? [...c.registry.types.values()].flatMap(type => type.columns.filter(column => typeof column.validate === 'function').map(column => ({ type: type.id, column: column.id, source: String(column.validate) }))) : [];
     }
     return options;

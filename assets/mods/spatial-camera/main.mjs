@@ -1,4 +1,4 @@
-import { AXES, neutralPose, round } from './camera.mjs';
+import { AXES, neutralPose, round, PlaneCamera } from './camera.mjs';
 import { CameraTracks } from './events.mjs';
 import { CameraProjection } from './projection.mjs';
 import { CameraControls } from './inspector.mjs';
@@ -17,8 +17,22 @@ export function activate(api){
   const suspended=()=>Boolean(editor.noiseEditor.sampleMode||editor.eventSampler.mode);
   const attachRenderer=renderer=>{
     const projection=new CameraProjection(()=>editor.invalidate());
+    const previousMapping=renderer.spatialMapping,mappingCameras=new Map();let mappingChart,mappingTempo,mappingOverride;
+    const mappingCamera=(seconds,frame,chart,tempo)=>{
+      const override=renderer.spatialCameraOverride??controls.poseOverride;
+      if(mappingChart!==chart.globalEvents||mappingTempo!==tempo||mappingOverride!==override){mappingCameras.clear();mappingChart=chart.globalEvents;mappingTempo=tempo;mappingOverride=override;}
+      const key=`${seconds}:${frame.width}:${frame.height}:${frame.scale}`;
+      if(mappingCameras.has(key))return mappingCameras.get(key);
+      const pose=override??tracks.sample(chart,tempo,seconds),camera=suspended()||neutralPose(pose)||projection.failed||!controls.visualActive&&!tracks.hasEvents?null:new PlaneCamera(pose,frame);
+      if(mappingCameras.size>=512)mappingCameras.delete(mappingCameras.keys().next().value);mappingCameras.set(key,camera);return camera;
+    };
+    renderer.spatialMapping={
+      project(point,seconds,frame,chart,tempo){const camera=mappingCamera(seconds,frame,chart,tempo);if(!camera)return point;const p=camera.project(point);return p?{x:(p.x-frame.width/2)/frame.scale,y:(frame.height/2-p.y)/frame.scale}:null;},
+      unproject(point,seconds,frame,chart,tempo){const camera=mappingCamera(seconds,frame,chart,tempo);return camera?camera.planeAt(frame.width/2+point.x*frame.scale,frame.height/2-point.y*frame.scale):point;},
+    };
     const releases=[];let sceneChart,sceneImages,imageGeneration,animatedScene=false;
     for(const method of ['drawBackground','drawScene','drawUi',...(renderer.drawRenderHits?['drawRenderHits']:[])])releases.push(api.patch(renderer,method,previous=>function(context,chart,tempo,seconds,selectedLine,frame){
+      if(method==='drawBackground'&&this.spatialForeground)return;
       const world=method==='drawScene'||method==='drawRenderHits';
       if(!world&&!cameraFollowsChart(chart))return previous.call(this,context,chart,tempo,seconds,selectedLine,frame);
       const pose=this.spatialCameraOverride??controls.poseOverride??tracks.sample(chart,tempo,seconds);
@@ -41,7 +55,7 @@ export function activate(api){
     }));
     releases.push(api.patch(renderer.noisePreview,'transformGeometry',previous=>function(entry,frame){const result=previous?previous.call(this,entry,frame):entry;return result&&projection.camera?projection.noise(result,frame):result;}));
     releases.push(api.patch(renderer,'draw',previous=>function(...args){const opacity=this.opacity;if(controls.visualActive)this.opacity=1;try{return previous.apply(this,args);}finally{this.opacity=opacity;}}));
-    releases.push(api.dispose(()=>{projection.dispose();delete renderer.spatialCameraState;}));
+    releases.push(api.dispose(()=>{projection.dispose();mappingCameras.clear();if(previousMapping)renderer.spatialMapping=previousMapping;else delete renderer.spatialMapping;delete renderer.spatialCameraState;}));
     return()=>releases.reverse().forEach(release=>release());
   };
   controls.attachRenderer=attachRenderer;

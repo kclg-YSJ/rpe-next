@@ -1,20 +1,34 @@
+#version 100
+precision mediump float;
+varying vec2 uv;
+uniform sampler2D screenTexture;
+uniform vec2 screenSize;
+uniform float time;
+vec2 rpenLegacyUv;
+vec4 rpenLegacySample(sampler2D source, vec2 point) {
+ vec2 local = (point - vec2(0.0, 0.0333)) / vec2(0.7031, 1.0 / 1.2);
+ if (local.x < 0.0 || local.x > 1.0 || local.y < 0.0 || local.y > 1.0) return vec4(0.0);
+ return texture2D(source, local);
+}
+vec4 rpenLegacyProj(sampler2D source, vec4 point) { return rpenLegacySample(source, point.xy / point.w); }
+vec4 rpenLegacyProj(sampler2D source, vec3 point) { return rpenLegacySample(source, point.xy / point.z); }
 #ifdef GL_ES
 precision mediump float;
 #endif
 
-varying vec4 v_fragmentColor;
-varying vec2 v_texCoord;
-uniform sampler2D u_texture;
 
-uniform vec2 resolution;
+
+
+
+uniform vec2 resolution; // %1350,900%
 uniform float power; // %-0.1%
 
 // Define the rectangle bounds (normalized coordinates)
-const vec2 rectMin = vec2(0.0, 0.033);  // Example: bottom-left corner of the rectangle
-const vec2 rectMax = vec2(0.703, 0.867);  // Example: top-right corner of the rectangle
+const vec2 rectMin = vec2(0.0, 0.0333);  // Example: bottom-left corner of the rectangle
+const vec2 rectMax = vec2(0.0, 0.0333) + vec2(0.7031, 1.0 / 1.2);  // Example: top-right corner of the rectangle
 
-void main() {
-    vec2 uv = v_texCoord;
+void rpenLegacyMain() {
+    vec2 uv = rpenLegacyUv;
 
     // Check if the current pixel is inside the rectangle
     if (uv.x >= rectMin.x && uv.x <= rectMax.x &&
@@ -38,22 +52,23 @@ void main() {
             nuv = m + normalize(d) * tan(r * new_power) * bind / tan(bind * new_power);
         else
             nuv = m + normalize(d) * atan(r * -new_power * 10.0) * bind / atan(-new_power * bind * 10.0);
-			
+
 		nuv.x = nuv.x * 0.7031;
 		nuv.y =(nuv.y * aspect / 1.2 + 0.0333);
-		
+
 		if (nuv.x >= rectMin.x && nuv.x <= rectMax.x && nuv.y >= rectMin.y && nuv.y <= rectMax.y) {
-			gl_FragColor = texture2D(CC_Texture0, vec2(nuv.x, nuv.y));
+			gl_FragColor = rpenLegacySample(screenTexture, vec2(nuv.x, nuv.y));
 			gl_FragColor.a = 1.0;
 		}
 		else
 		{
-			gl_FragColor = texture2D(CC_Texture0, v_texCoord);
+			gl_FragColor = rpenLegacySample(screenTexture, rpenLegacyUv);
 			gl_FragColor.a = 1.0;
 		}
     } else {
         // Pixels outside the rectangle are not affected
-        gl_FragColor = texture2D(CC_Texture0, v_texCoord);
+        gl_FragColor = rpenLegacySample(screenTexture, rpenLegacyUv);
 		gl_FragColor.a = 1.0;
     }
 }
+void main() { rpenLegacyUv = vec2(0.0, 0.0333) + uv * vec2(0.7031, 1.0 / 1.2); rpenLegacyMain(); }

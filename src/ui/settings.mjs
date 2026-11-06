@@ -22,10 +22,10 @@ export function createSettingsPanel({ onLocaleChange = () => {} } = {}) {
   ]);
   const restore = (heading, defaults, extra = []) => {
     if (!confirm(t('settings.s7d6ffba', { p0: heading }))) return;
-    for (const [id, value] of [...defaults, ...extra]) {
+    for (const [id, value, eventType] of [...defaults, ...extra]) {
       const input = id.startsWith('#') ? document.querySelector(id) : document.getElementById(id); if (!input) continue;
       if (input.type === 'checkbox') input.checked = Boolean(value); else input.value = String(value);
-      input.dispatchEvent(new Event(input.type === 'number' ? id === 'fps-limit' ? 'input' : 'change' : input.type === 'range' || input.type === 'color' ? 'input' : 'change', { bubbles: true }));
+      input.dispatchEvent(new Event(eventType ?? (input.type === 'number' ? id === 'fps-limit' ? 'input' : 'change' : input.type === 'range' || input.type === 'color' ? 'input' : 'change'), { bubbles: true }));
     }
   };
   const settingField = ([id, text, type, value, minimum, maximum, step, options]) => {
@@ -81,6 +81,18 @@ export function createSettingsPanel({ onLocaleChange = () => {} } = {}) {
   const fpsInput = body.querySelector('#fps-limit'); fpsInput.disabled = true;
   const fpsError = document.createElement('p'); fpsError.id = 'fps-limit-error'; fpsError.className = 'hint'; fpsError.hidden = true; fpsError.setAttribute('role', 'status'); fpsError.textContent = t('settings.sb33a8b5'); body.lastElementChild.append(fpsError);
   const fpsHint = document.createElement('p'); fpsHint.className = 'hint'; fpsHint.textContent = t('settings.s3c11d7d'); body.lastElementChild.append(fpsHint);
+  const recording = document.createElement('details'); recording.id = 'editor-render-settings'; recording.className = 'settings-group'; recording.dataset.settingsCategory = 'general';
+  const recordingSummary = document.createElement('summary'); recordingSummary.textContent = t('editor-recording.title'); recording.append(recordingSummary);
+  const recordingFields = [
+    ['editor-render-fps', t('editor-recording.targetFps'), 'number', DEFAULT_EDITOR_PREFERENCES.editorRenderFps, 1, 240, 1],
+    ['editor-render-auto-play', t('editor-recording.autoPlay'), 'checkbox', DEFAULT_EDITOR_PREFERENCES.editorRenderAutoPlay],
+    ['key-display', t('key-display.label'), 'checkbox', DEFAULT_EDITOR_PREFERENCES.keyDisplay],
+  ];
+  for (const field of recordingFields) recording.append(settingField(field));
+  const recordingHint = document.createElement('p'); recordingHint.className = 'hint'; recordingHint.textContent = t('editor-recording.hint'); recording.append(recordingHint);
+  const recordingReset = document.createElement('button'); recordingReset.type = 'button'; recordingReset.className = 'settings-reset'; recordingReset.textContent = t('settings.sa191935');
+  recordingReset.onclick = () => restore(t('editor-recording.title'), recordingFields.map(([id, unused, type, value]) => [id, value, type === 'checkbox' ? 'input' : 'change'])); recording.append(recordingReset);
+  body.append(recording);
   group(t('settings.sa482c4b'), [['note-size', t('settings.sc46e2c8'), 'range', DEFAULT_SETTINGS.noteSize, 10, 500, 1], ['bar-width', t('settings.sfaf8db5'), 'range', DEFAULT_SETTINGS.barWidth, 0.5, 10, 0.1], ['bar-alpha', t('settings.sf6e88ad'), 'range', DEFAULT_SETTINGS.barAlpha, 0.1, 2, 0.05], ['judgement-offset', t('settings.s75c178d'), 'range', DEFAULT_EDITOR_PREFERENCES.judgementOffset, 42, 240, 1], ['event-value-size', t('settings.s8c4f6ce'), 'range', 13, 8, 28, 1], ['event-value-threshold', t('settings.se7f1645'), 'range', 30, 10, 180, 1], ['draw-event-curves', t('settings.s3cd3a16'), 'checkbox', DEFAULT_SETTINGS.drawEventCurves], ['event-curve-threshold', t('settings.sd54b6a9'), 'range', 24, 8, 180, 1], ['event-opacity', t('settings.s0d6ac76'), 'range', DEFAULT_EDITOR_PREFERENCES.eventOpacity, 0.05, 1, 0.05], ['event-bar-width', t('settings.s2326c43'), 'range', DEFAULT_EDITOR_PREFERENCES.eventBarWidth, 0.35, 1, 0.01], ['highlight-notes', t('settings.sfa323b7'), 'checkbox', DEFAULT_SETTINGS.highlight], ['seamless-events', t('settings.s1c661f0'), 'checkbox', true], ['background-blur', t('settings.s838d08e'), 'range', 10.5, 0, 30, 0.5]]);
   group(t('settings.s8df94df'), [['viewport-overflow', t('settings.s36f8ec2'), 'checkbox', DEFAULT_EDITOR_PREFERENCES.viewportOverflow], ['overflow-blur', t('settings.s7702bb1'), 'range', DEFAULT_EDITOR_PREFERENCES.overflowBlur, 0, 80, 1], ['overflow-darken', t('settings.sbe87e02'), 'range', DEFAULT_EDITOR_PREFERENCES.overflowDarken, 0, 1, 0.05]]);
   const delayFields = [['hit-tap-delay', t('settings.s433367f'), 'number', DEFAULT_EDITOR_PREFERENCES.hitTapDelay, undefined, undefined, 'any'], ['hit-drag-delay', t('settings.s158520d'), 'number', DEFAULT_EDITOR_PREFERENCES.hitDragDelay, undefined, undefined, 'any'], ['hit-flick-delay', t('settings.s048413b'), 'number', DEFAULT_EDITOR_PREFERENCES.hitFlickDelay, undefined, undefined, 'any']];

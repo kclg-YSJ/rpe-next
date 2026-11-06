@@ -22,6 +22,7 @@ export class ProjectImages {
 
   async load(chart, assets, chartName, info) {
     this.clear();
+    this.assets = assets; this.chartName = chartName;
     const references = resourceReferences(chart, assets, chartName, info);
     this.backgroundName = references.background;
     const names = new Set([references.background, ...(chart.judgeLineList ?? []).map(line => line.Texture)].filter(Boolean));

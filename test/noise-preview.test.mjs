@@ -51,7 +51,7 @@ test('有噪域的层在生命周期外仍执行皮肤，保留空掩码和历�
     render(target, layer, assets, entries, seconds) { frames.push({ layer, entries, seconds }); return true; },
   };
   const tempo = new TempoMap(chart.BPMList);
-  for (const seconds of [0, 2, 20]) preview.draw({}, chart, tempo, seconds, 960, 640, 1);
+  for (const seconds of [0, 2, 20]) preview.draw({ canvas: { width: 960 } }, chart, tempo, seconds, 960, 640, 1);
   assert.equal(frames.length, 3);
   assert.ok(frames.every(frame => frame.layer.id === 'water' && frame.entries.length === 0));
   assert.deepEqual(frames.map(frame => frame.seconds), [0, 2, 20]);
@@ -68,7 +68,7 @@ test('复用的几何预览可在空谱面中执行对应层的皮肤', context 
   };
   let rendered;
   preview.gpu = { prune() {}, render(target, layer, assets, entries) { rendered = { layer, entries }; return true; } };
-  preview.draw({}, chart, new TempoMap(chart.BPMList), 1, 960, 640, 1, -1, undefined, { sourceGuides: [guide] });
+  preview.draw({ canvas: { width: 960 } }, chart, new TempoMap(chart.BPMList), 1, 960, 640, 1, -1, undefined, { sourceGuides: [guide] });
   assert.equal(rendered.layer.id, 'water'); assert.equal(rendered.entries[0], guide);
 });
 

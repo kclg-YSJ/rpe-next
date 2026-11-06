@@ -1,3 +1,4 @@
+import { prepareShaderExport } from '../platform/shader-export.mjs';
 import { showDialog } from './dialog.mjs';
 import { createChartExport, download, suggestDownloadName } from '../platform/files.mjs';
 import { chartExportStem } from '../core/export-filename.mjs';
@@ -55,14 +56,17 @@ export function showExportDialog(chart, assets, chartName, onExport, identifier,
   const sync = () => { const legacy = format.value.startsWith('rpe:'); unusedLabel.hidden = unusedHint.hidden = format.value.endsWith(':json'); settings.hidden = !legacy; tolerance.disabled = !simplify.checked; removeLabel.hidden = !chart.blockAreaList?.length || !legacy; removeGlobalLabel.hidden = !hasGlobalEvents || !legacy; clampLabel.hidden = bezierHint.hidden = !legacy; marginLabel.hidden = !legacy || !clampBezier.checked; margin.disabled = !legacy || !clampBezier.checked; };
   format.onchange = () => { suggestName(); sync(); }; simplify.onchange = clampBezier.onchange = sync; sync();
   const apply = document.querySelector('#modal-apply'); apply.hidden = false; apply.textContent = t('export-dialog.s1888967');
-  apply.onclick = () => {
+  apply.onclick = async () => {
+    if (apply.disabled) return; apply.disabled = true;
     try {
       const [compatibility, container] = format.value.split(':');
       if (noiseIssues.length && !acknowledgement.checked) throw new Error(t('export-dialog.s4094dae'));
       if (compatibility === 'rpe' && chart.blockAreaList?.length && !removeNoise.checked) throw new Error(t('export-dialog.sac6ba5f'));
       if (compatibility === 'rpe' && hasGlobalEvents && !removeGlobal.checked) throw Error(t('export-dialog.se25f82b'));
-      const result = createChartExport(chart, assets, chartName, { bakeCustomEasing: bake.checked, includeUnusedFiles: unused.checked, includeBackupCharts, compatibility, format: container, compact: compact.checked, name: name.value, identifier, clampBezier: compatibility === 'rpe' && clampBezier.checked, bezierMargin: Number(margin.value), removeNoiseAreas: compatibility === 'rpe' && removeNoise.checked, removeGlobalEvents: compatibility === 'rpe' && removeGlobal.checked, split: { simplify: simplify.checked, tolerance: Number(tolerance.value) } });
+      const prepared = container === 'pez' ? await prepareShaderExport(chart, assets, chartName) : { chart, assets };
+      const result = createChartExport(prepared.chart, prepared.assets, chartName, { bakeCustomEasing: bake.checked, includeUnusedFiles: unused.checked, includeBackupCharts, compatibility, format: container, compact: compact.checked, name: name.value, identifier, clampBezier: compatibility === 'rpe' && clampBezier.checked, bezierMargin: Number(margin.value), removeNoiseAreas: compatibility === 'rpe' && removeNoise.checked, removeGlobalEvents: compatibility === 'rpe' && removeGlobal.checked, split: { simplify: simplify.checked, tolerance: Number(tolerance.value) } });
       const filename = download(result.blob, result.name); document.querySelector('#modal').close(); onExport(filename, container);
     } catch (error) { document.querySelector('#modal-error').textContent = error.message; }
+    finally { apply.disabled = false; }
   };
 }

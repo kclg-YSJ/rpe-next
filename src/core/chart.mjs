@@ -113,6 +113,8 @@ export function assertChart(chart) {
             if (type !== 'moveXEvents' || event.trajectory.version !== 1) throw new Error(t('chart.sbaf82f3'));
             sampleCurveTrajectory(event.trajectory.options, 65);
             trajectorySplitSettings(event.trajectory.split);
+            if(event.trajectory.domain && (!Array.isArray(event.trajectory.domain)||event.trajectory.domain.length!==2||!event.trajectory.domain.every(Number.isFinite)||event.trajectory.domain[0]<0||event.trajectory.domain[1]>1||event.trajectory.domain[0]>=event.trajectory.domain[1]))throw Error(t('animation-curve.invalidDomain'));
+            if(event.trajectory.offsets && Object.entries(event.trajectory.offsets).some(([axis,values])=>!['x','y','rotation'].includes(axis)||!Array.isArray(values)||values.length!==2||!values.every(Number.isFinite)))throw Error(t('animation-curve.invalidNumber'));
             if (!Number.isInteger(event.trajectory.segments) || event.trajectory.segments < 4 || event.trajectory.segments > 8192) throw new Error(t('chart.s7953a23'));
           }
           beatValue(event?.startTime, `${path}.${type}[${index}].startTime`);

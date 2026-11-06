@@ -292,8 +292,10 @@ export function packageEntries(chart, assets, chartName, options = {}) {
   return output;
 }
 
-export function exportPackage(chart, assets, chartName) {
-  download(writeZip(packageEntries(chart, assets, chartName)), chartExportStem(chart, chartName) + '.pez');
+export async function exportPackage(chart, assets, chartName) {
+  const { prepareShaderExport } = await import('./shader-export.mjs');
+  const prepared = await prepareShaderExport(chart, assets, chartName);
+  download(writeZip(packageEntries(prepared.chart, prepared.assets, chartName)), chartExportStem(chart, chartName) + '.pez');
 }
 
 export function createChartExport(chart, assets, chartName, options = {}) {

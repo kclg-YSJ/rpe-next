@@ -1,4 +1,5 @@
 import { defaultShaderUniform } from '../core/shader.mjs';
+import { shaderSourceBody } from '../core/shader-source-info.mjs';
 
 const VERTEX_SOURCE = `
 attribute vec2 a_position;
@@ -58,15 +59,19 @@ void main(){
   gl_FragColor=vec4((front.rgb*front.a+back.rgb*back.a*(1.0-front.a))/max(alpha,0.00001),alpha);
 }`;
 
-export function fragmentSource(source, webgl2 = false, overflow = false) {
-  const portable = /uniform\s+sampler2D\s+screenTexture\b/.test(source);
+export function fragmentSource(source, webgl2 = false, overflow = false, preserveAlpha = false) {
+  source = shaderSourceBody(source);
+  const portable = /uniform\s+(?:(?:lowp|mediump|highp)\s+)?sampler2D\s+screenTexture\b/.test(source);
+  const custom = portable && !source.includes('@rpen-builtin');
+  const fragmentCoordinates = custom && /\bgl_FragCoord\b/.test(source);
   const origin = portable ? 'vec2(0.0)' : 'vec2(0.0, 0.0333)';
   const size = portable ? 'vec2(1.0)' : 'vec2(0.7031, 1.0 / 1.2)';
   const coordinate = portable ? 'uv' : 'v_texCoord';
-  let body = source.replace(/^\s*#version[^\n]*\n/, '').replaceAll('CC_Texture0', 'u_texture')
-    .replace(/\bscreenTexture\b/g, 'u_texture').replace(/\bscreenSize\b/g, 'resolution');
-  body = body.replace(/uniform\s+sampler2D\s+u_texture\s*;/g, '');
-  body = body.replace(/gl_FragCoord\.xy/g, '((v_texCoord - rpeRectMin) / (rpeRectMax - rpeRectMin) * resolution)');
+  let body = source.replace(/^\s*#version[^\n]*\n/m, '').replaceAll('CC_Texture0', 'u_texture')
+    .replace(/\bscreenTexture\b/g, 'u_texture');
+  body = body.replace(/uniform\s+(?:(?:lowp|mediump|highp)\s+)?sampler2D\s+u_texture\s*;/g, '');
+  if (fragmentCoordinates) body = body.replace(/\bgl_FragCoord\b/g, 'rpenFragCoord');
+  else if (!custom) body = body.replace(/gl_FragCoord\.xy/g, `((v_texCoord - rpeRectMin) / (rpeRectMax - rpeRectMin) * ${portable ? 'screenSize' : 'resolution'})`);
   if (portable) body = body.replace(/\btime\b/g, 'u_time');
   body = body.replace(new RegExp(`varying\\s+(?:(?:lowp|mediump|highp)\\s+)?vec2\\s+${coordinate}\\s*;`), '')
     .replace(new RegExp(`\\b${coordinate}\\b`, 'g'), 'rpeCoordinate')
@@ -81,19 +86,34 @@ varying vec2 v_texCoord;
 uniform vec2 rpeRectMin;
 uniform vec2 rpeRectMax;
 vec2 rpeCoordinate;
+${fragmentCoordinates ? `#ifdef GL_FRAGMENT_PRECISION_HIGH
+uniform highp vec2 rpenSurfaceSize;
+highp vec4 rpenFragCoord;
+#else
+uniform vec2 rpenSurfaceSize;
+vec4 rpenFragCoord;
+#endif` : ''}
+${preserveAlpha ? 'float rpenCoverage = 0.0; bool rpenSampled = false;' : ''}
 vec4 rpeSample(sampler2D source, vec2 coordinate) {
+  ${preserveAlpha ? 'rpenSampled = true;' : ''}
   vec2 local = (coordinate - ${origin}) / ${size};
   if (local.x < 0.0 || local.x > 1.0 || local.y < 0.0 || local.y > 1.0) return vec4(0.0);
-  return texture2D(source, mix(rpeRectMin, rpeRectMax, local));
+  vec4 pixel = texture2D(source, mix(rpeRectMin, rpeRectMax, local));
+  ${preserveAlpha ? 'rpenCoverage = max(rpenCoverage, pixel.a);' : ''}
+  return pixel;
 }
 vec4 rpeSampleProj(sampler2D source, vec4 coordinate) { return rpeSample(source, coordinate.xy / coordinate.w); }
 vec4 rpeSampleProj(sampler2D source, vec3 coordinate) { return rpeSample(source, coordinate.xy / coordinate.z); }
+#line 1
 ${body}
+#line 10000
 void main() {
   if (v_texCoord.x < rpeRectMin.x || v_texCoord.x > rpeRectMax.x || v_texCoord.y < rpeRectMin.y || v_texCoord.y > rpeRectMax.y) gl_FragColor = ${overflow ? 'texture2D(rpenOverflowTexture, v_texCoord)' : 'vec4(0.0)'};
   else {
     rpeCoordinate = ${origin} + (v_texCoord - rpeRectMin) / (rpeRectMax - rpeRectMin) * ${size};
+    ${fragmentCoordinates ? 'rpenFragCoord = vec4(gl_FragCoord.xy - rpeRectMin * rpenSurfaceSize, gl_FragCoord.zw);' : ''}
     rpeMain();
+    ${preserveAlpha ? 'gl_FragColor.a = min(gl_FragColor.a, rpenSampled ? rpenCoverage : texture2D(u_texture, v_texCoord).a);' : ''}
   }
 }
 `;
@@ -106,7 +126,8 @@ export function shaderViewport(view, width, height) {
 }
 
 export function shaderDefaults(source) {
-  return Object.fromEntries([...source.matchAll(/uniform\s+\w+\s+(\w+)\s*;[^\r\n%]*%([^%\r\n]+)%/g)].map(([, name, value]) => {
+  source = shaderSourceBody(source);
+  return Object.fromEntries([...source.matchAll(/uniform\s+(?:(?:lowp|mediump|highp)\s+)?\w+\s+(\w+)\s*;[^\r\n%]*%([^%\r\n]+)%/g)].map(([, name, value]) => {
     const numbers = value.split(',').map(Number); return [name, numbers.length === 1 ? numbers[0] : numbers];
   }).filter(([, value]) => (Array.isArray(value) ? value : [value]).every(Number.isFinite)));
 }
@@ -124,7 +145,7 @@ export class ShaderPipeline {
   dispose() {
     this.gl?.getExtension('WEBGL_lose_context')?.loseContext();
     if (this.canvas) this.canvas.width = this.canvas.height = 1;
-    this.programs.clear(); this.gl = null; this.canvas = null; this.sourceTexture = this.pingTexture = this.pongTexture = this.framebuffer = this.buffer = null;
+    this.programs.clear(); this.programErrors?.clear(); this.gl = null; this.canvas = null; this.sourceTexture = this.pingTexture = this.pongTexture = this.framebuffer = this.buffer = null;
   }
   constructor(invalidate = () => {}) { this.invalidate = invalidate; this.gl = null; this.canvas = null; this.programs = new Map(); this.sourceTexture = null; this.pingTexture = null; this.pongTexture = null; this.framebuffer = null; this.buffer = null; this.disabled = false; }
 
@@ -154,27 +175,31 @@ export class ShaderPipeline {
     const gl = this.gl; gl.bindTexture(gl.TEXTURE_2D, texture); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
   }
 
-  compile(name, source, overflow = false) {
-    const key = overflow ? '\0overflow\n' + source : source;
-    if (this.programs.has(key)) return this.programs.get(key);
+  compile(name, source, overflow = false, preserveAlpha = false) {
+    const key = (preserveAlpha ? '\0alpha\n' : '') + (overflow ? '\0overflow\n' : '') + source;
+    this.programErrors ??= new Map();
+    if (this.programs.has(key)) { if (this.programErrors.has(key)) this.lastError = this.programErrors.get(key); return this.programs.get(key); }
+    if (this.programs.size >= 64) { const oldest = this.programs.keys().next().value; const entry = this.programs.get(oldest); if (entry?.program) this.gl.deleteProgram(entry.program); this.programs.delete(oldest); this.programErrors.delete(oldest); }
+    const fail = message => { this.lastError = message; this.programErrors.set(key, message); this.programs.set(key, null); this.report?.(message); return null; };
     const gl = this.gl; const vertex = gl.createShader(gl.VERTEX_SHADER); const fragment = gl.createShader(gl.FRAGMENT_SHADER);
     gl.shaderSource(vertex, this.webgl2 ? '#version 300 es\n' + VERTEX_SOURCE.replace(/attribute\b/g, 'in').replace(/varying\b/g, 'out') : VERTEX_SOURCE); gl.compileShader(vertex);
-    gl.shaderSource(fragment, fragmentSource(source, this.webgl2, overflow)); gl.compileShader(fragment);
-    if (!gl.getShaderParameter(vertex, gl.COMPILE_STATUS) || !gl.getShaderParameter(fragment, gl.COMPILE_STATUS)) { this.lastError = gl.getShaderInfoLog(vertex) + gl.getShaderInfoLog(fragment); gl.deleteShader(vertex); gl.deleteShader(fragment); return null; }
+    gl.shaderSource(fragment, fragmentSource(source, this.webgl2, overflow, preserveAlpha)); gl.compileShader(fragment);
+    if (!gl.getShaderParameter(vertex, gl.COMPILE_STATUS) || !gl.getShaderParameter(fragment, gl.COMPILE_STATUS)) { const message = gl.getShaderInfoLog(vertex) + gl.getShaderInfoLog(fragment); gl.deleteShader(vertex); gl.deleteShader(fragment); return fail(message); }
     const program = gl.createProgram(); gl.attachShader(program, vertex); gl.attachShader(program, fragment); gl.linkProgram(program); gl.deleteShader(vertex); gl.deleteShader(fragment);
-    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) { this.lastError = gl.getProgramInfoLog(program); gl.deleteProgram(program); return null; }
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) { const message = gl.getProgramInfoLog(program); gl.deleteProgram(program); return fail(message); }
     const uniforms = new Map(); const types = new Map();
     for (let index = 0; index < gl.getProgramParameter(program, gl.ACTIVE_UNIFORMS); index++) { const info = gl.getActiveUniform(program, index); const name = info.name.replace(/\[0\]$/, ''); uniforms.set(name, gl.getUniformLocation(program, info.name)); types.set(name, info.type); }
     const defaults = shaderDefaults(source);
     const attributes = { position: gl.getAttribLocation(program, 'a_position'), texCoord: gl.getAttribLocation(program, 'a_texCoord') };
-    const result = { program, uniforms, types, defaults, attributes }; this.programs.set(key, result); return result;
+    const body = shaderSourceBody(source);
+    const result = { program, uniforms, types, defaults, attributes, builtin: /^\/\/ @rpen-builtin\b/m.test(body) || !/uniform\s+(?:(?:lowp|mediump|highp)\s+)?sampler2D\s+screenTexture\b/.test(body) }; this.programs.set(key, result); return result;
   }
 
   setUniforms(result, values, seconds, width, height, rect, resolution) {
     const gl = this.gl;
     const set = (name, value) => {
       const location = result.uniforms.get(name); if (location === null || location === undefined) return;
-      let normalised = normaliseUniformValue(name, value);
+      let normalised = result.builtin ? normaliseUniformValue(name, value) : value;
       if (result.types.get(name) === gl.FLOAT && Array.isArray(normalised)) normalised = normalised[0];
       if ([gl.SAMPLER_2D, gl.INT, gl.BOOL].includes(result.types.get(name))) { gl.uniform1i(location, Number(normalised) || 0); return; }
       if (Array.isArray(normalised)) {
@@ -184,9 +209,12 @@ export class ShaderPipeline {
         else if (normalised.length === 1) gl.uniform1f(location, normalised[0]);
       } else if (typeof normalised === 'number' && Number.isFinite(normalised)) gl.uniform1f(location, normalised);
     };
-    set('u_texture', 0); set('u_time', seconds); set('resolution', resolution ?? [1350, 900]); set('rpeRectMin', rect?.min ?? [0, 0]); set('rpeRectMax', rect?.max ?? [1, 1]);
+    // The preview image is the shader's screen; surrounding canvas padding
+    // belongs to the editor. UVs and pixel coordinates share this same domain.
+    const screen = result.builtin ? resolution ?? [1350, 900] : rect ? [width * (rect.max[0] - rect.min[0]), height * (rect.max[1] - rect.min[1])] : [width, height];
+    set('u_texture', 0); set('u_time', seconds); set('screenSize', screen); set('rpenSurfaceSize', [width, height]); set('resolution', resolution ?? [1350, 900]); set('rpeRectMin', rect?.min ?? [0, 0]); set('rpeRectMax', rect?.max ?? [1, 1]);
     for (const [name, location] of result.uniforms) {
-      if (['u_texture', 'u_time', 'resolution', 'rpeRectMin', 'rpeRectMax'].includes(name)) continue;
+      if (['u_texture', 'u_time', 'screenSize', 'rpenSurfaceSize', 'resolution', 'rpeRectMin', 'rpeRectMax'].includes(name)) continue;
       const fallback = name === 'offset' && result.types.get(name) === gl.FLOAT_VEC2 ? [0, 0] : defaultShaderUniform(name, resolution);
       set(name, values[name] ?? result.defaults[name] ?? fallback);
     }
@@ -295,7 +323,8 @@ export class ShaderPipeline {
     let input = this.sourceTexture; let output = this.pingTexture; let rendered = 0;
     const usable = [];
     this.filterApplied = false;
-    for (const pass of passes) { const source = sourceFor(pass); const program = source && this.compile(pass.shader, source); if (program) usable.push({ pass, program }); }
+    this.activeError = null;
+    for (const pass of passes) { const source = sourceFor(pass); const program = source && this.compile(pass.shader, source, false, Boolean(filter?.preserveAlpha)); if (program) usable.push({ pass, program }); else if (source) this.activeError = this.lastError; }
     const boundedFilter = applyFilter && filter.keepInside;
     let mergedOverflow = null;
     if (boundedFilter && filter.sourceCanvas && usable.length) {

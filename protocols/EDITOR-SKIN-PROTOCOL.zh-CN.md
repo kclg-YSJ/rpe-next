@@ -258,6 +258,9 @@ tokens 是初始默认值，不是只能读取的常量。可在 `@root` 状态/
 | `metadata` | 谱面信息，`#metadata-editor` |
 | `bpm` | BPM，`#bpm-editor` |
 | `trajectory` | 曲线轨迹，`#trajectory-editor` |
+| `spatial` | 空间轨迹右侧面板，`#spatial-editor`（`@spatial-panel`）；入口为 `@spatial-tool` |
+
+`@sampling-controls` 对应普通事件、噪域及空间轨迹共用的取样设置区。取样期间设置停留在右侧，不覆盖预览；空间轨迹曲线使用谱面颜色，编辑器皮肤不重映射其画布颜色。
 | `text-lines` | 文字拼合，`#text-lines-editor` |
 | `noise-fit` | 噪域图案，`#noise-fit-editor` |
 | `curve` | 曲线音符，`#curve-editor` |
@@ -266,6 +269,8 @@ tokens 是初始默认值，不是只能读取的常量。可在 `@root` 状态/
 | `noise` | 噪域列表/层，`#noise-panel` |
 | `noise-properties` | 噪域及内部事件属性，`#noise-properties` |
 | `clipboard` | 剪贴板历史 |
+
+`@sampling-controls` 对应普通事件、噪域及空间轨迹共用的取样设置区。取样期间设置停留在右侧，不覆盖预览；空间轨迹曲线使用谱面颜色，编辑器皮肤不重映射其画布颜色。
 
 常见样式入口：`.panel-title` 标题、`.field` 标签/控件行、`.hint` 提示、`.action-grid` 操作网格、`.primary` 主操作、`.wide-button` 整行按钮、`details > summary` 折叠头、`.modal-actions` 窗口底栏。例如 `[data-panel="events"] .field input` 只修改事件输入框。不要将 CSS 绑定到某一行索引或中文标签文本；可参考组件目录中的静态 id，动态字段以所属面板加控件类型作通用定制。
 
@@ -661,3 +666,7 @@ builtin 必须使用组件目录 builtinAssets 表中登记的有限名称，不
 动画曲线是编辑器内的大浮窗，直接继承当前皮肤；不创建系统子窗口。组件别名 animation-curve 指向 #animation-curve-editor，custom-easing-templates 指向 .custom-easing-group。布局保留可拖动标题栏、画布、长纵向滑条、侧栏、帮助与右下角缩放柄。帮助图示使用当前颜色令牌；无额外的模组运行环境。
 
 视频渲染：render-video 指向顶部唯一入口 #render-video（首页禁用），render-studio 指向按需创建的 #rpen-render-studio。不得在皮肤中复制渲染入口。面板继承皮肤颜色；详见 VIDEO-RENDER.zh-CN.md。
+
+整窗录制渲染使用快捷键；`@editor-recording-status` 为录制期间才创建的左下角状态／停止按钮，`@editor-render-fps` 为设置中的目标帧率。均继承普通控件外观，无须皮肤添加新入口。
+
+`@editor-render-settings` 为统一默认折叠的播放渲染设置面板，`@editor-render-auto-play` 为开始时自动播放。`@key-display` 是独立的按键显示开关；`@key-display-overlay` 为启用时才创建的右下角顶层键帽容器，pointer-events 为 none，不影响布局、焦点和鼠标操作。

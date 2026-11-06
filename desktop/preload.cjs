@@ -1,4 +1,17 @@
 const { contextBridge, ipcRenderer } = require('electron');
+contextBridge.exposeInMainWorld('rpenEditorCapture', {
+  version: 1,
+  call: (action, id) => ipcRenderer.invoke('rpen-editor-capture', action, id),
+  requestFrame: (requestId, value) => {
+    const send = result => {
+      const buffer = result.ok && result.result?.bytes?.buffer;
+      const message = { type: 'rpen-editor-capture-frame', requestId, result };
+      try { window.postMessage(message, location.origin, buffer instanceof ArrayBuffer ? [buffer] : []); }
+      catch { window.postMessage(message, location.origin); }
+    };
+    void ipcRenderer.invoke('rpen-editor-capture', 'frame', value).then(send, error => send({ ok: false, error: error.message }));
+  },
+});
 contextBridge.exposeInMainWorld('rpenAudioPitchCache', { version: 1, call: (action, key, bytes) => ipcRenderer.invoke('rpen-audio-pitch-cache', { action, key, bytes }) });
 contextBridge.exposeInMainWorld('rpenRenderOutput', { version: 1, call: (action, value) => ipcRenderer.invoke('rpen-render-output', { action, value }) });
 contextBridge.exposeInMainWorld('rpenLargePreview', {

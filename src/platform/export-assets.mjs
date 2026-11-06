@@ -2,11 +2,12 @@ import { isBackupChartFile } from '../core/chart-backups.mjs';
 import { parseNoiseSkin } from '../core/noise-skin.mjs';
 import { emitModHook } from '../core/mod-hooks.mjs';
 import { decodeLegacy } from './legacy-text.mjs';
+import { shaderAssetPath } from '../core/shader-assets.mjs';
 
 // Follow references in the exported snapshot, then references in its resources.
 // Paths use the same relative/case/basename resolution as editor playback.
 export function collectExportAssetPaths(chart, assets, chartName, { resolve, media, roots, mainFile, includeBackupCharts = false }) {
-  const required = new Set(roots), pending = [], processed = new Set([mainFile]), resolutions = new Map(), skins = new Set();
+  const required = new Set(roots), pending = [], processed = new Set([mainFile]), resolutions = new Map(), skins = new Set(), shaders = new Set();
   let collecting = false;
   const enqueue = name => { if (assets.has(name) && !processed.has(name)) { processed.add(name); pending.push(name); } };
   const keep = path => { required.add(path); if (collecting) enqueue(path); };
@@ -47,6 +48,7 @@ export function collectExportAssetPaths(chart, assets, chartName, { resolve, med
     if (!value || typeof value !== 'object') return;
     if (Array.isArray(value)) { for (const child of value) visit(child, source); return; }
     for (const [key, child] of Object.entries(value)) {
+      if (key === 'shader' && typeof child === 'string') { const shader = shaderAssetPath(assets, child, source); if (shader) { shaders.add(shader); keep(shader); continue; } }
       // Descriptive text, embedded source documents and remembered inactive skins
       // are not resource references. Their JSON data is still exported unchanged.
       if (['rpeNextLegacySource', 'skinPresets', 'textEvents'].includes(key) || key === 'Texture' && child === 'line.png'
@@ -71,7 +73,7 @@ export function collectExportAssetPaths(chart, assets, chartName, { resolve, med
     const name = pending[index], bytes = assets.get(name);
     if (/\.json(?:\.(?:bak|backup)(?:\.\d+)?)?$/i.test(name)) {
       try { visit(JSON.parse(decodeLegacy(bytes)), name); } catch { /* An optional resource may not be JSON. */ }
-    } else if (/\.(?:glsl|frag|vert|css|svg|mjs|js)$/i.test(name)) {
+    } else if (shaders.has(name) || /\.(?:glsl|frag|fs|fsh|vert|css|svg|mjs|js)$/i.test(name)) {
       const text = decodeLegacy(bytes);
       const references = /\/\/\s*@texture\s+(\S+)|#include\s*["<]([^">]+)[">]|(?:url\(\s*|(?:href|src)\s*=\s*)["']([^"']+)["']|(?:import|export)\s+(?:[^;\n]*?\s+from\s*)?["']([^"']+)["']/g;
       for (const match of text.matchAll(references)) add(match.slice(1).find(Boolean), name);

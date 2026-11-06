@@ -20,6 +20,12 @@ import { drawEditorJudgement, editorJudgementWidth } from './editor-judgement.mj
 import { dragEventEndpoint } from '../core/event-drag.mjs';
 import { t } from '../i18n.mjs';
 import { selectionCounts } from '../application/selection-count.mjs';
+import { displayNumber, displayPosition } from './spatial-display.mjs';
+import { SamplingControls } from './sampling-controls.mjs';
+import { SamplingTargets } from './sampling-targets.mjs';
+import { samplingPreferences } from '../platform/sampling-preferences.mjs';
+import { snapSamplePoint, snapSampleAngle, snapConstrainedPoint } from '../core/sampling-grid.mjs';
+import { drawSamplingGrid, drawSnapGuides } from './sampling-guides.mjs';
 
 function button(text, title, run) {
   const control = document.createElement('button'); control.type = 'button'; control.textContent = text; control.title = title; control.onclick = run; return control;
@@ -52,8 +58,9 @@ export class NoiseAreaEditor {
     this.modeHeader.append(this.modePrimary, spacer, ...this.modeTracks, trailing);
     document.querySelector('.timeline-head').append(this.modeHeader);
     this.overlay = document.createElement('canvas'); this.overlay.className = 'noise-sampler'; this.overlay.hidden = true; canvas.closest('.stage').append(this.overlay);
-    this.sampleBar = document.createElement('div'); this.sampleBar.className = 'noise-sample-bar'; this.sampleBar.hidden = true;
-    this.sampleBar.append(hint(t('noise-area.s5cb983c')), button(t('noise-area.s2e0df4a'), t('noise-area.s419c38c'), () => this.endSample(true)), button(t('noise-area.s4d0b468'), t('noise-area.s38d6600'), () => this.endSample(false))); canvas.closest('.stage').append(this.sampleBar);
+    this.sampleBar = document.createElement('div'); this.sampleBar.className = 'sampling-dock'; this.sampleBar.hidden = true;
+    this.sampleBar.classList.add('sampling-dock'); document.querySelector('[data-panel="noise-properties"]').prepend(this.sampleBar);
+    this.sampleControls = new SamplingControls(this.sampleBar,{change:()=>this.invalidate(),apply:()=>this.endSample(true),cancel:()=>this.endSample(false)}); this.sampleTargets=new SamplingTargets();
     for (const [name, handler] of [['pointerdown', event => this.down(event)], ['pointermove', event => this.move(event)], ['pointerup', event => this.up(event)], ['pointercancel', () => this.cancelGesture()]]) canvas.addEventListener(name, handler);
     canvas.addEventListener('wheel', event => { event.preventDefault(); event.stopPropagation(); if (!this.sampleMode) { this.wheel(event); this.cursor = this.point(event); this.updateDrag(); } }, { passive: false });
     canvas.addEventListener('contextmenu', event => { event.preventDefault(); if (this.suppressContextMenu || this.drag?.endpoint) { this.suppressContextMenu = false; event.stopImmediatePropagation?.(); return; } this.pending = null; this.onContextMenu?.(event); this.invalidate(); });
@@ -92,6 +99,7 @@ export class NoiseAreaEditor {
     setProperty(this.canvas, 'hidden', !this.active || this.context.previewVisible || Boolean(this.sampleMode));
     setProperty(document.querySelector('#noise-tab'), 'hidden', !this.active);
     setProperty(this.overlay, 'hidden', !this.sampleMode); setProperty(this.sampleBar, 'hidden', !this.sampleMode);
+    if(this.properties)this.properties.hidden=Boolean(this.sampleMode);
     document.querySelector('.editor').classList.toggle('noise-sampling', Boolean(this.sampleMode));
     setProperty(document.querySelector('#mirror'), 'disabled', this.active);
     setProperty(document.querySelector('#batch-run'), 'disabled', this.active || !this.context.session.selection.size);
@@ -472,7 +480,10 @@ export class NoiseAreaEditor {
   }
   beginSample(target) {
     this.flush(); this.pause(); const area = this.area(); if (!area) return;
+    this.sampleSnap=this.sampleLocalSnap=this.angleSnap=null;
     this.sampleMode = { ...samplingTarget(area, target.type, target.index, target.field), base: this.sampleMode?.base ?? this.context.session.chart };
+    const value=target.type?area[target.type][target.index][target.field]:area[target.field];
+    this.sampleControls?.configure((typeof value==='number'?[['value',value]]:['x','y'].filter(key=>Number.isFinite(value?.[key])).map(key=>[key,value[key]])).map(([key,value])=>({key,label:key==='value'?t('sampling.value'):key.toUpperCase(),value,change:next=>{const changed=structuredClone(this.area()),entry=target.type?changed[target.type][target.index]:changed;if(key==='value'){entry[target.field]=next;if(entry.inst)entry[target.field==='start'?'end':'start']=next;}else entry[target.field][key]=next;this.draftChart=this.replaceArea(changed);this.invalidate();}})));
     this.sampleSeconds = target.type ? this.context.tempo.seconds(area[target.type][target.index][target.field === 'end' ? 'endTime' : 'startTime']) : this.context.tempo.seconds(this.context.timeline.origin);
     this.sampleZoom ??= [this.context.preview, this.context.realtimePreview].map(renderer => ({ renderer, original: renderer.viewDivisor ?? 1, divisor: renderer.viewDivisor ?? 1 }));
     this.sampleDrag = null; this.render(); this.invalidate();
@@ -481,13 +492,13 @@ export class NoiseAreaEditor {
     if (!this.sampleMode) return;
     for (const { renderer, original } of this.sampleZoom ?? []) renderer.viewDivisor = original;
     this.sampleZoom = null;
-    const chart = this.draftChart; this.sampleMode = null; this.sampleDrag = null; this.draftChart = null; this.syncChrome();
+    const chart = this.draftChart; if(this.sampleMode.base!==this.context.session.chart)apply=false; this.sampleMode = null; this.sampleDrag = null; this.draftChart = null; this.syncChrome();
     if (apply && chart) { try { this.commit(t('noise-area.seaab4c2'), chart); } catch (error) { this.report(error); } }
     this.render(); this.invalidate();
   }
   fitSampleView() {
     const previousView = this.sampleView();
-    const rect = this.overlay.getBoundingClientRect(); const controlsBottom = this.sampleBar.getBoundingClientRect().bottom - rect.top;
+    const rect = this.overlay.getBoundingClientRect(); const controlsBottom = this.sampleControls ? 0 : this.sampleBar.getBoundingClientRect().bottom - rect.top;
     for (const zoom of this.sampleZoom ?? []) {
       const positionScale = previewPositionScale(zoom.renderer.aspectRatio ?? 1.5);
       const position = noiseSampleHandle(this.area(), this.context.tempo, this.sampleSeconds, this.sampleMode, positionScale);
@@ -510,15 +521,30 @@ export class NoiseAreaEditor {
     if (!this.sampleMode || event.button !== 0) return; event.preventDefault(); event.stopPropagation();
     const view = this.sampleView(); const point = { x: event.clientX - view.left, y: event.clientY - view.top }; const handle = view.screen(noiseSampleHandle(this.area(), this.context.tempo, this.sampleSeconds, this.sampleMode, view.positionScale));
     if (Math.hypot(point.x - handle.x, point.y - handle.y) > 26) return;
-    this.overlay.setPointerCapture(event.pointerId); this.sampleDrag = { pointer: { x: event.clientX, y: event.clientY }, offset: { x: point.x - handle.x, y: point.y - handle.y } };
+    this.overlay.setPointerCapture(event.pointerId); this.sampleDrag = { pointer: { x: event.clientX, y: event.clientY }, origin:view.world(handle), offset: { x: point.x - handle.x, y: point.y - handle.y } }; this.sampleSnap=null;
   }
   sampleMove(event) {
     if (!this.sampleDrag) return;
     this.sampleDrag.pointer = { x: event.clientX, y: event.clientY };
-    const view = this.sampleView(); const point = view.world({ x: event.clientX - view.left - this.sampleDrag.offset.x, y: event.clientY - view.top - this.sampleDrag.offset.y });
-    try { const area = applyNoiseSample(this.area(), this.context.tempo, this.sampleSeconds, this.sampleMode, point, view.positionScale); this.draftChart = this.replaceArea(area); this.fitSampleView(); this.invalidate(); } catch (error) { this.notify(error.message, 'warning'); this.sampleDrag = null; }
+    const view = this.sampleView(); let point = view.world({ x: event.clientX - view.left - this.sampleDrag.offset.x, y: event.clientY - view.top - this.sampleDrag.offset.y });
+    try {
+      const settings=this.sampleTargets?{...samplingPreferences(),stepX:samplingPreferences().stepX*view.positionScale.x,stepY:samplingPreferences().stepY*view.positionScale.y}:{gridSnap:false,objectSnap:false}, targets=this.sampleTargets?.get(this.sampleMode.base,this.context.tempo,this.sampleSeconds,view.positionScale,{areaIndex:this.selected,renderer:this.context.previewVisible?this.context.preview:this.context.realtimePreview});
+      if((!this.sampleMode.type||['moveXEvents','moveYEvents'].includes(this.sampleMode.type)||this.sampleMode.field==='anchor') && settings.coordinates!=='local'){const options={settings,targets,scale:view.scale,previous:this.sampleSnap,origin:this.sampleDrag.origin,free:event.altKey};if(['moveXEvents','moveYEvents'].includes(this.sampleMode.type)&&this.sampleMode.field!=='anchor'){const base=noiseSampleHandle(this.area(),this.context.tempo,this.sampleSeconds,this.sampleMode,view.positionScale),probeArea=structuredClone(this.area()),e=probeArea[this.sampleMode.type][this.sampleMode.index];e[this.sampleMode.field]+=1;const probe=noiseSampleHandle(probeArea,this.context.tempo,this.sampleSeconds,this.sampleMode,view.positionScale);this.sampleSnap=snapConstrainedPoint(point,base,{x:probe.x-base.x,y:probe.y-base.y},options);}else this.sampleSnap=snapSamplePoint(point,options);point=this.sampleSnap;}
+      let area = applyNoiseSample(this.area(), this.context.tempo, this.sampleSeconds, this.sampleMode, point, view.positionScale);
+      const {type,index,field}=this.sampleMode;
+      if(type==='rotateEvents' && field!=='anchor'){const entry=area[type][index],result=snapSampleAngle(entry[field],{settings,targets,previous:this.angleSnap,free:event.altKey});this.angleSnap=result;entry[field]=result.angle;if(entry.inst)entry[field==='start'?'end':'start']=result.angle;}
+      else if(['moveXEvents','moveYEvents'].includes(type) && field!=='anchor' && settings.coordinates==='local'){
+        const entry=area[type][index],axis=type==='moveYEvents'?'y':'x',probe=structuredClone(area);probe[type][index][field]+=1;
+        const a=noiseSampleHandle(area,this.context.tempo,this.sampleSeconds,this.sampleMode,view.positionScale),b=noiseSampleHandle(probe,this.context.tempo,this.sampleSeconds,this.sampleMode,view.positionScale),localScale=view.scale*Math.hypot(b.x-a.x,b.y-a.y);
+        const object=snapConstrainedPoint(point,a,{x:b.x-a.x,y:b.y-a.y},{settings:{...settings,gridSnap:false},targets,scale:view.scale,previous:this.sampleSnap,free:event.altKey});
+        if(object.guides.length){this.sampleSnap=object;area=applyNoiseSample(area,this.context.tempo,this.sampleSeconds,this.sampleMode,object,view.positionScale);}
+        else{this.sampleSnap=null;const snapped=snapSamplePoint({[axis]:entry[field]},{settings:samplingPreferences(),scale:localScale,previous:this.sampleLocalSnap,free:event.altKey});this.sampleLocalSnap=snapped;entry[field]=snapped[axis];if(entry.inst)entry[field==='start'?'end':'start']=entry[field];}
+      }
+      this.draftChart = this.replaceArea(area); this.fitSampleView(); this.invalidate();
+    } catch (error) { this.notify(error.message, 'warning'); this.sampleDrag = null; }
   }
   previewState() {
+    if(this.sampleMode && this.sampleMode.base!==this.context.session.chart){this.endSample(false);return {chart:this.chart};}
     if (!this.sampleMode) return { chart: this.chart };
     this.fitSampleView();
     if (this.samplePreviewCache?.source === this.chart && this.samplePreviewCache.mode === this.sampleMode) return this.samplePreviewCache.result;
@@ -538,6 +564,12 @@ export class NoiseAreaEditor {
   drawSample() {
     if (!this.sampleMode) return;
     const { context, width, height } = prepareCanvas(this.overlay); const view = this.sampleView(); const area = this.area();
+    const rotation=this.sampleMode.type==='rotateEvents'&&this.sampleMode.field!=='anchor'; const rotationAnchor=rotation?area.rotateEvents[this.sampleMode.index].anchor:null;
+    drawSamplingGrid(context,view,{rotation,center:rotationAnchor?{x:rotationAnchor.x*view.positionScale.x,y:rotationAnchor.y*view.positionScale.y}:{x:0,y:0},positionScale:view.positionScale});drawSnapGuides(context,view,this.sampleSnap);
+    const rawRead=this.sampleMode.type?area[this.sampleMode.type][this.sampleMode.index][this.sampleMode.field]:null;const read=typeof rawRead==='number'?rawRead:null;
+    this.sampleControls?.updateValues(read===null?rawRead??area[this.sampleMode.field]:{value:read});
+    const position=noiseSampleHandle(area,this.context.tempo,this.sampleSeconds,this.sampleMode,view.positionScale);
+    this.sampleControls?.sync(rotation,`${t('spatial.noiseNumber',{number:this.selected})} · ${t('spatial.beatReadout',{beat:displayNumber(this.context.tempo.beat(this.sampleSeconds))})}\n${t('spatial.position')} ${displayPosition(position)}${rotation?'　'+displayNumber(read)+'°':''}`);
     const sample = previewNoiseGeometry(sampleEditingArea(area, this.context.tempo, this.sampleSeconds, this.sampleMode), view.positionScale); const points = sample.points.map(view.screen);
     context.strokeStyle = '#67efa4'; context.lineWidth = 2; context.beginPath(); points.forEach((point, index) => index ? context.lineTo(point.x, point.y) : context.moveTo(point.x, point.y)); context.closePath(); context.stroke();
     const anchor = this.sampleMode.type && noiseHasAnchor(this.sampleMode.type) ? area[this.sampleMode.type][this.sampleMode.index].anchor : null;

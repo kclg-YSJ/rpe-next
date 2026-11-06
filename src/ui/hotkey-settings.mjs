@@ -18,6 +18,7 @@ export function showHotkeySettings(preferences, save) {
   const resetAll = document.createElement('button'); resetAll.textContent = t('hotkey-settings.s1a8a8ae');
   const importButton = document.createElement('button'); importButton.textContent = t('hotkey-settings.s60e2bca');
   const exportButton = document.createElement('button'); exportButton.textContent = t('hotkey-settings.s1888967');
+  resetAll.type = importButton.type = exportButton.type = 'button';
   const file = document.createElement('input'); file.type = 'file'; file.accept = '.json,.txt'; file.hidden = true;
   toolbar.append(resetAll, importButton, exportButton, file); content.append(toolbar);
   const summary = document.createElement('p'); summary.className = 'hotkey-summary'; summary.setAttribute('role', 'status'); summary.setAttribute('aria-live', 'polite'); content.append(summary);
@@ -61,6 +62,7 @@ export function showHotkeySettings(preferences, save) {
       const record = document.createElement('button'); record.textContent = t('hotkey-settings.s83f84cf'); record.setAttribute('aria-label', t('hotkey-settings.sd89b61e', { p0: label }));
       const clear = document.createElement('button'); clear.textContent = t('hotkey-settings.s7b15e5e'); clear.title = t('hotkey-settings.sc718eb2', { p0: label });
       const reset = document.createElement('button'); reset.textContent = t('hotkey-settings.s457d449'); reset.title = t('hotkey-settings.s72eeb0d', { p0: formatShortcut(DEFAULT_HOTKEYS[action]) });
+      record.type = clear.type = reset.type = 'button';
       const message = document.createElement('small'); message.className = 'hotkey-message'; message.id = `hotkey-message-${action}`;
       root.append(description, input, record, clear, reset, message); section.append(root);
       rows.set(action, { root, input, record, reset, message });

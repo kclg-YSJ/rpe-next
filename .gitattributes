@@ -1,2 +1,4 @@
 # Preserve pinned third-party runtime and model checksums across platforms.
 assets/vendor/** -text whitespace=-blank-at-eol,-blank-at-eof
+# Shader source hashes are part of the public resource manifest.
+assets/rpe/shaders/** text eol=lf

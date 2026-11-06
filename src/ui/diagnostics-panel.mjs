@@ -3,7 +3,7 @@ import { t } from '../i18n.mjs';
 export function diagnosticSubtype(issue) {
   if (issue.code === 'timeRange') return t(issue.path.startsWith('notes[') ? 'diag.noteTimeRange' : 'diag.eventTimeRange');
   const key = { shortRead: 'shortReadGroup', tapAfterFlick: 'tapAfterFlickGroup', tapAfterDrag: 'tapAfterDragGroup',
-    assetMissing: 'assetMissingGroup', assetAmbiguous: 'assetAmbiguousGroup', assetConfig: 'assetConfigGroup',
+    assetMissing: 'assetMissingGroup', assetAmbiguous: 'assetAmbiguousGroup', assetConfig: 'assetConfigGroup', shaderUniformMissing: 'shaderUniformMissingGroup', shaderUniformType: 'shaderUniformTypeGroup',
     modMissing: 'modMissingGroup', modVersion: 'modVersionGroup', globalRule: 'globalRuleGroup', globalCheckFailure: 'globalCheckGroup', eventOverlap: 'eventOverlapGroup', missingBaseline: 'missingBaselineGroup' }[issue.code];
   if (key) return t('diag.' + key);
   return issue.message;

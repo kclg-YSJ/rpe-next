@@ -53,9 +53,21 @@ export class NoisePreview {
     if (!options.sourceGuides && options.positionScale) this.guides = this.guides.map(entry => previewNoiseGeometry(entry, options.positionScale));
     if (!options.sourceGuides && this.transformGeometry) this.guides = this.guides.map(entry => this.transformGeometry(entry, { width, height, scale, viewport, seconds })).filter(Boolean);
     const margin = Math.max(2, scale * 5);
-    let entries = this.guides.filter(entry => entry.scaleX !== 0 && entry.scaleY !== 0 &&
-      !entry.points.every(point => width / 2 + point.x * scale < -margin) && !entry.points.every(point => width / 2 + point.x * scale > width + margin) &&
-      !entry.points.every(point => height / 2 - point.y * scale < -margin) && !entry.points.every(point => height / 2 - point.y * scale > height + margin));
+    const skinBounds = new Map(); let assets;
+    for (const layer of definitions) if (this.usesSkin(layer)) {
+      this.gpu ??= new NoiseSkinRenderer(() => this.invalidate?.(), message => this.report?.(message));
+      assets ??= this.getAssets?.() ?? new Map();
+      const ratio = target.canvas.width / width;
+      const prepared = this.gpu.prepare?.(layer, assets, Math.max(1,Math.round(viewport.width*ratio)), Math.max(1,Math.round(viewport.height*ratio)));
+      const padding = prepared?.padding ?? [32,32];
+      skinBounds.set(layer.id, { skin: prepared?.skin, bounds: [viewport.left-padding[0]/ratio, viewport.top-padding[1]/ratio, viewport.left+viewport.width+padding[0]/ratio, viewport.top+viewport.height+padding[1]/ratio] });
+    }
+    let entries = this.guides.filter(entry => {
+      if (entry.scaleX === 0 || entry.scaleY === 0) return false;
+      const bounds = skinBounds.get(noiseLayerId(entry.area))?.bounds ?? [-margin,-margin,width+margin,height+margin];
+      return !entry.points.every(point => width/2+point.x*scale < bounds[0]) && !entry.points.every(point => width/2+point.x*scale > bounds[2]) &&
+        !entry.points.every(point => height/2-point.y*scale < bounds[1]) && !entry.points.every(point => height/2-point.y*scale > bounds[3]);
+    });
     const interior = options.excludeInside;
     if (interior && interior.right > interior.left && !definitions.some(layer => this.usesSkin(layer))) entries = entries.filter(entry => !entry.points.every(point => {
       const horizontal = width / 2 + point.x * scale;
@@ -68,9 +80,8 @@ export class NoisePreview {
     for (const definition of definitions) {
       const items = entries.filter(entry => noiseLayerId(entry.area) === definition.id);
       if (this.usesSkin(definition)) {
-        this.gpu ??= new NoiseSkinRenderer(() => this.invalidate?.(), message => this.report?.(message));
         const musicSeconds = seconds + Number(chart.META?.offset ?? 0) / 1000;
-        if (this.gpu.render(target, definition, this.getAssets?.() ?? new Map(), items, musicSeconds, viewport, scale, width, height)) continue;
+        if (this.gpu.render(target, definition, assets, items, musicSeconds, viewport, scale, width, height, skinBounds.get(definition.id)?.skin)) continue;
       }
       if (!items.length) continue;
       const composite = this.layer('composite', width, height, ratio);

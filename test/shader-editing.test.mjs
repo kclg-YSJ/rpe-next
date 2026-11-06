@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { createChart, createLine, diagnose, parseChart, serializeChart } from '../src/core/chart.mjs';
 import { fromNumber } from '../src/core/beat.mjs';
 import { shaderEvents, shaderParameterTrack, shaderParameters, parseShaderValue, shaderTypeFields, shaderEventLanes } from '../src/core/shader-events.mjs';
-import { ShaderRuntime } from '../src/core/shader.mjs';
+import { builtinShaderSource, ShaderRuntime } from '../src/core/shader.mjs';
 import { EditorSession } from '../src/application/session.mjs';
 import { eventList, placedEvent, insertEvent, transformEvents, deleteEvents, copyEvents, pasteEvents } from '../src/application/event-commands.mjs';
 import { reorderLine, deleteLine, duplicateLine } from '../src/application/line-commands.mjs';
@@ -60,7 +60,7 @@ test('重叠的同类 shader 按 order 独立叠加，相接边界只应用后�
 });
 
 test('shader 参数标量、向量、默认值、绝对拍数及原版 clone 类型', async () => {
-  const source = await readFile(new URL('../assets/rpe/shaders/pr/rain_pr.glsl', import.meta.url), 'utf8');
+  const source = builtinShaderSource(await readFile(new URL('../assets/rpe/shaders/rain.glsl', import.meta.url), 'utf8'));
   const definitions = shaderParameters(source);
   assert.deepEqual(definitions.find(entry => entry.name === 'rainColor').value, [0.7, 0.8, 0.9, 0.6]);
   assert.ok(!definitions.some(entry => ['screenSize', 'time'].includes(entry.name)));
@@ -68,7 +68,7 @@ test('shader 参数标量、向量、默认值、绝对拍数及原版 clone 类
   assert.throws(() => parseShaderValue('1,', 2)); assert.throws(() => parseShaderValue('NaN', 1));
   const projected = { ...effect(), startTime: [2, 0, 1], endTime: [4, 0, 1] };
   assert.deepEqual(shaderParameterTrack(projected, 'factor')[0], { startTime: [2, 0, 1], endTime: [4, 0, 1], start: 0.5, end: 0.5, easingType: 1 });
-  assert.deepEqual(shaderTypeFields('circle_blur_2'), { shader: 'circleBlur', clone: true });
+  assert.deepEqual(shaderTypeFields('circle_blur_2'), { shader: 'circleBlur', clone: false });
   assert.deepEqual(shaderTypeFields('rain'), { shader: '/rain_pr.glsl', clone: false });
 });
 
@@ -77,7 +77,7 @@ test('shader 参数按原版真实秒插值，使用所属线倍率；首段开�
   chart.BPMList.push({ startTime: [2, 0, 1], bpm: 60 });
   chart.effects = [{ ...effect(), clone: true, vars: { factor: [{ startTime: [0, 0, 1], endTime: [4, 0, 1], start: 0, end: 1, easingType: 1 }], later: [{ startTime: [3, 0, 1], endTime: [4, 0, 1], start: 8, end: 9 }] } }];
   const runtime = new ShaderRuntime(); runtime.load = () => {}; runtime.compile(chart, new TempoMap(chart.BPMList));
-  assert.equal(runtime.active(2)[0].shader, 'grayscale_2');
+  assert.equal(runtime.active(2)[0].shader, 'grayscale');
   assert.equal(runtime.active(2)[0].values.factor, 1 / 3);
   assert.equal(runtime.active(2)[0].values.later, undefined);
   assert.equal(runtime.active(7).length, 0);

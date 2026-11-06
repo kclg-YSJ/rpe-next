@@ -4,6 +4,11 @@ import { createChart } from '../src/core/chart.mjs';
 import { TempoMap } from '../src/core/tempo.mjs';
 import { canonicalShaderName, ShaderRuntime } from '../src/core/shader.mjs';
 import { ShaderPipeline, shaderViewport, fragmentSource, shaderDefaults } from '../src/ui/shader-pipeline.mjs';
+test('空间前景Shader保留输入覆盖率，变体不影响普通Shader',()=>{
+  const shader='uniform sampler2D screenTexture; varying vec2 uv; void main(){gl_FragColor=vec4(texture2D(screenTexture,uv).rgb,1.0);}';
+  const plain=fragmentSource(shader),spatial=fragmentSource(shader,false,false,true),modern=fragmentSource(shader,true,false,true);
+  assert.ok(!plain.includes('rpenCoverage'));assert.ok(spatial.includes('rpenCoverage = max(rpenCoverage, pixel.a)'));assert.ok(spatial.includes('gl_FragColor.a = min'));assert.ok(modern.includes('rpeFragColor.a = min'));
+});
 
 test('shader 连续渲染复用输入纹理和中间纹理，仅在尺寸变化时重新分配', () => {
   const allocations = [], uploads = [], draws = [];
@@ -128,4 +133,22 @@ test('Shader 坐标从实际预览矩形映射，兼容横竖比例和两套原�
 test('Shader 默认值注释不跨行读取，采样数、强度和向量分别解析', () => {
   const source = 'uniform float sampleCount; // %3% int 1..64\r\nuniform float power; // %0.01%\r\nuniform vec4 color; // %1,0.5,0,1%';
   assert.deepEqual(shaderDefaults(source), { sampleCount: 3, power: 0.01, color: [1, 0.5, 0, 1] });
+});
+
+test('custom fragment pixel coordinates and screenSize share the preview image domain, independent of canvas padding and DPI', () => {
+  const source = 'precision highp float;uniform sampler2D screenTexture;uniform vec2 screenSize;void main(){vec4 pixel=gl_FragCoord;gl_FragColor=texture2D(screenTexture,vec2(pixel.x/screenSize.x,gl_FragCoord.y/screenSize.y));}';
+  for (const modern of [false, true]) {
+    const adapted = fragmentSource(source, modern);
+    assert.match(adapted, /vec4 pixel=rpenFragCoord/); assert.match(adapted, /rpenFragCoord\.y\/screenSize\.y/);
+    assert.match(adapted, /rpenFragCoord = vec4\(gl_FragCoord\.xy - rpeRectMin \* rpenSurfaceSize, gl_FragCoord\.zw\)/);
+  }
+  const pipeline = new ShaderPipeline(), values = new Map(), names = ['screenSize', 'rpenSurfaceSize', 'rpeRectMin', 'rpeRectMax'];
+  pipeline.gl = { FLOAT: 1, SAMPLER_2D: 2, INT: 3, BOOL: 4, uniform2fv: (name, value) => values.set(name, value) };
+  const program = { builtin: false, uniforms: new Map(names.map(name => [name, name])), types: new Map(), defaults: {} };
+  pipeline.setUniforms(program, {}, 0, 1200, 900, { min: [.1, .2], max: [.7, .8] }, [1350, 900]);
+  assert.ok(Math.abs(values.get('screenSize')[0] - 720) < 1e-9); assert.ok(Math.abs(values.get('screenSize')[1] - 540) < 1e-9); assert.deepEqual(values.get('rpenSurfaceSize'), [1200, 900]);
+  program.builtin = true; pipeline.setUniforms(program, {}, 0, 1200, 900, { min: [.1, .2], max: [.7, .8] }, [1350, 900]);
+  assert.deepEqual(values.get('screenSize'), [1350, 900]);
+  const builtin = fragmentSource('// @rpen-builtin\n' + source);
+  assert.doesNotMatch(builtin, /uniform highp vec2 rpenSurfaceSize/);
 });

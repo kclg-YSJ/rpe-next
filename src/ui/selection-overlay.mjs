@@ -6,9 +6,15 @@ export class SelectionOverlay {
     this.canvas = document.createElement('canvas'); this.canvas.className = 'selection-overlay'; this.canvas.setAttribute('aria-hidden', 'true'); stage.append(this.canvas);
     timeline.marqueeOverlay = true;
     window.addEventListener('pointermove', event => timeline.updateRectangle(event), true);
+    window.addEventListener('pointerup', event => timeline.endRectanglePan(event), true);
+    window.addEventListener('pointercancel', event => { if (timeline.endRectanglePan(event)) event.stopImmediatePropagation(); }, true);
+    window.addEventListener('blur', () => timeline.endRectanglePan());
     stage.addEventListener('pointerdown', event => {
       if (event.target?.closest?.('.line-switcher')) return;
-      if (timeline.finishRectangle(event)) { event.preventDefault(); event.stopImmediatePropagation(); }
+      if (timeline.rectangleSelection() && [0, 1, 2].includes(event.button)) {
+        if (!timeline.finishRectangle(event)) timeline.beginRectanglePan(event, event.target);
+        event.preventDefault(); event.stopImmediatePropagation();
+      }
     }, true);
   }
 

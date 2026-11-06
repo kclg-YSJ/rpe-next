@@ -1,4 +1,5 @@
 import { t } from '../i18n.mjs';
+import { legacyNoiseSkin } from './noise-skin-compat.mjs';
 export const NOISE_LAYER_VERSION = 230;
 export const DEFAULT_NOISE_LAYER = 'default';
 export const noiseLayers = chart => chart.noiseAreaLayers?.length ? chart.noiseAreaLayers : [{ id: DEFAULT_NOISE_LAYER, name: t('noise-skin.s5f3a1c4'), skin: '', parameters: {} }];
@@ -141,6 +142,8 @@ export function parseNoiseSkin(files) {
     const blockMask = value.blockMask ?? {};
     if (!object(blockMask)) throw new Error(t('noise-skin.s26d75b1'));
     for (const scale of [blockMask.scaleX ?? 1, blockMask.scaleY ?? 1]) if (!finite(scale) || scale <= 0) throw new Error(t('noise-skin.s5e4ad4e'));
+    const padding = value.padding !== undefined ? value.padding : config.padding !== undefined ? config.padding : 32;
+    if (!(finite(padding) ? padding >= 0 && padding <= 2048 : object(padding) && Object.entries(padding).every(([key, amount]) => ['screen','geometryOnly'].includes(key) ? typeof amount === 'boolean' : ['pixels','screenWidth','screenHeight'].includes(key) && finite(amount) && amount >= 0 && amount <= (key === 'pixels' ? 2048 : 1)))) throw new Error(t('noise-skin.padding-invalid'));
     const written = new Set();
     const passes = value.passes.map(pass => {
       if (!object(pass) || typeof pass.output !== 'string') throw new Error(t('noise-skin.s6c441ca'));
@@ -166,9 +169,12 @@ export function parseNoiseSkin(files) {
       for (const [name, type] of uniforms) if (type === 'sampler2D' && !['screenTexture', 'blockMask'].includes(name) && !Object.hasOwn(inputs, name) && !images.some(image => image.name === name)) throw new Error(t('noise-skin.s737565e') + name);
       written.add(output); return { ...pass, inputs, constants, output, component };
     });
-    return { targets, passes, blockMask };
+    return { targets, passes, blockMask, padding };
   };
-  return { author: config.author?.trim() ?? '', parameters, sources, textures, files, normal: channel(config), low: config.lowPerformance === undefined ? null : channel(config.lowPerformance, true) };
+  const normal = channel(config), low = config.lowPerformance === undefined ? null : channel(config.lowPerformance, true);
+  const legacyPadding = legacyNoiseSkin(config, sources);
+  if (legacyPadding) { normal.padding = legacyPadding; if (low && config.lowPerformance.padding === undefined) low.padding = legacyPadding; }
+  return { author: config.author?.trim() ?? '', parameters, sources, textures, files, normal, low };
 }
 export function maskWord(normal, subtract) {
   return (normal[0] ? 1 : 0) | (subtract[0] === 1 ? 2 : 0) | (normal[1] ? 4 : 0) | (subtract[1] === 1 ? 8 : 0) | (normal[2] ? 16 : 0) | (subtract[2] === 1 ? 32 : 0);

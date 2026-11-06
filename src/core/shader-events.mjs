@@ -1,6 +1,7 @@
 import { beatValue, fromNumber } from './beat.mjs';
-import { SHADER_NAMES, shaderIdentity, shaderLine } from './shader.mjs';
+import { SHADER_NAMES, canonicalShaderName, shaderIdentity, shaderLine } from './shader.mjs';
 import { t } from '../i18n.mjs';
+import { shaderUniforms } from './shader-uniforms.mjs';
 export { shaderIdentity, shaderLine } from './shader.mjs';
 
 const cache = new WeakMap();
@@ -20,10 +21,10 @@ export function shaderEventLanes(events) {
 }
 
 export function shaderTypeFields(name) {
-  const index = SHADER_NAMES.indexOf(name);
-  const base = index >= 10 && index < 20 ? SHADER_NAMES[index - 10] : name;
-  const shader = index >= 20 ? `/${base}_pr.glsl` : base.replace(/_(\w)/g, (match, letter) => letter.toUpperCase());
-  return { shader, clone: index >= 10 && index < 20 };
+  const base = canonicalShaderName(name) ?? name;
+  const index = SHADER_NAMES.indexOf(base);
+  const shader = index >= 10 ? `/${base}_pr.glsl` : index >= 0 ? base.replace(/_(\w)/g, (match, letter) => letter.toUpperCase()) : name;
+  return { shader, clone: false };
 }
 
 function eventBeat(value) {
@@ -100,14 +101,7 @@ export function alignShaderParameters(event) {
 }
 
 export function shaderParameters(source) {
-  return [...source.matchAll(/uniform\s+(float|int|bool|vec[234])\s+(\w+)\s*;([^\r\n]*)/g)]
-    .filter(([, , name]) => !['resolution', 'screenSize', 'time', 'u_time'].includes(name))
-    .map(([, type, name, comment]) => {
-      const dimensions = type.startsWith('vec') ? Number(type.at(-1)) : 1;
-      const values = comment.match(/%([^%]+)%/)?.[1].split(',').map(Number);
-      const fallback = values?.length === dimensions && values.every(Number.isFinite) ? values : Array(dimensions).fill(0);
-      return { name, type, dimensions, value: dimensions === 1 ? fallback[0] : fallback };
-    });
+  return shaderUniforms(source).filter(parameter => /^(float|int|bool|vec[234])$/.test(parameter.type));
 }
 
 export function parseShaderValue(text, dimensions) {

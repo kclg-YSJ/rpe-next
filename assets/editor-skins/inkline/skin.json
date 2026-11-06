@@ -3784,7 +3784,8 @@
       "items": [
         "noise-areas-tool",
         "global-events-tool",
-        "multi-line-tool"
+        "multi-line-tool",
+        "spatial-tool"
       ]
     },
     {

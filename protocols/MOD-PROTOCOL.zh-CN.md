@@ -235,7 +235,9 @@ export function activate(api) {
 | `save()` | 调用现有主动保存流程，返回 Promise；必须 await 并处理写入或版本冲突错误，详见下文 |
 | `addAsset(path,bytes)/removeAsset(path)` | 改素材、标未保存、刷新贴图缓存 |
 
-可直接访问实际对象：`audio/audioSources/audioOnsets/audioAnalysis/playback/preview/realtimePreview/timeline/skin/images/hitSounds/editorSkins/noteSkins/noiseEditor/eventSampler/trajectoryPanel/textLinesPanel/noiseFitPanel/noiseTrackingPanel/multiEdit/batchControls/collaboration/versionControl`。它们不是只读快照或受限代理，可以包装方法、调整字段或替换底层行为；具体接口看同名源码。持久设置修改需调用相应的保存流程。`audioOnsets`管理采音算法、模型推理缓存与候选筛选，供原生界面和AI共用；调用`analyze(buffer, options, signal)`不修改谱面，模型环境需由用户配置，不能绕过其安装确认。
+可直接访问实际对象：`audio/audioSources/audioOnsets/audioAnalysis/playback/preview/realtimePreview/timeline/skin/images/hitSounds/editorSkins/noteSkins/noiseEditor/eventSampler/spatialTool/trajectoryPanel/textLinesPanel/noiseFitPanel/noiseTrackingPanel/multiEdit/batchControls/collaboration/versionControl`。它们不是只读快照或受限代理，可以包装方法、调整字段或替换底层行为；具体接口看同名源码。持久设置修改需调用相应的保存流程。`audioOnsets`管理采音算法、模型推理缓存与候选筛选，供原生界面和AI共用；调用`analyze(buffer, options, signal)`不修改谱面，模型环境需由用户配置，不能绕过其安装确认。
+
+几何投影扩展可在预览 renderer 上提供 `spatialMapping.project(point, seconds, frame, chart, tempo)` 与 `unproject(...)`。point 是完成比例适配和父线计算后的判定线世界 X/Y，输出仍为当前预览面中的同单位 X/Y；frame 包含 CSS 像素 width/height 和绘制 scale。返回 null 表示不可投影或不可反算，不能伪造零坐标。空间轨迹按各节点自身的秒数调用映射，编辑时先反算观察视图，再调用 unproject。内置摄像机已接入，停用模组时恢复原映射；纯像素 Shader 无需提供此接口。
 
 音频分析的 `audioSources.select(id或id数组)` 临时切换实际播放与默认分析音源，至少选择一项；`selectedIds` 返回勾选项，`resolveSelection()` 返回其混合。`audio.buffer` 始终保留原音乐，`audio.playbackBuffer` 是当前实际播放缓冲；两者不可混为保存或导出的素材。所有声部共用原音乐零点与谱面延迟，选择不进入谱面历史或设置，退出谱面恢复原音频。波形/频谱按各声部颜色分列显示，`audioOnsets` 默认分析当前混合。
 
@@ -339,6 +341,8 @@ API 1 的托管方法、清单和钩子是稳定契约；新增可选字段与�
 在项目目录执行 `node tools/pack-mod.mjs <模组目录> [输出.rpenmod]`，会校验清单和 JS 语法并打包。也可将文件直接 ZIP 打包；不要含用户谱面、密钥、开发日志或 node_modules。测试时使用备份谱面和独立浏览器或桌面数据目录；桌面测试还应使用独立的谱面库，不能只更换程序文件夹就假定数据隔离。
 
 `Preview.drawBackground`、`Preview.drawUi` 使用同样的绘制阶段签名，分别位于背景阶段及第一层 shader 后的游戏 UI 阶段。前者支持 center 捕获窗口偏移；后者使用 frame.viewport 定义 UI 的逻辑布局范围，并依赖 frame.states。三维摄像机的“跟随谱面”选项组合这两个可恢复补丁，让背景图片和游戏 UI 参与投影，同时保留它们在 shader 与噪域前后的顺序。
+
+替换谱面内 Shader 资源字节后，可调用 `editor.shaderAssetsChanged()` 标记素材未保存、更新谱面检查与预览源码缓存，避免无关图片重载。资源字节应替换为新的 `Uint8Array`，不要原地修改旧对象；此接口只负责素材变更通知，不创建编辑事务或自动联机传输。
 
 发布前至少验证：导入后不执行、启用及再次启用、修改快捷键、文本输入不穿透、切换谱面、撤销/重做、禁用时清理、依赖/冲突和异常恢复；自定义数据还须验证保存、重开、Next 导出及兼容导出的行为。支持桌面端的模组还应验证更新后设置继承、切换谱面库、大素材保存、冲突或写入失败时保留编辑。替换素材优先提交新的字节数组；保存仍会重新校验可变数组内容，不以对象引用相同作为素材未变化的保证。高自由度来自同页执行能力，可靠性来自模组作者对状态与恢复的完整管理。
 

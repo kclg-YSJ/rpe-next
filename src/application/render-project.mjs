@@ -26,7 +26,7 @@ export function chartRange(chart, tempo, musicDuration = 0, offsetMs = null, lar
 }
 export function rangeEndAtOffset(range, offsetMs) { return Math.max(.1,range.declared||(range.musicSeconds>0?range.musicSeconds-offsetMs/1000:range.content)||1); }
 
-export async function loadStudioProject(host, signal, { musicEnabled = true } = {}) {
+export async function loadStudioProject(host, signal, { musicEnabled = true, hitDelays = null, hitLine = null, playbackMusic = false } = {}) {
   const editor=host.editor,session=editor.session;
   if(!editor.hasDocument||editor.home)throw Error(t('render.openChart'));
   const disk=session.largeDocument;
@@ -42,8 +42,21 @@ export async function loadStudioProject(host, signal, { musicEnabled = true } = 
   let entries;
   project.readHits=async(start,end,taskSignal)=>{
     assertCurrent();checkRenderAbort(taskSignal);
-    if(disk){const result=[];for(let from=start;from<end-1e-9;from=Math.min(end,from+1)){const to=Math.min(end,from+1);const value=await renderAwait(largeChartCommand('hits',disk.summary.id,{start:from,end:to}),taskSignal);assertCurrent();result.push(...value.entries);}return result;}
-    if(!entries){await renderYield(taskSignal);entries=hitTimeline(chart,tempo,{tap:0,drag:0,flick:0}).map(e=>({...e,time:e.time-project.chartOffset/1000,count:1}));}
+    if (disk) {
+      const result = [];
+      for (let from = start; from < end - 1e-9; from = Math.min(end, from + 1)) {
+        const to = Math.min(end, from + 1);
+        const options = { start: from, end: to, ...(hitDelays ? { delays: hitDelays, line: hitLine } : {}) };
+        const value = await renderAwait(largeChartCommand('hits', disk.summary.id, options), taskSignal);
+        assertCurrent();
+        for (const entry of value.entries) {
+          const time = entry.time + (hitDelays?.[entry.kind] ?? 0) / 1000;
+          if (time >= from && time < to) result.push({ ...entry, time });
+        }
+      }
+      return result;
+    }
+    if(!entries){await renderYield(taskSignal);entries=hitTimeline(chart,tempo,hitDelays?Object.fromEntries(Object.entries(hitDelays).map(([kind,ms])=>[kind,ms/1000])):{tap:0,drag:0,flick:0},hitLine).map(e=>({...e,time:e.time-project.chartOffset/1000,count:1}));}
     const lower=value=>{let lo=0,hi=entries.length;while(lo<hi){const mid=Math.floor((lo+hi)/2);if(entries[mid].time<value)lo=mid+1;else hi=mid;}return lo;};
     return entries.slice(lower(start),lower(end));
   };
@@ -52,7 +65,7 @@ export async function loadStudioProject(host, signal, { musicEnabled = true } = 
     for(;;){try{const value=await renderAwait(largeChartCommand('window',disk.summary.id,{seconds,span,radius,historySpan}),taskSignal);assertCurrent();return value;}catch(error){if(!/不同音符组超过/.test(error.message)||span<.025)throw error;span/=2;}}
   }:null;
   try {
-    try { project.musicSource=await createRenderMusic({project,buffer:disk?null:editor.audio?.buffer,url:disk?(editor.audio?.media?.src||disk.summary.media?.music):null,signal}); }
+    try { project.musicSource=await createRenderMusic({project,buffer:playbackMusic?editor.audio?.playbackBuffer:disk?null:editor.audio?.buffer,url:playbackMusic?editor.audio?.playbackMedia?.src:disk?(editor.audio?.media?.src||disk.summary.media?.music):null,signal}); }
     catch (error) { if (musicEnabled || signal?.aborted) throw error; project.musicError=error; project.musicSource=null; }
     project.musicBuffer=project.musicSource?.buffer??null;
     project.range=chartRange(chart,tempo,project.musicSource?.duration??editor.audio?.buffer?.duration??editor.audio?.media?.duration??0,null,disk?.summary.endTime??0);project.duration=project.range.end;

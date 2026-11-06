@@ -230,6 +230,65 @@ label { display: inline-flex; align-items: center; gap: 6px; color: #ddd; }
 small { font-size: 11px; color: #aaa; font-weight: 400; }
 #cursor-position { margin-left: auto; font-size: 11px; color: #aaa; }
 .stage { flex: 1; width: 100%; max-width: 100%; min-width: 0; min-height: 0; position: relative; overflow: hidden; }
+.sampling-dock { position: static; padding: 12px 16px; margin: 0; min-width: 0; background: transparent; border: 0; box-shadow: none; }
+.sampling-dock[hidden], .spatial-node-form[hidden] { display: none; }
+.sampling-controls { display: grid; gap: 8px; min-width: 0; }
+.sampling-readout { display: block; white-space: pre-line; font: 12px/1.7 var(--font-family, sans-serif); font-variant-numeric: tabular-nums; color: inherit; padding: 0 0 8px; border-bottom: 1px solid var(--line); }
+.sampling-controls details, #spatial-editor>details { padding: 5px 0; }
+.sampling-controls summary, #spatial-editor summary { cursor: pointer; padding: 5px 0; }
+.sampling-actions, .spatial-actions { display: flex; align-items: center; gap: 7px; }
+.sampling-actions button { flex: 1; }
+.editor.event-sampling .sampling-dock~.hint { display: none; }
+.spatial-actions { justify-content: space-between; margin-bottom: 10px; }
+.spatial-actions label { display: flex; align-items: center; gap: 5px; }
+.spatial-layer { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.spatial-near { touch-action: none; }
+.spatial-layer[hidden], .spatial-pointer-readout[hidden] { display: none; }
+.spatial-plane-highlights { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; overflow: hidden; }
+.spatial-plane-highlights rect { fill: none; stroke: #fff; stroke-width: 2; stroke-dasharray: 4 3; animation: spatial-plane-outline .65s linear infinite; }
+@keyframes spatial-plane-outline { to { stroke-dashoffset: -14; } }
+@media (prefers-reduced-motion: reduce) { .spatial-plane-highlights rect { animation: none; } }
+.preview-wrap:has(.spatial-near:not([hidden])) .preview-overlay { z-index: 20; }
+.spatial-pointer-readout { position: absolute; padding: 7px 10px; border: 1px solid var(--line); border-radius: 5px; background: var(--panel, #222); color: var(--text, #eee); box-shadow: 0 2px 8px #0005; pointer-events: none; white-space: pre-line; font: 12px/1.6 var(--font-family, sans-serif); font-variant-numeric: tabular-nums; }
+.spatial-panel { padding: 14px 16px; }
+.tool-panel-header, .tool-section-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.tool-panel-header { margin-bottom: 12px; }
+.tool-panel-header button { width: 27px; height: 27px; padding: 0; }
+.tool-section { border-top: 1px solid var(--line); padding: 10px 0; margin-top: 10px; }
+.tool-section-header { margin-bottom: 8px; font-size: 12px; }
+.tool-section-header button { font-size: 12px; padding: 4px 8px; flex: none; }
+.spatial-panel .field, .sampling-controls .field { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 56%); gap: 10px; align-items: center; margin: 7px 0; min-height: 28px; }
+.spatial-panel .field > :is(input, select), .sampling-controls .field > :is(input, select) { width: 100%; min-width: 0; box-sizing: border-box; }
+.spatial-panel .field > input[type=checkbox], .sampling-controls .field > input[type=checkbox] { width: auto; justify-self: end; }
+.spatial-panel .field > span, .sampling-controls .field > span { font-size: 12px; }
+.spatial-panel .tool-wide { width: 100%; min-width: 0; margin-bottom: 7px; box-sizing: border-box; }
+.tool-actions { display: flex; gap: 7px; margin: 7px 0; }
+.tool-actions button { flex: 1; min-width: 0; }
+.tool-status { margin: 8px 0; }
+.spatial-coordinate-pair { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.spatial-coordinate-pair input { min-width: 0; width: 0; flex: 1; padding-inline: 5px; }
+.spatial-line-controls summary small { margin-left: 8px; }
+.spatial-line-controls > .multi-line-list { margin: 8px 0 0; max-height: 30vh; }
+.spatial-line-controls > .multi-line-actions { margin: 8px 0; }
+.spatial-line-controls > .multi-line-expression-field { display: block; margin: 8px 0; }
+.spatial-line-controls > .multi-line-expression-field > input { width: 100%; margin-top: 6px; }
+.spatial-line-controls > button { margin-top: 8px; }
+.spatial-line-controls .multi-line-row { padding: 6px; }
+.spatial-line-controls [aria-pressed=true] { border-color: var(--accent); }
+.spatial-node-easing[hidden] { display: none; }
+.spatial-node-easing > .hint { display: block; margin: 5px 0 8px; line-height: 1.6; }
+.spatial-node-easing > details { padding: 5px 0; }
+.spatial-node-easing .custom-easing-group { margin: 8px 0; }
+.spatial-node-easing .easing-gallery { margin: 7px 0; }
+.spatial-node-easing .easing-gallery button { min-width: 0; }
+.spatial-help { border: 1px solid var(--line); padding: 10px; border-radius: 4px; font-size: 12px; line-height: 1.7; }
+.spatial-help p { margin: 7px 0; }
+.spatial-help[hidden] { display: none; }
+.spatial-node-owner { margin: 10px 0 5px; font-size: 12px; opacity: .8; font-variant-numeric: tabular-nums; }
+.spatial-node-form { display: grid; gap: 3px; margin-bottom: 10px; }
+.spatial-node-form>button { margin-top: 3px; }
+#spatial-editor input[type=text] { min-width: 0; }
+.spatial-range-value { margin-left: 7px; opacity: .75; font-variant-numeric: tabular-nums; }
 #timeline-markers { position: absolute; z-index: 7; top: 0; left: 0; right: 0; height: 16px; pointer-events: none; }
 .timeline-marker { position: absolute; top: 0; width: max-content; max-width: 160px; transform: translateX(-50%); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 1px 4px; border: 1px solid #a98e4c; background: #27231bd9; color: #ffe29a; font-size: 10px; line-height: 13px; pointer-events: auto; }
 .timeline-marker:hover { background: #55472a; color: #fff0bd; }
@@ -1495,3 +1554,70 @@ html.rpen-render-active, html.rpen-render-active body { overflow: hidden !import
 #rpen-render-studio .rpas-time { white-space: nowrap; flex-shrink: 0; min-width: 130px; }
 #rpen-render-studio .rpas-display { width: 100%; height: 100%; object-fit: contain; }
 #rpen-render-studio.rpas-root { width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; }
+/* Created only during a recording; inherits either editor skin's controls. */
+.editor-recording-status { position: relative; flex: 0 0 auto; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.editor-recording-frame { position: absolute; bottom: 1px; left: 8px; width: 33px; height: 3px; pointer-events: none; }
+.editor-recording-status[data-phase="recording"] { color: var(--danger, #df6262); }
+#editor-render-settings > summary { font-weight: 600; cursor: pointer; }
+#editor-render-settings[open] > summary { margin-bottom: 12px; }
+#key-display-overlay { position: fixed; inset: auto 24px 52px auto; width: min(440px, calc(100vw - 36px)); height: 300px; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; outline: 0; background: transparent; color: #f4f6fa; pointer-events: none; overflow: visible; z-index: 2147483647; }
+#key-display-overlay::backdrop { background: transparent; pointer-events: none; }
+#key-display-overlay .key-display-row { position: absolute; right: 0; bottom: 0; display: flex; align-items: center; gap: 7px; max-width: 100%; padding: 7px 12px; border: 1px solid #ffffff32; border-radius: 10px; background: #171c26e8; box-shadow: 0 3px 10px #0003; white-space: nowrap; font: 600 15px/1.4 system-ui, sans-serif; }
+#key-display-overlay kbd { display: inline-block; min-width: 1em; padding: 1px 3px; border: 0; border-radius: 3px; color: inherit; background: transparent; text-align: center; font: inherit; }
+#key-display-overlay .key-display-plus { color: #bec5d0; font-size: 12px; }
+#key-display-overlay .key-display-count { margin-left: 2px; color: #c3cbd7; font: 500 12px/1.4 system-ui, sans-serif; }
+.editor-notification > button { margin-left: .65em; }
+.shader-code-window { position: fixed; inset: auto; margin: 0; padding: 0; min-width: min(640px, calc(100vw - 16px)); min-height: min(420px, calc(100vh - 16px)); max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); display: flex; flex-direction: column; overflow: hidden; resize: both; border: 1px solid var(--border, #555); border-radius: 12px; background: var(--panel, #292929); color: var(--text, #eee); box-shadow: 0 18px 70px #0008; z-index: 2000; }
+.shader-code-window::backdrop { background: transparent; pointer-events: none; }
+.shader-code-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; cursor: move; border-bottom: 1px solid var(--border, #555); flex: none; touch-action: none; }
+.shader-code-header h2 { margin: 0; font-size: 17px; }
+.shader-code-actions, .shader-code-toolbar, .shader-code-footer, .shader-preview-toolbar { display: flex; align-items: center; gap: 7px; }
+.shader-code-window .curve-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 32px; min-height: 32px; padding: 5px 9px; }
+.shader-code-toolbar { padding: 9px 12px; flex: none; flex-wrap: wrap; }
+.shader-code-toolbar > select { max-width: 42%; min-width: 160px; }
+.shader-code-toolbar > input[type="search"] { margin-left: auto; width: 180px; min-width: 100px; }
+.shader-code-body { min-height: 0; flex: 1; display: grid; grid-template-columns: minmax(250px, 1.2fr) minmax(260px, 1fr); border-block: 1px solid var(--border, #555); }
+.shader-code-side { display: flex; min-width: 0; min-height: 0; flex-direction: column; border-right: 1px solid var(--border, #555); }
+.shader-code-input { position: relative; flex: 1; min-height: 160px; background: var(--bg, #202124); overflow: hidden; }
+.shader-code-input > pre, .shader-code-input > textarea { position: absolute; inset: 0 0 0 48px; padding: 12px; margin: 0; border: 0; border-radius: 0; font: 13px/21px Consolas, "Cascadia Mono", monospace; tab-size: 2; white-space: pre; text-align: left; letter-spacing: normal; }
+.shader-code-input > .shader-line-numbers { inset: 0 auto 0 0; width: 48px; padding-inline: 7px; color: var(--muted, #929292); border-right: 1px solid var(--border, #555); text-align: right; overflow: hidden; user-select: none; }
+.shader-code-input > .shader-highlight { pointer-events: none; overflow: hidden; color: var(--text, #ddd); background: transparent; }
+.shader-code-input > textarea { width: calc(100% - 48px); height: 100%; color: transparent; caret-color: var(--text, white); background: transparent; resize: none; outline: none; overflow: auto; -webkit-text-fill-color: transparent; }
+.shader-code-input > textarea::selection { background: #5483a86b; }
+.shader-token-comment { color: #88a87c; } .shader-token-keyword { color: #8db5df; } .shader-token-number { color: #d7ad83; } .shader-token-directive { color: #c8a5d8; }
+.shader-code-diagnostic { flex: none; max-height: 120px; overflow: auto; white-space: pre-wrap; margin: 0; padding: 9px 12px; color: var(--danger, #ed9c9c); font: 12px/1.6 Consolas, monospace; background: #a0202012; }
+.shader-code-preview { min-width: 0; min-height: 0; overflow: auto; padding: 10px; }
+.shader-preview-toolbar { flex-wrap: wrap; margin-bottom: 10px; }
+.shader-preview-toolbar > select { flex: 1; min-width: 100px; } .shader-preview-toolbar input { width: 85px; }
+.shader-preview-image { width: 100%; aspect-ratio: 16 / 9; background: #161719; background-image: conic-gradient(#242629 25%, transparent 0 50%, #242629 0 75%, transparent 0); background-size: 18px 18px; border: 1px solid var(--border, #555); border-radius: 5px; overflow: hidden; }
+.shader-preview-image canvas { width: 100%; height: 100%; display: block; }
+.shader-preview-params { margin-top: 8px; display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 5px 12px; }
+.shader-preview-params .field { display: flex; flex-direction: column; align-items: stretch; gap: 3px; min-width: 0; font-size: 12px; }
+.shader-preview-params input { width: 100%; min-width: 0; }
+.shader-code-footer { padding: 9px 12px; flex: none; flex-wrap: wrap; }
+.shader-code-footer > input { flex: 1; min-width: 160px; }
+.shader-code-status { flex: none; padding: 0 12px 8px; min-height: 25px; font-size: 12px; color: var(--muted, #bbb); }
+.shader-code-status.error { color: var(--danger, #ed9c9c); }
+.shader-code-scope { flex: none; padding: 0 12px 9px; color: var(--rpen-muted, var(--muted, #bbb)); font-size: 12px; line-height: 1.5; }
+.shader-code-help { flex: none; max-height: 34%; overflow: auto; margin: 0 12px 10px; padding: 10px; border: 1px solid var(--border, #555); border-radius: 6px; font-size: 13px; }
+.shader-code-help p { white-space: pre-line; margin: 6px 0; } .shader-code-help pre { white-space: pre-wrap; font: 12px/1.5 Consolas, monospace; }
+.shader-code-window.compact .shader-code-body { grid-template-columns: minmax(240px, 1.2fr) minmax(220px, 1fr); }
+.shader-code-window.compact .shader-code-toolbar > input[type="search"] { width: 120px; }
+#shader-code-window { --curve-unit: 1px; background: var(--rpen-surface, var(--panel, #292929)); color: var(--rpen-text, var(--text, #eee)); }
+#shader-code-window .curve-icon { width: 18px; height: 18px; flex: 0 0 18px; }
+#shader-code { background: transparent !important; color: transparent !important; -webkit-text-fill-color: transparent !important; font: 13px/21px Consolas, "Cascadia Mono", monospace !important; }
+#shader-code-window .shader-code-input { background: var(--rpen-elevated, #202124); }
+/* The textarea is an invisible input plane over the highlighted text. These
+   metrics must agree even when a skin styles all text fields with !important. */
+#shader-code-window .shader-code-input > pre, #shader-code-window #shader-code {
+  box-sizing: border-box; margin: 0 !important; padding: 12px !important;
+  border: 0 !important; border-radius: 0 !important; min-height: 0 !important;
+  font: 13px/21px Consolas, "Cascadia Mono", monospace !important;
+  font-variant-ligatures: none !important; letter-spacing: normal !important;
+  word-spacing: 0 !important; text-indent: 0 !important; text-align: left !important;
+  white-space: pre !important; tab-size: 2 !important; text-shadow: none !important;
+}
+#shader-code-window .shader-code-input > .shader-line-numbers { padding-inline: 7px !important; border-right: 1px solid var(--border, #555) !important; text-align: right !important; }
+#shader-code-window .shader-code-input > pre { user-select: none; }
+#shader-code-window .shader-highlight > span { font: inherit !important; letter-spacing: inherit !important; }
+#shader-code-window #shader-code::selection { color: transparent !important; -webkit-text-fill-color: transparent !important; text-shadow: none !important; }
