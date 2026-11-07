@@ -10,6 +10,10 @@ on:
         description: Exact source commit used by every package
         type: string
         required: true
+      prerelease:
+        description: Mark this release as a prerelease
+        type: boolean
+        default: false
 permissions:
   contents: write
   actions: read
@@ -24,6 +28,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       BUILD_RUN: ${{ inputs.build_run }}
       SOURCE_COMMIT: ${{ inputs.source_commit }}
+      RELEASE_PRERELEASE: ${{ inputs.prerelease }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -65,12 +70,12 @@ jobs:
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft > existing-release.json; then
             node --input-type=module -e 'import fs from "node:fs"; if(!JSON.parse(fs.readFileSync("existing-release.json")).isDraft)throw Error("Release is already published");'
           else
-            gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --target "$SOURCE_COMMIT" --draft --prerelease --title "rpe-next $RELEASE_VERSION" --notes-file ".github/release-notes/$RELEASE_TAG.md"
+            gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --target "$SOURCE_COMMIT" --draft --prerelease="$RELEASE_PRERELEASE" --title "rpe-next $RELEASE_VERSION" --notes-file ".github/release-notes/$RELEASE_TAG.md"
           fi
           test "$(gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_TAG" --jq .sha)" = "$SOURCE_COMMIT"
           gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --title "rpe-next $RELEASE_VERSION" --notes-file ".github/release-notes/$RELEASE_TAG.md"
           gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --clobber release-assets/*.zip release-assets/*.dmg release-assets/*.tar.xz release-assets/SHA256SUMS.txt
           gh api "repos/$GITHUB_REPOSITORY/releases" --jq ".[] | select(.tag_name == \"$RELEASE_TAG\")" > release-result.json
           node --input-type=module -e 'import fs from "node:fs"; const r=JSON.parse(fs.readFileSync("release-result.json")), v=JSON.parse(fs.readFileSync("release-assets/verified-assets.json")); if(!r.draft || r.assets.length!==8) throw Error("Incomplete draft"); for(const a of v.assets){const b=r.assets.find(x=>x.name===a.file); if(!b || b.size!==a.bytes || b.digest && b.digest!=="sha256:"+a.sha256)throw Error("Uploaded asset mismatch: "+a.file);}'
-          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease="$RELEASE_PRERELEASE"
           gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json url,isDraft,isPrerelease,assets
