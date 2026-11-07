@@ -1,0 +1,10 @@
+Required Notice: Copyright 2026 cmdysj.
+Required Notice: Re:PhiEdit Next is reconstructed from the original Re:PhiEdit (RPE) project using AI (GPT).
+
+RPE Classic 0.2.5 is an unofficial editor skin and layout mod for Re:PhiEdit Next.
+The layout, original direct-placement SVG and integration code use PolyForm Noncommercial License 1.0.0; see LICENSE.
+Inkline UI styles, icons and its Noto Sans SC subset are reused from Re:PhiEdit Next's built-in Inkline skin, with attribution to cmdysj.
+The Noto Sans SC subset retains Adobe copyright and SIL Open Font License 1.1; see LICENSE-OFL.txt and the embedded font metadata.
+Original RPE toolbar icons, slider/control images and the event-bar texture are reused without visual changes at the user's request. See ASSETS.md for their relative source paths and checksums. These resources retain their original rights and are not relicensed by the code license.
+The classic font is read from the user's installed editor. No legacy TTF is redistributed. Host resources remain subject to their original rights and licenses.
+The preview is a generated interface illustration. No chart, music, cover, note skin, user profile, credentials or personal test data is included.

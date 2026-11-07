@@ -5,6 +5,8 @@ import { EditorSession } from '../src/application/session.mjs';
 import { createChart, createLine, createEvent } from '../src/core/chart.mjs';
 import { TempoMap } from '../src/core/tempo.mjs';
 import { SceneRuntime } from '../src/core/scene.mjs';
+import { toggleSingleEventLock } from '../src/application/event-commands.mjs';
+import { withEventLock } from '../src/application/event-value-memory.mjs';
 
 function fixture(chart = createChart(), autoFit = true, pairedMovementSampling = false) {
   const sampler = Object.create(EventSampler.prototype);
@@ -104,6 +106,19 @@ test('配套取样取消不提交；区间不一致、配对不唯一或不同�
     sampler.applyPoint({ x: initial.x + 40, y: initial.y + 80 });
     sampler.finish(false);
     assert.equal(session.chart, chart);
+  }
+});
+
+test('数值拖动和位置取样只在确认后记住编辑端点，取消不影响原端点选择', () => {
+  for(const sampling of [false,true])for(const apply of [false,true]){
+    const chart=createChart();chart.judgeLineList[0].eventLayers[0].moveXEvents=[createEvent(10,20,0,4)];
+    const {sampler,session}=fixture(chart);session.focus='events';session.eventSelection=new Set(['moveXEvents:0']);
+    if(sampling){sampler.begin({type:'moveXEvents',index:0,lineIndex:0,field:'end'});sampler.draftChart=sampler.eventChart(80);}
+    else sampler.updateValueDraft({type:'moveXEvents',index:0,lineIndex:0,field:'end'},80);
+    assert.equal(withEventLock(session,session.line.eventLayers[0].moveXEvents[0],true).start,10);
+    if(sampling)sampler.finish(apply);else sampler.finishValue(apply);
+    toggleSingleEventLock(session);const event=session.line.eventLayers[0].moveXEvents[0];
+    assert.deepEqual([event.start,event.end],[apply?80:10,apply?80:10]);
   }
 });
 

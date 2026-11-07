@@ -7,6 +7,7 @@ import { EventTrack } from '../core/events.mjs';
 import { shaderEvents, replaceShaderEvents, alignShaderParameters } from '../core/shader-events.mjs';
 import { t } from '../i18n.mjs';
 import { expandXyEntries, xyIntervalOccupied, xyOtherAxis, xyTimingUpdates } from './xy-binding.mjs';
+import { EVENT_VALUE_MEMORY_LIMIT, hasEventValueMemory, rememberEventValueChange, withEventLock } from './event-value-memory.mjs';
 
 export const eventKey = (type, index) => `${type}:${index}`;
 export function eventListAt(session, lineIndex, type, layer = session.eventLayer) {
@@ -85,7 +86,7 @@ export function commitEventLists(session, label, updates, selection = session.ev
   session.commit(label, chart, beforeSelection);
 }
 
-export function transformedEventLists(session, lineIndex, selection, transform, { xyTiming = false } = {}) {
+export function transformedEventLists(session, lineIndex, selection, transform, { xyTiming = false, onValueChange } = {}) {
   const updates = new Map();
   const linked = new Map();
   for (const key of selection) {
@@ -95,6 +96,7 @@ export function transformedEventLists(session, lineIndex, selection, transform, 
     let next = rebaseCustomEventValues(event, transform(event, type));
     if (type === 'paintEvents' && session.shaderAutoAlign !== false && beatValue(next.startTime) !== beatValue(event.startTime)) next = alignShaderParameters(next);
     updates.get(type)[index] = next;
+    onValueChange?.(event, type, index);
     const link = Number(event.linkgroup ?? 0);
     if (link > 0 && type !== 'paintEvents') linked.set(`${type}:${link}`, next);
   }
@@ -106,6 +108,7 @@ export function transformedEventLists(session, lineIndex, selection, transform, 
       if (Number(event.linkgroup ?? 0) !== link || selection.has(eventKey(type, index))) continue;
       events[index] = { ...event, start: structuredClone(next.start), end: structuredClone(next.end), easingType: next.easingType,
         easingLeft: next.easingLeft, easingRight: next.easingRight, bezier: next.bezier, bezierPoints: structuredClone(next.bezierPoints), customEasing: structuredClone(next.customEasing) };
+      onValueChange?.(event, type, index);
     }
     updates.set(type, events);
   }
@@ -115,8 +118,13 @@ export function transformedEventLists(session, lineIndex, selection, transform, 
 
 export function transformEvents(session, label, transform, options) {
   let chart = session.chart;
+  const editingValue = options?.valueField === 'start' || options?.valueField === 'end';
+  const valueChanges = editingValue || hasEventValueMemory(session) ? [] : null;
   for (const [lineIndex, selection] of eventSelections(session)) {
-    const updates = transformedEventLists(session, lineIndex, selection, transform, options);
+    const onValueChange = valueChanges ? (event, type, index) => {
+      if (valueChanges.length < EVENT_VALUE_MEMORY_LIMIT && (editingValue || hasEventValueMemory(session, event))) valueChanges.push({ event, lineIndex, type, index });
+    } : undefined;
+    const updates = transformedEventLists(session, lineIndex, selection, transform, { ...options, onValueChange });
     if (updates.size) chart = chartWithEventLists(chart, lineIndex, session.eventLayer, updates);
   }
   if (chart === session.chart) return;
@@ -125,14 +133,26 @@ export function transformEvents(session, label, transform, options) {
   if (session.multiLineActive && session.multiLineMode === 'events') session.eventSelection = new Set(session.multiEventSelection.get(session.lineIndex) ?? []);
   session.focus = 'events'; session.selection.clear();
   session.commit(label, chart, beforeSelection);
+  if (valueChanges) for (const entry of valueChanges) {
+    rememberEventValueChange(session, entry.event, eventListAt(session, entry.lineIndex, entry.type)[entry.index], options?.valueField, { type: entry.type, index: entry.index });
+  }
 }
 
 export function toggleSingleEventLock(session) {
   const entries = selectedEventEntries(session);
   if (entries.length !== 1 || entries[0].type === 'paintEvents') return false;
   const locked = !Boolean(entries[0].event.inst);
-  transformEvents(session, t('event-commands.s015e4fc'), event => ({ ...event, inst: locked ? 1 : 0, ...(locked ? { end: structuredClone(event.start) } : {}) }));
+  transformEvents(session, t('event-commands.s015e4fc'), event => withEventLock(session, event, locked));
   return true;
+}
+
+export function rememberEventValueTargets(session, before, targets, layer = session.eventLayer) {
+  for (const target of targets) {
+    const lineIndex = target.lineIndex ?? session.lineIndex;
+    const previous = eventListAt({ chart: before, eventLayer: layer }, lineIndex, target.type)[target.index];
+    const current = eventListAt(session, lineIndex, target.type, layer)[target.index];
+    rememberEventValueChange(session, previous, current, target.field, { type: target.type, index: target.index });
+  }
 }
 
 export function insertEvent(session, type, event) {

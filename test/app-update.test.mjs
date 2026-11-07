@@ -29,7 +29,7 @@ async function updater(context, data, extra = {}) {
   const root = await scratch(context), target = join(root, 'editor'); await mkdir(target);
   await writeFile(join(target, 'original.txt'), 'old application');
   const calls = [], source = release('0.14.0', 'windows', 'x64', data);
-  const service = await new DesktopUpdates({ statePath: join(root, 'profile', 'updates.json'), target, platform: 'win32', arch: 'x64', fetcher: async (url, options) => {
+  const service = await new DesktopUpdates({ statePath: join(root, 'profile', 'updates.json'), target, version: '0.13.2', platform: 'win32', arch: 'x64', fetcher: async (url, options) => {
     calls.push({ url: String(url), options });
     if (String(url) === UPDATE_RELEASES_URL) return Response.json([source], { headers: { etag: 'fixture' } });
     if (String(url) === source.assets[0].browser_download_url) return new Response(data, { headers: { 'content-length': String(data.length) } });
@@ -58,11 +58,11 @@ test('update URLs and checksums are limited to the official repository and relea
 });
 test('checker caches ETags, throttles checks, persists disabled automatic checking, never downloads', async () => {
   let now = 1000000, count = 0, persisted; const source = release();
-  const checker = new UpdateChecker({ now: () => now, platform: 'win32', arch: 'x64', persist: async state => { persisted = structuredClone(state); }, fetcher: async (url, options) => { assert.equal(url, UPDATE_RELEASES_URL); count++; if (count > 1) { assert.equal(options.headers['If-None-Match'], 'etag'); return new Response(null, { status: 304 }); } return Response.json([source], { headers: { etag: 'etag' } }); } });
+  const checker = new UpdateChecker({ version: '0.13.2', now: () => now, platform: 'win32', arch: 'x64', persist: async state => { persisted = structuredClone(state); }, fetcher: async (url, options) => { assert.equal(url, UPDATE_RELEASES_URL); count++; if (count > 1) { assert.equal(options.headers['If-None-Match'], 'etag'); return new Response(null, { status: 304 }); } return Response.json([source], { headers: { etag: 'etag' } }); } });
   assert.equal((await checker.check()).available, true); await checker.check(true); assert.equal(count, 1);
   now += UPDATE_INTERVAL; await checker.check(); assert.equal(count, 2); assert.equal(checker.state.checked, now);
   await checker.setAuto(false); now += UPDATE_INTERVAL; await checker.check(); assert.equal(count, 2);
-  const restarted = new UpdateChecker({ state: persisted, platform: 'win32', arch: 'x64' }); assert.equal(restarted.info().autoCheck, false); assert.equal(restarted.info().latest.version, '0.14.0');
+  const restarted = new UpdateChecker({ version: '0.13.2', state: persisted, platform: 'win32', arch: 'x64' }); assert.equal(restarted.info().autoCheck, false); assert.equal(restarted.info().latest.version, '0.14.0');
 });
 test('GitHub rate limits and failed network requests back off without discarding cached releases', async () => {
   let now = 1000000, calls = 0; const checker = new UpdateChecker({ now: () => now, fetcher: async () => { calls++; return new Response(null, { status: 429, headers: { 'retry-after': '120' } }); } });

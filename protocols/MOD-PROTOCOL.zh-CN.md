@@ -351,3 +351,5 @@ API 1 的托管方法、清单和钩子是稳定契约；新增可选字段与�
 事件可包含 customEasing，具体见 ANIMATION-CURVES-PROTOCOL.zh-CN.md 和 schemas/animation-curve-v1.schema.json。提供方应使用共用 EventTrack / event-easing 求值，不能只读取 easingType。修改标准缓动须移除 customEasing；未知字段与裁切区间应保留。模组类型声明增加 AnimationCurve / CustomEventEasing。
 
 视频渲染模块创建独立 Preview，沿用 preview:before 和 onPreview 的传入 chart/seconds，payload.purpose 为 autoplay/export；离线输出不依赖真实播放头。需要包装渲染实例的扩展可从 @rpen/ui/render-extensions.mjs 导入 registerRenderExtension(attach)，attach 返回释放函数；同时保留原编辑器实例的接入。三维摄像机已使用此机制。详见 VIDEO-RENDER.zh-CN.md。
+
+内置 `rpe-classic-layout` 与同版本 RPE Classic 编辑器皮肤配套：选择皮肤时自动装载，切换其他皮肤时卸载，自动装载不改写普通模组的持久化启用列表。手动停用及紧急禁用有效，安全模式不自动装载；手动启用会应用配套皮肤。皮肤与布局更新均随本体分发，保持导入包不能覆盖内置版本的规则。后续该皮肤的外观适配由维护方验证。实现使用现有 API 1，不增加对普通扩展的权限或接口要求。

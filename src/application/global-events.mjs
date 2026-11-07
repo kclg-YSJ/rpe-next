@@ -2,6 +2,7 @@ import { EditorSession } from './session.mjs';
 import { createChart } from '../core/chart.mjs';
 import { globalColumnKey, validateColumnEvent, validateGlobalEvents, GLOBAL_EVENT_VERSION } from '../core/global-events.mjs';
 import { t } from '../i18n.mjs';
+import { copyEventValueMemory } from './event-value-memory.mjs';
 
 class GlobalEditingSession extends EditorSession {
   constructor(document) { super(); this.document = document; this.focus = 'events'; }
@@ -51,6 +52,7 @@ export class GlobalEventDocument {
       if (!entry || entry.type.readonly) throw Error(t('global-events.s2be176a'));
       if (!Array.isArray(change.events)) throw Error(t('global-events.sc5574f8'));
       const events = structuredClone(change.events); events.forEach(event => { validateColumnEvent(entry.column, event); const result = entry.type.validate?.(event, entry.column); if (result === false || typeof result === 'string') throw Error(typeof result === 'string' ? result : t('global-events.s634a0c2')); });
+      copyEventValueMemory(this.editor, ({ index }) => change.events[index], ({ index }) => events[index]);
       if (entry.type.persistent) {
         const data = chart.globalEvents ?? { version: 1, types: {} }, previous = data.types[entry.type.id];
         const type = { ...previous, name: entry.type.name, source: { ...entry.type.source }, ...(entry.type.width !== undefined ? { width: entry.type.width } : {}), columns: { ...previous?.columns,

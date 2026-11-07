@@ -8,7 +8,7 @@ import { drawSamplingGrid, drawSnapGuides } from './sampling-guides.mjs';
 import { previewViewport, previewPositionScale } from '../core/editor-display.mjs';
 import { fitNoiseSampleView } from '../core/noise-sampling.mjs';
 import { beatValue } from '../core/beat.mjs';
-import { chartWithEventLists, eventListAt, eventKey, transformedEventLists } from '../application/event-commands.mjs';
+import { chartWithEventLists, eventListAt, eventKey, transformedEventLists, rememberEventValueTargets } from '../application/event-commands.mjs';
 import { prepareCanvas } from './timeline.mjs';
 import { t } from '../i18n.mjs';
 
@@ -68,6 +68,7 @@ export class EventSampler {
     const source = this.valueDraft.chart;
     const lineIndex = target.lineIndex ?? this.session.lineIndex;
     const draft = this.valueDraft;
+    draft.target = { ...target, lineIndex };
     const targetKey = `${lineIndex}:${target.type}:${target.index}`;
     if (draft.targetKey !== targetKey) {
       draft.targetKey = targetKey;
@@ -116,7 +117,10 @@ export class EventSampler {
     draft.session.liveEventEdit = false;
     this.valueDraft = null; this.draftChart = null; this.session.liveEventEdit = false;
     this.syncChrome();
-    if (apply && current && chart && chart !== this.session.chart) this.session.commit(label, chart);
+    if (apply && current && chart && chart !== this.session.chart) {
+      this.session.commit(label, chart);
+      if (draft.target) rememberEventValueTargets(this.session, draft.base, [draft.target], draft.layer);
+    }
     else this.session.notify();
     this.invalidate();
   }
@@ -153,12 +157,15 @@ export class EventSampler {
   finish(apply) {
     if (!this.mode) { this.finishValue(apply); return; }
     if (this.mode.base !== this.session.chart || this.mode.owner !== this.session || this.mode.layer !== this.session.eventLayer) apply = false;
-    const chart = this.draftChart;
+    const chart = this.draftChart, mode = this.mode;
     for (const { renderer, original } of this.sampleZoom ?? []) renderer.viewDivisor = original;
     this.sampleZoom = null;
     this.mode = null; this.draftChart = null; this.drag = null; this.canvas.hidden = true; this.session.liveEventEdit = false;
     this.syncChrome();
-    if (apply && chart && chart !== this.session.chart) this.session.commit(t('event-sampler.seaab4c2'), chart);
+    if (apply && chart && chart !== this.session.chart) {
+      this.session.commit(t('event-sampler.seaab4c2'), chart);
+      rememberEventValueTargets(this.session, mode.base, [mode, ...(mode.paired ? [{ ...mode, ...mode.paired }] : [])], mode.layer);
+    }
     else if (!apply) this.session.notify();
     this.invalidate();
   }

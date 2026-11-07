@@ -15,7 +15,7 @@ export function applyNumberShortcut(session, action) {
   const entry = entries[0];
   if (entry.type === 'alphaEvents') {
     const value = action === 'NumberMirror' ? 0 : 255;
-    transformEvents(session, t('number-shortcuts.sfb6ecc5'), event => ({ ...event, end: value, ...(event.inst ? { start: value } : {}) }));
+    transformEvents(session, t('number-shortcuts.sfb6ecc5'), event => ({ ...event, end: value, ...(event.inst ? { start: value } : {}) }), { valueField: 'end' });
     return true;
   }
   if (action !== 'NumberMirror' || entry.type === 'paintEvents' || !Number.isFinite(entry.event.start) || !Number.isFinite(entry.event.end)) return false;

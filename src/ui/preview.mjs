@@ -17,6 +17,7 @@ import { DEFAULT_EDITOR_PREFERENCES } from '../core/default-settings.mjs';
 import { HitEffectBatch } from './hit-effect-batch.mjs';
 import { NoteSpriteBatch, holdBatchWithinBudget } from './note-sprite-batch.mjs';
 import { CountedNoteBatch } from './counted-note-batch.mjs';
+import { previewNoteHit } from '../core/preview-note-hit.mjs';
 
 const clamp = value => Math.max(0, Math.min(1, value));
 
@@ -422,11 +423,13 @@ export class Preview {
           if (Math.max(screenX, tailX) + padding < viewport.left || Math.min(screenX, tailX) - padding > viewport.left + viewport.width ||
               Math.max(screenY, tailY) + padding < viewport.top || Math.min(screenY, tailY) - padding > viewport.top + viewport.height) continue;
         }
-        const hitArea={ lineIndex: index, noteIndex: entry.index, type:note.type, x1: screenX, y1: screenY, x2: tailX, y2: tailY, radius: Math.max(12, noteWidth * 0.65) };
+        const skew = position.skew ? Math.tan(position.skew * Math.PI / 180) : 0;
+        const hitArea={ lineIndex: index, noteIndex: entry.index, type:note.type, x1: screenX, y1: screenY, x2: tailX, y2: tailY, radius: Math.max(12, noteWidth * 0.65),
+          pickWidth: noteWidth, pickHeightWidth: heightWidth, pickCosine: cosine, pickSine: sine, pickSkew: skew, pickHighlight: highlight, pickShowHead: position.showHead, pickSide: noteIsAbove(note) ? 1 : -1 };
         if(this.collisionGeometry){
           const outline=this.skin?.noteImage?.(note.type,highlight);
           const aspect=outline?(outline.naturalHeight??outline.height)/(outline.naturalWidth??outline.width):0.12;
-          const halfHeight=Math.max(this.skin?.resourcePack?0:2.5,Math.abs(heightWidth)*aspect/2);const cosine=Math.cos(rotation),sine=Math.sin(rotation),skew=Math.tan(position.skew*Math.PI/180);
+          const halfHeight=Math.max(this.skin?.resourcePack?0:2.5,Math.abs(heightWidth)*aspect/2);
           Object.assign(hitArea,{collisionWidth:Math.abs(noteWidth),collisionHeight:halfHeight*2,rotation,polygon:note.type===2?null:[[-noteWidth/2,-halfHeight],[noteWidth/2,-halfHeight],[noteWidth/2,halfHeight],[-noteWidth/2,halfHeight]].map(([dx,dy])=>({x:screenX+(dx+dy*skew)*cosine-dy*sine,y:screenY+(dx+dy*skew)*sine+dy*cosine}))});
         }
         this.noteHitAreas.push(hitArea);
@@ -445,7 +448,7 @@ export class Preview {
         }
         if (position.showHead && !drawnHold) {
           context.translate(horizontal, -position.y * scale);
-          context.transform(1, 0, Math.tan(position.skew * Math.PI / 180), 1, 0, 0);
+          context.transform(1, 0, skew, 1, 0, 0);
           if (!this.skin?.head(context, note.type, 0, 0, baseNoteWidth, highlight, tint, 5, baseHeightWidth)) context.fillRect(-noteWidth / 2, -2, noteWidth, 4);
         }
         context.restore();
@@ -548,16 +551,13 @@ export class Preview {
     if (!this.visible || !this.noteHitAreas?.length) return null;
     const rectangle = this.canvas.getBoundingClientRect();
     const point = { x: clientX - rectangle.left, y: clientY - rectangle.top };
-    const distanceToSegment = area => {
-      const dx = area.x2 - area.x1; const dy = area.y2 - area.y1;
-      const length = dx * dx + dy * dy;
-      const amount = length ? Math.max(0, Math.min(1, ((point.x - area.x1) * dx + (point.y - area.y1) * dy) / length)) : 0;
-      return Math.hypot(point.x - (area.x1 + amount * dx), point.y - (area.y1 + amount * dy));
-    };
     const view = this.viewport;
     if (view && (point.x < view.left || point.x > view.left + view.width || point.y < view.top || point.y > view.top + view.height)) return null;
-    const area = this.noteHitAreas.slice().reverse().find(area => distanceToSegment(area) <= area.radius);
-    return area ? { lineIndex: area.lineIndex, noteIndex: area.noteIndex } : null;
+    for (let index = this.noteHitAreas.length - 1; index >= 0; index--) {
+      const area = this.noteHitAreas[index];
+      if (previewNoteHit(area, point, this.skin)) return { lineIndex: area.lineIndex, noteIndex: area.noteIndex };
+    }
+    return null;
   }
 
   drawGuides(context, scale, selectedLine) {

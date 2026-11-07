@@ -25,7 +25,7 @@ test('协议测试数据可打包、导入并往返导出', async () => {
 test('Inkline 内置资源完整且可以直接加载，保留作者、颜色参数与字体', async context => {
   context.mock.method(globalThis, 'fetch', async url => new Response(await readFile(new URL(url))));
   const skins = await builtinEditorSkins();
-  assert.deepEqual(skins.map(record => record.skin.id), ['inkline']);
+  assert.deepEqual(skins.map(record => record.skin.id), ['inkline', 'rpe-classic']);
   const skin = skins[0]; assert.equal(skin.builtin, true);
   // Metadata may ship one text per locale; both languages are kept in the package.
   assert.deepEqual(skin.skin.name, { 'zh-CN': '墨线 Inkline', 'en-US': 'Inkline' });

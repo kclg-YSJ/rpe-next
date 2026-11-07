@@ -233,3 +233,77 @@ test('框选平移仅适用于超宽多线分列，其他按键、面板和可�
   session.multiLineMode='notes'; session.multiLineMerge=true;
   assert.equal(timeline.beginRectanglePan(pointer(400,500),timeline.notesCanvas),false);
 });
+
+test('框选完成记录最终鼠标坐标，跨区和相同选区的再次框选都刷新', () => {
+  for (const area of ['notes', 'events']) for (const multi of [false, true]) {
+    const { session, timeline } = selectionFixture(), completions = [];
+    if (multi) {
+      session.chart.judgeLineList.push(structuredClone(session.line));
+      session.multiLineEnabled = true; session.multiLineMode = area; session.multiLineIndices = [0, 1];
+    }
+    timeline.onSelectionComplete = (kind, point) => completions.push({ kind, point });
+    const interaction = area === 'notes' ? timeline : timeline.eventInteraction, base = area === 'notes' ? 0 : 520;
+    const chart = session.chart;
+    for (const endX of [base + 800, base + 700]) {
+      interaction.down(pointer(base + 10, 550, true)); interaction.up(pointer(base + 10, 550, true));
+      assert.equal(completions.length, endX === base + 800 ? 0 : 1);
+      timeline.finishRectangle(pointer(endX, 300, true));
+      assert.deepEqual(completions.at(-1), { kind: area, point: { x: endX - base, y: 300 } });
+    }
+    assert.equal(completions.length, 2); assert.equal(session.chart, chart);
+  }
+});
+
+test('空点任意编辑区保留单选、多选、所属线、当前面板焦点和多选控制球意图', () => {
+  for (const area of ['notes', 'events']) for (const multi of [false, true]) for (const count of [1, 2]) {
+    const { session, timeline } = selectionFixture();
+    session.focus = area; session.multiSelectionIntent = area;
+    session.line.notes.push(createNote(1, 1, 0));
+    session.line.eventLayers[0].moveXEvents.push(createEvent(10, 20, 1, 2));
+    if (area === 'notes') session.selection = new Set(Array.from({ length: count }, (_, i) => i));
+    else session.eventSelection = new Set(Array.from({ length: count }, (_, i) => `moveXEvents:${i}`));
+    if (multi) {
+      session.chart.judgeLineList.push(structuredClone(session.line));
+      session.multiLineEnabled = true; session.multiLineMode = area; session.multiLineIndices = [0, 1];
+      if (area === 'notes') session.multiLineSelection = new Map([[0, new Set(session.selection)], [1, new Set([0])]]);
+      else session.multiEventSelection = new Map([[0, new Set(session.eventSelection)], [1, new Set(['moveXEvents:0'])]]);
+    }
+    const before = session.selectionState(), chart = session.chart;
+    for (const [interaction, x] of [[timeline, 30], [timeline.eventInteraction, 990]]) {
+      interaction.down(pointer(x, 50)); interaction.up(pointer(x, 50));
+      assert.deepEqual(session.selectionState(), before, `${area}/${multi}/${count}`);
+      assert.equal(session.multiSelectionIntent, area); assert.equal(session.focus, area); assert.equal(session.chart, chart);
+    }
+  }
+});
+
+test('Ctrl 点选和划选在释放时报告最终坐标，空点不报告新的选择完成', () => {
+  for (const area of ['notes', 'events']) {
+    const { session, timeline } = selectionFixture(), completions = [], base = area === 'notes' ? 0 : 520;
+    timeline.onSelectionComplete = (kind, point) => completions.push({ kind, point });
+    const interaction = area === 'notes' ? timeline : timeline.eventInteraction;
+    const x = area === 'notes' ? timeline.noteHorizontal(0, 0) : 130;
+    const y = area === 'notes' ? timeline.noteVertical(session.notes[0]) : 400;
+    interaction.down({ ...pointer(base + x, y), ctrlKey: true }); interaction.up(pointer(base + x + 1, y + 1));
+    assert.deepEqual(completions.at(-1), { kind: area, point: { x: x + 1, y: y + 1 } });
+    interaction.down(pointer(base + 30, 50)); interaction.up(pointer(base + 30, 50));
+    assert.equal(completions.length, 1);
+    interaction.down(pointer(base + 30, 50)); interaction.move(pointer(base + 100, 100)); interaction.up(pointer(base + 110, 110));
+    assert.deepEqual(completions.at(-1), { kind: area, point: { x: 110, y: 110 } });
+    assert.equal(completions.length, 2);
+  }
+});
+
+test('超大谱异步选择保留结束点，并丢弃已被后续选择或换谱替代的完成通知', async () => {
+  const { session, timeline } = selectionFixture(), completions = [];
+  let resolve;
+  const pending = new Promise(done => { resolve = done; });
+  session.largeDocument = { busy: true, pending };
+  timeline.onSelectionComplete = (area, point) => completions.push({ area, point });
+  timeline.completeSelection('notes', pointer(300, 400)); timeline.cursor = { x: 10, y: 20 };
+  resolve(); await pending; await Promise.resolve();
+  assert.deepEqual(completions, [{ area: 'notes', point: { x: 300, y: 400 } }]);
+  const next = new Promise(done => { resolve = done; }); session.largeDocument.pending = next;
+  timeline.completeSelection('notes', pointer(250, 350)); session.largeDocument.pending = Promise.resolve();
+  resolve(); await next; await Promise.resolve(); assert.equal(completions.length, 1);
+});

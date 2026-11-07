@@ -4,6 +4,7 @@ import { parseEditorSkin, EDITOR_SKIN_LIMITS } from '../core/editor-skin.mjs';
 import { assetUrl } from '../core/asset-url.mjs';
 import { nativeStorage, nativePackages } from './native.mjs';
 import { t } from '../i18n.mjs';
+import { builtinPackageFiles, deferBuiltinPackage } from './builtin-packages.mjs';
 
 async function access(mode, action) {
   const connection = await openDatabase('rpe-next-editor-skins', 1, (connection, transaction) => ensureStore(connection, transaction, 'packages', { keyPath: 'id' }));
@@ -44,13 +45,14 @@ export async function builtinEditorSkins() {
   const response = await fetch(assetUrl('editor-skins/index.json'));
   if (!response.ok) throw new Error(t('editor-skins.s4c01d3e'));
   const list = await response.json(); if (!Array.isArray(list)) throw new Error(t('editor-skins.sacd2ee2'));
+  const cache = new Map();
   return Promise.all(list.map(async entry => {
     if (!entry || typeof entry.directory !== 'string' || !/^[a-z0-9-]+$/.test(entry.directory) || !Array.isArray(entry.files)) throw new Error(t('editor-skins.s52c726d'));
-    const files = new Map(await Promise.all(entry.files.map(async path => {
-      if (typeof path !== 'string' || path.includes('..') || path.startsWith('/')) throw new Error(t('editor-skins.sd3e38d2'));
-      const result = await fetch(assetUrl(`editor-skins/${entry.directory}/${path}`)); if (!result.ok) throw new Error(t('editor-skins.sf849c20'));
-      return [path, new Uint8Array(await result.arrayBuffer())];
-    })));
-    return { ...parseEditorSkin(files), builtin: true };
+    const load = async () => parseEditorSkin(await builtinPackageFiles('editor-skins', entry, cache));
+    if (entry.deferred) {
+      const skin = parseEditorSkin(new Map([['skin.json', new TextEncoder().encode(JSON.stringify(entry.metadata))]])).skin;
+      return deferBuiltinPackage({ skin, bytes: entry.bytes ?? 0, fileCount: entry.files.length + Object.keys(entry.shared ?? {}).length }, load);
+    }
+    return { ...await load(), builtin: true };
   }));
 }

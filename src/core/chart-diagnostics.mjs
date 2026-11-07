@@ -3,6 +3,7 @@ import { beatValue, fromNumber } from './beat.mjs';
 import { TempoMap } from './tempo.mjs';
 import { diagnoseNoiseAreas, NOISE_TRACKS } from './noise-areas.mjs';
 import { validateGlobalEvent } from './global-events.mjs';
+import { shaderLine } from './shader.mjs';
 import { t, currentLocale } from '../i18n.mjs';
 
 const BASE = ['moveXEvents', 'moveYEvents', 'rotateEvents', 'alphaEvents', 'speedEvents'];
@@ -107,8 +108,9 @@ function shaderParameterIssues(event, location, seconds, options) {
       for (const [index, segment] of value.entries()) {
         const start = readBeat(segment?.startTime), end = readBeat(segment?.endTime), where = { ...location, path: `${path}[${index}]`, beat: Number.isFinite(start) ? start : 0, removable: false };
         const emit = code => issues.push(diagnostic(code, 'error', where));
-        if (![start, end].every(Number.isFinite)) emit('beat');
-        else { if (end < start) emit('eventTime'); if (seconds && outside(seconds(start), seconds(end), options, true)) emit('timeRange'); }
+        const timeIssue = code => issues.push(diagnostic(code, 'error', { ...where, shaderParameter: true, parameter: name, segment: index }, { name, segment: index + 1, start, end }));
+        if (![start, end].every(Number.isFinite)) timeIssue('shaderParameterBeat');
+        else { if (end < start) timeIssue('shaderParameterTime'); if (seconds && outside(seconds(start), seconds(end), options, true)) timeIssue('shaderParameterTimeRange'); }
         if (!finite(segment?.start) || !finite(segment?.end)) emit('value');
         if (segment) easingIssues(segment, emit);
       }
@@ -215,11 +217,16 @@ export function diagnoseChart(chart, options = {}) {
       append(issues, eventIssues(column.events, columnId, { path: `globalEvents.${typeId}.${columnId}`, globalType: typeId, globalColumn: columnId, removable: false }, tempo && (beat => tempo.seconds(beat)), config, definition ?? { overlap: true, valueType: column.valueType ?? 'json' }));
     }
   }
-  for (const [i, event] of [...list(chart.effects), ...list(chart.shaderEvents), ...list(chart.META?.effects)].entries()) {
+  let effectIndex = 0;
+  for (const [shaderRoot, events] of [['effects', chart.effects], ['shaderEvents', chart.shaderEvents], ['META.effects', chart.META?.effects]]) for (const [shaderIndex, event] of list(events).entries()) {
+    const i = effectIndex++;
     const time = value => Array.isArray(value) ? value : Number.isFinite(value) ? fromNumber(value) : [NaN, 0, 1];
     const normalized = { ...event, startTime: time(event.startTime ?? event.start ?? 0), endTime: time(event.endTime ?? event.end ?? 0) };
-    append(issues, eventIssues([normalized], 'paintEvents', { line: Number.isInteger(event.line) ? event.line : 0, path: `effects.${i}`, removable: false }, tempo && (beat => tempo.seconds(beat)), config));
-    append(issues, shaderParameterIssues(event, { line: Number.isInteger(event.line) ? event.line : 0, path: `effects.${i}` }, tempo && (beat => tempo.seconds(beat)), config));
+    const line = shaderLine(event, chart), factor = chart.judgeLineList[line]?.bpmfactor ?? 1;
+    const location = { line, path: `effects.${i}`, extended: true, eventType: 'paintEvents', shaderRoot, shaderIndex, removable: false };
+    const seconds = tempo && (beat => tempo.seconds(beat, factor));
+    append(issues, eventIssues([normalized], 'paintEvents', location, seconds, config));
+    append(issues, shaderParameterIssues(event, location, seconds, config));
   }
   return issues;
 }

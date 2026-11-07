@@ -147,7 +147,7 @@ export class EventInteraction {
     if (event.button === 2) return;
     const session = this.timeline.getSession(); const point = this.timeline.point(event, this.canvas); const rectangle = this.hit(point);
     if (event.ctrlKey || event.shiftKey || event.button === 1) session.multiSelectionIntent = 'events';
-    else session.multiSelectionIntent = null;
+    else if (rectangle) session.multiSelectionIntent = null;
     this.timeline.eventCursor = point; this.timeline.hoverArea = 'events';
     this.timeline.clipboardPointer = point;
     const panelLineIndex = session.multiLineActive && session.multiLineMode === 'events'
@@ -161,8 +161,8 @@ export class EventInteraction {
       try { this.place(); } catch (error) { this.timeline.notify?.(error.message, 'error'); }
       return;
     }
-    session.focus = 'events'; session.eventLayer = this.timeline.layer;
-    if (!event.ctrlKey && !event.shiftKey && event.button !== 1) { session.selection.clear(); if (!rectangle) session.eventSelection.clear(); }
+    if (rectangle || event.ctrlKey || event.shiftKey || event.button === 1) { session.focus = 'events'; session.eventLayer = this.timeline.layer; }
+    if (rectangle && !event.ctrlKey && !event.shiftKey && event.button !== 1) session.selection.clear();
     this.canvas.focus({ preventScroll: true }); this.canvas.setPointerCapture(event.pointerId);
     const multiMode = session.multiLineActive;
     const multiPanel = multiMode && this.timeline.panelCount('events') > 1;
@@ -173,10 +173,11 @@ export class EventInteraction {
     } else if ((multiPanel || panColumns) && (!rectangle && !this.timeline.tool)) this.drag = { kind: 'multi-pan', start: point, current: point, clientX: event.clientX };
     else if (!multiMode && (event.shiftKey || event.button === 1)) this.drag = { kind: 'rectangle', area: 'events', start: point, startFactor: this.timeline.factorForLine(session.lineIndex), startSeconds: this.timeline.timeAt(point.y), current: point, append: true, remove: false };
     else if (rectangle && event.button === 0) {
+      const selecting = event.ctrlKey || !(session.multiLineActive ? session.multiEventSelection?.get(rectangle.lineIndex ?? session.lineIndex) : session.eventSelection)?.has(eventKey(rectangle.type, rectangle.index));
       selectEvent(session, rectangle.lineIndex ?? session.lineIndex, rectangle.type, rectangle.index, { toggle: event.ctrlKey });
       const kind = this.timeline.rpeEventDrag !== true ? Math.abs(point.y - rectangle.y) < 6 ? 'endTime' : Math.abs(point.y - (rectangle.y + rectangle.height)) < 6 ? 'startTime' : 'move' : 'move';
       const selected = eventListAt(session, rectangle.lineIndex ?? session.lineIndex, rectangle.type)?.[rectangle.index];
-      this.drag = { kind, type: rectangle.type, lineIndex: rectangle.lineIndex, start: point, current: point, anchor: selected?.[kind === 'endTime' ? 'endTime' : 'startTime'], originSeconds: this.timeline.tempo.seconds(this.timeline.origin, this.timeline.factorForLine(rectangle.lineIndex ?? session.lineIndex)) };
+      this.drag = { kind, selecting, type: rectangle.type, lineIndex: rectangle.lineIndex, start: point, current: point, anchor: selected?.[kind === 'endTime' ? 'endTime' : 'startTime'], originSeconds: this.timeline.tempo.seconds(this.timeline.origin, this.timeline.factorForLine(rectangle.lineIndex ?? session.lineIndex)) };
     } else if (!multiMode) this.drag = { kind: 'stroke', start: point, current: point, points: [point], remove: event.button === 2 };
     this.bindXyDrag(session);
     session.notify();
@@ -208,6 +209,7 @@ export class EventInteraction {
         return;
       }
       if (this.drag.kind === 'stroke' && (this.drag.tracing || Math.hypot(point.x - this.drag.start.x, point.y - this.drag.start.y) > 3)) {
+        if (!this.drag.tracing) { const session = this.timeline.getSession(); session.focus = 'events'; session.eventLayer = this.timeline.layer; session.selection.clear(); }
         this.drag.tracing = true;
         this.drag.points.push(point); const session = this.timeline.getSession();
         session.multiSelectionIntent = 'events';
@@ -301,6 +303,7 @@ export class EventInteraction {
         } else transformEvents(session, drag.kind === 'move' ? t('event-interaction.s9728d19') : t('event-interaction.s8c3d905'), change);
       }
     } catch (error) { this.reportError(error); }
+    if (drag.kind === 'stroke' && drag.tracing || drag.selecting && !drag.scrolled && Math.hypot(drag.current.x - drag.start.x, drag.current.y - drag.start.y) <= 4) this.timeline.completeSelection('events', event);
     this.timeline.changed();
   }
 

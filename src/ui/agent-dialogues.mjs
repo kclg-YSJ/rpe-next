@@ -14,6 +14,12 @@ const button = (label, action) => { const node = text('button', label); node.typ
 const detail = label => { const node = document.createElement('details'); node.append(text('summary', label)); return node; };
 const pretty = value => JSON.stringify(value, null, 2);
 const time = milliseconds => (milliseconds / 1000).toFixed(2) + ' s';
+export function submitAgentText(event, submit) {
+  if (event.defaultPrevented || event.key !== 'Enter' || event.shiftKey || event.altKey || event.isComposing || event.keyCode === 229) return false;
+  event.preventDefault(); event.stopPropagation();
+  if (!event.repeat) submit();
+  return true;
+}
 export function agentUsageText(stats) {
   if (!stats) return '';
   return [stats.model, stats.reasoningEffort ? agentEffortLabel(stats.reasoningEffort) : '', stats.startedAt ? new Date(stats.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '', time(stats.durationMs ?? 0), stats.usageKnown ? t('agent-dialogues.s1f73712', { p0: stats.promptTokens, p1: stats.completionTokens, p2: stats.totalTokens }) : t('agent-dialogues.s0e03625'), stats.reasoningTokens ? t('agent-dialogues.s7321f8c', { p0: stats.reasoningTokens }) : '', stats.cachedTokens ? t('agent-dialogues.s5f7da44', { p0: stats.cachedTokens }) : '', stats.requests ? t('agent-dialogues.s3b8c12f', { p0: stats.requests }) : '', stats.tools ? t('agent-dialogues.sbc85fe9', { p0: stats.tools }) : ''].filter(Boolean).join(' · ');
@@ -96,9 +102,13 @@ export class AgentDialogues {
     this.attachments = text('div', '', 'agent-image-list agent-composer-images'); this.attachments.hidden = true;
     panel.input.addEventListener('paste', event => this.pasteImages(event));
     panel.input.oninput = () => { this.store.current.draft = panel.input.value; this.save(); this.updateBusy(); };
-    panel.input.onkeydown = event => { if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); this.composer.requestSubmit(); } };
+    panel.input.onkeydown = event => { submitAgentText(event, () => {
+      if ((event.ctrlKey || event.metaKey) && panel.agent?.busy) this.interrupt(panel.input.value);
+      else this.composer.requestSubmit();
+    }); };
     const actions = text('div', '', 'agent-composer-actions'); panel.send = button(t('agent-dialogues.s1214d63'), () => {}); panel.send.type = 'submit'; panel.stop = button(t('agent-dialogues.sa17f70a'), () => { this.pauseQueue(); panel.agent.stop(); }); panel.stop.hidden = true;
     this.interruptButton = button(t('agent-dialogues.s90de0b5'), () => this.interrupt(panel.input.value)); this.interruptButton.hidden = true; actions.append(panel.status, this.routing.toggle, panel.send, this.interruptButton, panel.stop, this.routing.menu);
+    this.interruptButton.title = t('agent-dialogues.interruptShortcut');
     this.resumeQueue = button(t('agent-dialogues.s39faf0c'), () => { for (const { turn } of this.queued()) { turn.paused = false; this.save(turn); } this.autoQueue = true; this.drain(); }); this.resumeQueue.className = 'agent-queue-resume'; this.resumeQueue.hidden = true;
     this.composer.append(this.attachments, panel.input, actions); this.composer.onsubmit = event => { event.preventDefault(); this.send(panel.input.value); };
     panel.host.append(topbar, controls, this.background, this.viewport, this.resumeQueue, this.composer); this.updateRouting();
@@ -436,6 +446,8 @@ export class AgentDialogues {
     this.panel.notify(t('agent-dialogues.sd457b0d') + args.question.replace(/\s+/g, ' ').slice(0, 120), 'warning');
     return this.pending(signal, finish => { const card = text('form', '', 'agent-question'); card.append(text('strong', t('agent-dialogues.s70172e2'))); const question = text('div', '', 'agent-content'); renderAgentMarkdown(question, args.question); card.append(question);
       const input = document.createElement('textarea'); input.rows = 3; input.setAttribute('aria-label', t('agent-dialogues.s354b3f3')); const reply = value => { this.running?.turn.process.push({ kind: 'question', question: args.question, answer: value }); if (this.running) this.save(this.running.turn); card.append(text('p', value)); finish({ answer: value }); };
+      input.title = t('agent-dialogues.replyShortcut');
+      input.onkeydown = event => { submitAgentText(event, () => card.requestSubmit()); };
       const choices = text('div', '', 'agent-actions agent-question-choices'); choices.setAttribute('role', 'group'); choices.setAttribute('aria-label', t('agent-dialogues.s824f73d')); for (const choice of args.choices ?? []) choices.append(button(choice, () => reply(choice))); card.append(choices, input, button(t('agent-dialogues.s3f5ee82'), () => { if (input.value.trim()) reply(input.value.trim()); })); card.onsubmit = event => { event.preventDefault(); if (input.value.trim()) reply(input.value.trim()); }; return card;
     }, t('agent-dialogues.sac69952'));
   }

@@ -1,4 +1,4 @@
-export const APP_VERSION = '0.13.2';
+export const APP_VERSION = '0.14.0';
 export const UPDATE_REPOSITORY = 'kclg-YSJ/rpe-next';
 export const UPDATE_REPOSITORY_URL = 'https://github.com/' + UPDATE_REPOSITORY;
 export const UPDATE_RELEASES_URL = 'https://api.github.com/repos/' + UPDATE_REPOSITORY + '/releases?per_page=30';

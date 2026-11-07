@@ -7,6 +7,7 @@ import {beatInputControl} from './beat-input.mjs';
 import {numericWheel} from './numeric-wheel.mjs';
 import {createEasingPicker,EASING_NAMES} from './easing-picker.mjs';
 import { t } from '../i18n.mjs';
+import { withEventLock } from '../application/event-value-memory.mjs';
 const node=(tag,className,text)=>{const element=document.createElement(tag);if(className)element.className=className;if(text)element.textContent=text;return element;};
 
 /** Independent property page: never mounts the global event catalogue. */
@@ -35,11 +36,11 @@ export class GlobalEventInspector {
     const { event, type: key } = entries[0], columnEntry = this.document.columns.find(column => column.key === key), { type, column } = columnEntry;
     form.append(node('h3', '', t('global-event-inspector.sc927adf', { p0: type.name, p1: type.columns.length > 1 ? ' · ' + column.name : '', p2: entries.length })));
     if (type.readonly) { form.append(node('p', 'hint', t('global-event-inspector.secab397'))); return; }
-    const update = (change, label = t('global-event-inspector.sabe7f42')) => {
+    const update = (change, label = t('global-event-inspector.sabe7f42'), valueField) => {
       const entries = selectedEvents(this.document.editor); if(entries.length!==1)return;
       const current = entries[0], next = change(structuredClone(current.event), this.document.columns.find(column => column.key === current.type));
       if(JSON.stringify(next)===JSON.stringify(current.event))return;
-      transformEvents(this.document.editor, label, () => rebaseCustomEventValues(current.event, next));
+      transformEvents(this.document.editor, label, () => rebaseCustomEventValues(current.event, next), { valueField });
     };
     const field = (name, key, kind, value, apply) => {
       const label = node('label', 'field'); label.append(name);
@@ -55,15 +56,15 @@ export class GlobalEventInspector {
         apply(value);input.removeAttribute('aria-invalid');
       } catch(error) { if(!quiet){input.setAttribute('aria-invalid','true');this.report(error);} } };
       input.onfocus=()=>{this.editing={input,selection:[...this.document.editor.eventSelection].join('|')};};
-      input.onblur=()=>{if(this.editing?.input===input)this.editing=null;queueMicrotask(()=>{if(!this.editing&&!this.host.closest('[data-panel]').hidden)this.render();});};
+      input.onblur=event=>{if(this.editing?.input===input)this.editing=null;const within=this.host.contains(event.relatedTarget);queueMicrotask(()=>{if(!within&&!this.editing&&!this.host.contains(document.activeElement)&&!this.host.closest('[data-panel]').hidden)this.render();});};
       input.oninput=event=>{if(!event.isComposing)applyInput(true);};
       input.oncompositionend=()=>applyInput(true);
       input.onchange=()=>applyInput();
       label.append(kind === 'beat' ? beatInputControl(input, () => this.timeline.division, error => this.report(error)) : input); form.append(label);
     };
     for (const [key, name] of [['startTime', t('global-event-inspector.s087c451')], ['endTime', t('global-event-inspector.sc4d3fa4')]]) field(name, key, 'beat', event[key], value => update(current => ({ ...current, [key]: value })));
-    for (const [key, name] of [['start', t('global-event-inspector.s532cd47')], ['end', t('global-event-inspector.s00005a6')]]) field(name, key, column.valueType, event[key], value => update(current => ({ ...current, [key]: value, ...(current.inst ? { start: value, end: structuredClone(value) } : {}) })));
-    field(t('global-event-inspector.s7787450'), 'inst', 'boolean', event.inst, value => update(current => ({ ...current, inst: value ? 1 : 0, ...(value ? { end: structuredClone(current.start) } : {}) })));
+    for (const [key, name] of [['start', t('global-event-inspector.s532cd47')], ['end', t('global-event-inspector.s00005a6')]]) field(name, key, column.valueType, event[key], value => update(current => ({ ...current, [key]: value, ...(current.inst ? { start: value, end: structuredClone(value) } : {}) }), undefined, key));
+    field(t('global-event-inspector.s7787450'), 'inst', 'boolean', event.inst, value => update(() => withEventLock(this.document.editor, selectedEvents(this.document.editor)[0].event, value)));
     for (const [key, name, fallback] of [['easingLeft', t('global-event-inspector.s2fbff0e'), 0], ['easingRight', t('global-event-inspector.sb38574e'), 1], ['linkgroup', t('global-event-inspector.s50136f9'), 0]].filter(([key]) => !event.customEasing || key === 'linkgroup')) field(name, key, 'number', event[key] ?? fallback, value => {
       if (key === 'linkgroup' ? !Number.isInteger(value) || value < 0 : value < 0 || value > 1) throw Error(key === 'linkgroup' ? t('global-event-inspector.sbf11766') : t('global-event-inspector.s773fbe4'));
       update(current => ({ ...current, [key]: value }));

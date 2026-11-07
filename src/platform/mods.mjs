@@ -1,6 +1,7 @@
 import { openDatabase, ensureStore } from './storage.mjs';
 import { readZip,writeZip } from './archive.mjs';
-import { MOD_LIMITS,parseModPackage } from '../core/mod-package.mjs';
+import { MOD_LIMITS,parseModPackage,modManifest } from '../core/mod-package.mjs';
+import { builtinPackageFiles, deferBuiltinPackage } from './builtin-packages.mjs';
 import { assetUrl } from '../core/asset-url.mjs';
 import { nativeStorage, nativePackages } from './native.mjs';
 import { t } from '../i18n.mjs';
@@ -18,5 +19,11 @@ export async function importMod(files,directory=false){
 export async function builtinMods(){
   const response=await fetch(assetUrl('mods/index.json'));if(!response.ok)throw Error(t('mods.sd477bc7'));const list=await response.json();
   if(!Array.isArray(list))throw Error(t('mods.sca48f1b'));
-  return Promise.all(list.map(async entry=>{if(!entry||!/^[a-z][a-z0-9-]*$/.test(entry.directory)||!Array.isArray(entry.files))throw Error(t('mods.s9653619'));const files=new Map(await Promise.all(entry.files.map(async path=>{if(typeof path!=='string'||path.includes('..')||path.startsWith('/'))throw Error(t('mods.se1cc6b0'));const result=await fetch(assetUrl(`mods/${entry.directory}/${path}`));if(!result.ok)throw Error(t('mods.s0c61114'));return[path,new Uint8Array(await result.arrayBuffer())];})));return {...parseModPackage(files),builtin:true};}));
+  const cache=new Map();
+  return Promise.all(list.map(async entry=>{
+    if(!entry||!/^[a-z][a-z0-9-]*$/.test(entry.directory)||!Array.isArray(entry.files))throw Error(t('mods.s9653619'));
+    const load=async()=>parseModPackage(await builtinPackageFiles('mods',entry,cache));
+    if(entry.deferred)return deferBuiltinPackage({manifest:modManifest(entry.metadata),bytes:entry.bytes??0},load);
+    return {...await load(),builtin:true};
+  }));
 }

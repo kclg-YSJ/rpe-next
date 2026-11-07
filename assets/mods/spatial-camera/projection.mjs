@@ -102,6 +102,9 @@ export class CameraProjection {
       if(Math.max(a.x,b.x)+radius<v.left||Math.min(a.x,b.x)-radius>v.left+v.width||Math.max(a.y,b.y)+radius<v.top||Math.min(a.y,b.y)-radius>v.top+v.height)continue;
       if(area.polygon)area.polygon=camera.clip(area.polygon.map(world)).map(point=>camera.project(point)).filter(Boolean);
       if(area.collisionWidth!==undefined){area.collisionWidth=radius*2;area.collisionHeight=area.collisionHeight*frame.scale*camera.focal/a.depth;area.rotation=Math.atan2(b.y-a.y,b.x-a.x)+Math.PI/2;}
+      // The affine sprite bounds belong to the source plane. Retain this
+      // camera's projected hit shape after mapping into screen coordinates.
+      area.pickWidth=undefined;
       area.x1=a.x;area.y1=a.y;area.x2=b.x;area.y2=b.y;area.radius=radius;areas[count++]=area;
     }
     areas.length=count;renderer.noteHitAreas=areas;

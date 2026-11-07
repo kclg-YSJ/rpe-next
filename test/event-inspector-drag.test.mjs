@@ -6,6 +6,7 @@ import { insertEvent, eventKey } from '../src/application/event-commands.mjs';
 import { createEvent } from '../src/core/chart.mjs';
 import { cancelValueDrag } from '../src/ui/draggable-value.mjs';
 import { TempoMap } from '../src/core/tempo.mjs';
+import { toggleSingleEventLock } from '../src/application/event-commands.mjs';
 
 class FakeTarget {
   constructor() { this.listeners = new Map(); }
@@ -127,6 +128,32 @@ test('透明度文本允许负整数，保留255上限与撤销', () => {
     input.value = '300'; input.oninput({}); assert.equal(session.line.eventLayers[0].alphaEvents[0].start, 255);
     assert.deepEqual(errors, []);
   } finally { restore(); }
+});
+
+test('事件属性尾值修改后钩定采用尾值；空输入和只点击首值不会改取值端', () => {
+  for (const shortcut of [false,true]) {
+    const { container,session,errors,restore }=setup(1,{sampler:null});
+    try {
+      const input=field(container,'end').children.at(-1).children[0];input.value='333';input.oninput({});
+      const start=field(container,'start').children.at(-1).children[0];start.value='';start.oninput({});
+      start.value='20';start.onchange();
+      if(shortcut)toggleSingleEventLock(session);
+      else {let lock;walk(container,node=>{if(node.getAttribute?.('aria-label')==='钩定')lock=node;});lock.checked=true;lock.onchange();}
+      const event=session.line.eventLayers[0].moveXEvents[1];assert.deepEqual([event.start,event.end,event.inst],[333,333,1]);
+      assert.deepEqual(errors,[]);
+    }finally{restore();}
+  }
+});
+
+test('从数值框直接点钩定时不在失焦微任务里替换正在点击的控件', async()=>{
+  const {container,session,restore}=setup(1,{sampler:null});
+  try{
+    const input=field(container,'end').children.at(-1).children[0];input.value='222';input.oninput({});
+    let lock;walk(container,node=>{if(node.getAttribute?.('aria-label')==='钩定')lock=node;});
+    const children=container.children;container.contains=node=>node===lock;globalThis.document.activeElement=globalThis.document.body;
+    input.onblur({relatedTarget:lock});await Promise.resolve();assert.equal(container.children,children);
+    lock.checked=true;lock.onchange();const event=session.line.eventLayers[0].moveXEvents[1];assert.deepEqual([event.start,event.end],[222,222]);
+  }finally{restore();}
 });
 
 test('事件面板的数值字段名称可拖动，并把每一步交给取样器实时预览', () => {

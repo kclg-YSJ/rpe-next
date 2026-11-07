@@ -18,6 +18,8 @@ import { runEventTool } from './event-tools.mjs';
 import { editorSkinContext } from './editor-skin-canvas.mjs';
 import { evaluateEventNumber } from '../core/numeric-expression.mjs';
 import { numericExpressionSource, setNumericExpressionResolver } from './numeric-expression-input.mjs';
+import { createMovementVectorPanel } from './movement-vector-panel.mjs';
+import { EVENT_VALUE_MEMORY_LIMIT, rememberEventValueChange, withEventLock } from '../application/event-value-memory.mjs';
 export { EASING_NAMES } from './easing-picker.mjs';
 const galleryState = { open: false };
 // Value change per pixel of label drag (the drag sensitivity setting scales it);
@@ -34,11 +36,14 @@ function inspectorEntries(session) {
   return selectedEvents(session);
 }
 
-function applyEventTransform(session, label, transform) {
+function applyEventTransform(session, label, transform, valueField) {
   if (session.multiLineActive && session.multiLineMode === 'events') {
     const result = editCapturedSelection(captureSelection(session), { event: transform });
     commitSelectionEdit(session, result, label);
-  } else transformEvents(session, label, transform);
+    for (const change of result.changes.slice(0, EVENT_VALUE_MEMORY_LIMIT)) if (change.kind === 'events') {
+      rememberEventValueChange(session, change.before, eventListAt(session, change.lineIndex, change.type)[change.index], valueField, { type: change.type, index: change.index });
+    }
+  } else transformEvents(session, label, transform, { valueField });
 }
 
 export function renderEventInspector(session, tempo, currentBeat, reportError, notify = () => {}, sampler = null) {
@@ -53,6 +58,7 @@ export function renderEventInspector(session, tempo, currentBeat, reportError, n
   const valueTitle = eventType === 'alphaEvents' ? [t('event-inspector.s7ff4e31'), t('event-inspector.s85fe18b')] : eventType === 'speedEvents' ? [t('event-inspector.s681e916'), t('event-inspector.s0e1d31f')] : eventType === 'colorEvents' ? [t('event-inspector.s37eb2f2'), t('event-inspector.s3bf81a3')] : eventType === 'textEvents' ? [t('event-inspector.s7aaf80e'), t('event-inspector.s70ef707')] : [t('event-inspector.s532cd47'), t('event-inspector.s00005a6')];
   const fields = [['startTime', t('event-inspector.s087c451'), 'beat'], ['endTime', t('event-inspector.sc4d3fa4'), 'beat'], ['start', valueTitle[0], valueKind(eventType, event.start)], ['end', valueTitle[1], valueKind(eventType, event.end)], ['easingLeft', t('event-inspector.s2fbff0e'), 'number'], ['easingRight', t('event-inspector.sb38574e'), 'number'], ['linkgroup', t('event-inspector.s50136f9'), 'number']];
   const boundaryFields = [];
+  let movementPanel;
   const constrainNumber = (key, value) => {
     if (eventType === 'alphaEvents' && (key === 'start' || key === 'end')) return Math.trunc(Math.min(255, value));
     if (key === 'easingLeft' || key === 'easingRight') return Math.max(0, Math.min(1, value));
@@ -63,7 +69,8 @@ export function renderEventInspector(session, tempo, currentBeat, reportError, n
     applyEventTransform(session, t('event-inspector.sa47ceda', { p0: title }), current => {
       const next = constrainNumber(key, typeof value === 'function' ? value(current) : value);
       return { ...current, [key]: next, ...(current.inst && (key === 'start' || key === 'end') ? { start: next, end: structuredClone(next) } : {}) };
-    });
+    }, key);
+    movementPanel?.sync();
   };
   const applyField = (input, key, title, kind, quiet = false) => {
     const update = () => {
@@ -108,7 +115,7 @@ export function renderEventInspector(session, tempo, currentBeat, reportError, n
       integer: integerField,
       hint: t('event-inspector.s6fb0abb', { p0: title }),
       read: () => { const text = String(input.value).trim(); const parsed = Number(text); return text && Number.isFinite(parsed) ? parsed : Number(event[key]) || 0; },
-      preview: value => sampler ? sampler.updateValueDraft(target, value) : true,
+      preview: value => { const result = sampler ? sampler.updateValueDraft(target, value) : true; movementPanel?.sync(sampler?.draftChart ?? session.chart); return result; },
       commit: value => safely(() => { if (sampler) { if (sampler.valueDraft) sampler.finishValue(true, t('event-inspector.s615e6b4', { p0: title })); } else writeValue(key, title, value); }),
       cancel: () => { if (sampler?.valueDraft) sampler.finishValue(false); },
     });
@@ -122,7 +129,7 @@ export function renderEventInspector(session, tempo, currentBeat, reportError, n
     const applySample = next => safely(() => {
       sampleValue = structuredClone(next);
       if (sampler) sampler.updateValueDraft(target, next);
-      else applyEventTransform(session, t('event-inspector.secb9029', { p0: title }), current => ({ ...current, [key]: next, ...(current.inst && (key === 'start' || key === 'end') ? { start: structuredClone(next), end: structuredClone(next) } : {}) }));
+      else applyEventTransform(session, t('event-inspector.secb9029', { p0: title }), current => ({ ...current, [key]: next, ...(current.inst && (key === 'start' || key === 'end') ? { start: structuredClone(next), end: structuredClone(next) } : {}) }), key);
     });
     const addRange = (labelText, min, max, step, initial, update) => {
       const label = document.createElement('label'); label.className = 'field'; label.append(labelText);
@@ -152,6 +159,17 @@ export function renderEventInspector(session, tempo, currentBeat, reportError, n
     return { panel, close };
   };
   for (const [key, title, kind] of fields) {
+    if (key === 'linkgroup' && entries.length === 1 && session.movementVector !== false && ['moveXEvents', 'moveYEvents'].includes(eventType) && session.focus === 'events') {
+      movementPanel = createMovementVectorPanel(session, entries[0], { reportError, syncValues: () => {
+        const current = inspectorEntries(session)[0]?.event;
+        if (!current) return;
+        for (const field of ['start', 'end']) {
+          const input = container.querySelector(`input[data-rpen-field="${field}"]`);
+          if (input && document.activeElement !== input) input.value = current[field];
+        }
+      } });
+      container.append(movementPanel.element);
+    }
     const label = document.createElement('label'); label.className = 'field'; label.append(title);
     const input = document.createElement('input'); input.type = kind === 'number' ? 'number' : 'text'; input.step = 'any'; input.setAttribute('aria-label', t('event-inspector.s21d101a', { p0: title }));
     input.dataset.rpenField = key; label.dataset.rpenField = key;
@@ -161,7 +179,7 @@ export function renderEventInspector(session, tempo, currentBeat, reportError, n
     if (key === 'linkgroup') { input.min = 0; input.step = 1; }
     input.value = kind === 'beat' ? formatBeat(event[key]) : kind === 'array' ? event[key].join(', ') : event[key] ?? (key === 'easingRight' ? 1 : 0);
     input.onfocus = () => { session.liveEventEdit = true; };
-    input.onblur = () => { session.liveEventEdit = false; queueMicrotask(() => { if (!session.liveEventEdit) renderEventInspector(session, tempo, currentBeat, reportError, notify, sampler); }); };
+    input.onblur = (event = {}) => { session.liveEventEdit = false; const within = container.contains?.(event.relatedTarget); queueMicrotask(() => { if (!within && !session.liveEventEdit && !container.contains?.(document.activeElement)) renderEventInspector(session, tempo, currentBeat, reportError, notify, sampler); }); };
     input.oninput = event => { if (!event.isComposing && (kind !== 'number' || input.value.trim())) applyField(input, key, title, kind, true); };
     input.onchange = () => applyField(input, key, title, kind);
     if (kind === 'number') {
@@ -196,7 +214,7 @@ export function renderEventInspector(session, tempo, currentBeat, reportError, n
   }
   const lockLabel = document.createElement('label'); lockLabel.className = 'field'; lockLabel.append(t('event-inspector.s7787450'));
   const lock = document.createElement('input'); lock.type = 'checkbox'; lock.checked = Boolean(event.inst); lock.setAttribute('aria-label', t('event-inspector.sdb6c851'));
-  lock.onchange = () => safely(() => applyEventTransform(session, t('event-inspector.s04b892d'), current => ({ ...current, inst: lock.checked ? 1 : 0, ...(lock.checked ? { end: structuredClone(current.start) } : {}) })));
+  lock.onchange = () => safely(() => applyEventTransform(session, t('event-inspector.s04b892d'), current => withEventLock(session, current, lock.checked)));
   lockLabel.append(lock); container.append(lockLabel);
   const link = Number(event.linkgroup ?? 0);
   const group = document.createElement('button'); group.type = 'button'; group.className = 'wide-button'; group.textContent = t('event-inspector.s0c9f607', { p0: link });

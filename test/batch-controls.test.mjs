@@ -59,3 +59,43 @@ test('batch ball origin stays anchored through scrolling and BPM/multiplier chan
   }
   assert.equal(session.chart, controls.active.snapshot.chart); controls.cancel();
 });
+
+function placementFixture(area, multi = false) {
+  const result = fixture(area, multi), { controls, timeline, button } = result;
+  controls.stage = { getBoundingClientRect: () => ({ left: 0, top: 0 }) };
+  controls.groups.get(area).host = { style: {}, querySelectorAll: () => [button] };
+  timeline.onSelectionComplete = (selectedArea, point) => controls.placeSelection(selectedArea, point);
+  return result;
+}
+
+test('each completed selection repositions balls at its final pointer, even when the same objects are selected again', () => {
+  for (const area of ['notes', 'events']) for (const multi of [false, true]) {
+    const { controls, timeline, pointer, session, button } = placementFixture(area, multi);
+    let cancelled = 0;
+    button.getAnimations = () => [{ cancel() { cancelled++; } }]; button.style.transform = 'translate(80px, 0)';
+    const group = controls.groups.get(area), chart = session.chart;
+    timeline.completeSelection(area, pointer(370, 280)); controls.sync();
+    assert.equal(group.host.style.left, '420px'); assert.equal(group.host.style.top, '250px');
+    assert.equal(button.style.transform, ''); assert.equal(cancelled, 1);
+    // Hovering or notifying does not move an already positioned group.
+    if (area === 'notes') timeline.cursor = { x: 70, y: 80 }; else timeline.eventCursor = { x: 70, y: 80 };
+    session.notify(); controls.sync(); assert.equal(group.host.style.left, '420px');
+    timeline.completeSelection(area, pointer(420, 240)); controls.sync();
+    assert.equal(group.host.style.left, '470px'); assert.equal(group.host.style.top, '210px');
+    assert.equal(session.chart, chart); assert.equal(session.history.undoStack.length, 0);
+  }
+});
+
+test('completed selections use canvas boundaries, not selected-line boundaries, and retain the anchor across layout changes', () => {
+  const { controls, timeline, pointer, session } = placementFixture('notes', true), group = controls.groups.get('notes');
+  session.multiLineSelection = new Map([[0, new Set([0, 1])]]);
+  timeline.multiLineWidth = 200;
+  timeline.completeSelection('notes', pointer(480, 240)); controls.sync();
+  assert.equal(group.host.style.left, '530px');
+  timeline.cursor = null;
+  const canvas = timeline.notesCanvas;
+  canvas.clientWidth = 580; canvas.getBoundingClientRect = () => ({ left: 0, top: 0, width: 580, height: 600 });
+  controls.sync(); assert.equal(group.host.style.left, '530px');
+  timeline.completeSelection('notes', pointer(900, -100)); controls.sync();
+  assert.equal(group.host.style.left, '554px'); assert.equal(group.host.style.top, '25px');
+});

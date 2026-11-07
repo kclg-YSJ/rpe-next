@@ -102,6 +102,20 @@ export class Timeline {
     return { x: event.clientX - rectangle.left, y: event.clientY - rectangle.top };
   }
 
+  completeSelection(area, event) {
+    const canvas = area === 'notes' ? this.notesCanvas : this.eventsCanvas;
+    const point = event ? this.point(event, canvas) : area === 'notes' ? this.cursor : this.eventCursor;
+    if (!point) return;
+    const anchor = { ...point }, session = this.getSession();
+    if (area === 'notes') this.cursor = anchor; else this.eventCursor = anchor;
+    const document = area === 'notes' ? session.largeDocument : null;
+    const pending = document?.busy ? document.pending : null;
+    const finish = () => {
+      if (this.getSession() === session && (!document || session.largeDocument === document && (!pending || document.pending === pending))) this.onSelectionComplete?.(area, anchor);
+    };
+    if (pending) pending.then(finish, () => {}); else finish();
+  }
+
   rectangleSelection() {
     if (this.drag?.kind === 'rectangle') return { drag: this.drag, canvas: this.notesCanvas, area: 'notes' };
     if (this.eventInteraction.drag?.kind === 'rectangle') return { drag: this.eventInteraction.drag, canvas: this.eventsCanvas, area: 'events' };
@@ -164,6 +178,7 @@ export class Timeline {
     this.endRectanglePan();
     selection.drag.finished = true;
     if (selection.area === 'notes') this.up(event); else this.eventInteraction.up(event);
+    this.completeSelection(selection.area, event);
     return true;
   }
 
@@ -517,6 +532,7 @@ export class Timeline {
         return;
       }
       if (this.drag.kind === 'stroke' && (this.drag.tracing || Math.hypot(this.cursor.x - this.drag.start.x, this.cursor.y - this.drag.start.y) > 3)) {
+        if (!this.drag.tracing) { this.getSession().focus = 'notes'; this.getSession().eventSelection.clear(); }
         this.drag.tracing = true;
         this.getSession().multiSelectionIntent = 'notes';
         this.drag.points.push(this.cursor);
@@ -562,14 +578,14 @@ export class Timeline {
     const session = this.getSession();
     if(hit&&event.ctrlKey&&session.largeDocument?.logicalSelection){
       const selected=(session.multiLineActive?session.multiLineSelection.get(hit.lineIndex):session.selection)?.has(hit.index);
-      session.largeDocument.selectRegions([],{append:true,remove:Boolean(selected),references:[hit.item._rpenLargeRef.id]});this.changed();return;
+      session.largeDocument.selectRegions([],{append:true,remove:Boolean(selected),references:[hit.item._rpenLargeRef.id]});this.completeSelection('notes',event);this.changed();return;
     }
     if (event.ctrlKey || event.shiftKey || event.button === 1) session.multiSelectionIntent = 'notes';
-    else session.multiSelectionIntent = null;
+    else if (hit) session.multiSelectionIntent = null;
     if (event.button === 0 && hit && this.curvePick?.(hit.item, hit.index)) return;
     if (!session.multiLineActive && hit?.lineIndex !== undefined && hit.lineIndex !== session.lineIndex) session.selectLine(hit.lineIndex);
-    session.focus = 'notes';
-    if (!event.ctrlKey && !event.shiftKey && event.button !== 1) session.eventSelection.clear();
+    if (hit || event.ctrlKey || event.shiftKey || event.button === 1) session.focus = 'notes';
+    if (hit && !event.ctrlKey && !event.shiftKey && event.button !== 1) session.eventSelection.clear();
     const multiMode = session.multiLineActive;
     const multiPanel = multiMode && this.panelCount('notes') > 1;
     const panBlank = multiPanel && !hit && !this.tool && !this.pendingHold;
@@ -601,7 +617,7 @@ export class Timeline {
       const side = noteIsAbove(hit.item) ? 1 : -1;
       const hitVertical = beat => this.noteView?.flow ? this.vertical(beat, this.notesCanvas.clientHeight, side) : session.multiLineActive ? this.verticalForLine(beat, hit.lineIndex, this.notesCanvas.clientHeight) : this.vertical(beat);
       const kind = hit.item.type === 2 && Math.abs(position.y - hitVertical(hit.end)) <= 8 ? 'endTime' : hit.item.type === 2 && Math.abs(position.y - hitVertical(hit.start)) <= 8 ? 'startTime' : 'move';
-      this.drag = { kind, start: position, current: position, anchor: hit.index, lineIndex: hit.lineIndex, originSeconds: this.tempo.seconds(this.origin, this.factorForLine(hit.lineIndex ?? session.lineIndex)) };
+      this.drag = { kind, selecting: event.ctrlKey || !wasSelected, start: position, current: position, anchor: hit.index, lineIndex: hit.lineIndex, originSeconds: this.tempo.seconds(this.origin, this.factorForLine(hit.lineIndex ?? session.lineIndex)) };
       if (this.noteView?.flow) { this.drag.side = side; this.drag.distanceOffset = this.noteView.distanceAt(hit.item[kind === 'endTime' ? 'endTime' : 'startTime']) - this.noteView.pointerDistance(position.y, side); }
       session.notify();
     } else if (!multiMode) { this.drag = { kind: 'stroke', start: position, current: position, points: [position], remove: event.button === 2 }; session.notify(); }
@@ -623,7 +639,7 @@ export class Timeline {
     drag.currentWorldX = drag.current.x + this.multiLineViewportOffset(this.notesCanvas.clientWidth, 'notes');
     if (drag.startFactor !== undefined) drag.currentSeconds = this.noteView?.flow ? this.timeAt(drag.current.y) : this.tempo.seconds(this.origin, drag.startFactor) + (this.baseline() - drag.current.y) / this.scale;
     const session = this.getSession();
-    if(drag.kind==='stroke'&&drag.tracing&&session.largeDocument){this.drag=null;session.largeDocument.selectRegions(drag.largeRegions??[],{append:true,remove:drag.remove,interval:this.selectionInterval});this.changed();return;}
+    if(drag.kind==='stroke'&&drag.tracing&&session.largeDocument){this.drag=null;session.largeDocument.selectRegions(drag.largeRegions??[],{append:true,remove:drag.remove,interval:this.selectionInterval});this.completeSelection('notes',event);this.changed();return;}
     if (drag.kind === 'rectangle') {
       if (!drag.finished) { this.changed(); return; }
       const left = Math.min(drag.startWorldX ?? drag.start.x, drag.currentWorldX ?? drag.current.x);
@@ -681,6 +697,7 @@ export class Timeline {
       }
     }
     this.drag = null;
+    if (drag.kind === 'stroke' && drag.tracing || drag.selecting && !drag.scrolled && Math.hypot(drag.current.x - drag.start.x, drag.current.y - drag.start.y) <= 4) this.completeSelection('notes', event);
     if (drag.kind === 'stroke' && drag.tracing) session.notify();
     this.changed();
   }
@@ -1063,6 +1080,7 @@ export class Timeline {
       const lineSelection = session.multiEventSelection?.get(lineIndex) ?? (lineIndex === session.lineIndex ? session.eventSelection : EMPTY_SELECTION);
       const layer = this.extended ? { ...(session.chart.judgeLineList?.[lineIndex]?.extended ?? {}), paintEvents: eventListAt(session, lineIndex, 'paintEvents') } : session.chart.judgeLineList?.[lineIndex]?.eventLayers?.[this.layer] ?? {};
       types.forEach((type, channel) => {
+        const scaleRange = this.eventValueScale?.range(type, lineIndex);
         const barX = offset + channel * channelWidth + (channelWidth - barWidth) / 2;
         context.strokeStyle = '#334154'; context.beginPath(); context.moveTo(offset + channel * channelWidth, 0); context.lineTo(offset + channel * channelWidth, height); context.stroke();
         const events = layer[type] ?? EMPTY_EVENTS;
@@ -1098,10 +1116,10 @@ export class Timeline {
           if (canDrawCurves && !event.trajectory && type !== 'paintEvents' && Number.isFinite(event.start) && Number.isFinite(event.end)) {
             if (seamless) {
               const range = ranges.get(index); if (!curveBatches.has(range)) curveBatches.set(range, []);
-              curveBatches.get(range).push({ event, range, startY: bottom, endY: top });
+              curveBatches.get(range).push({ event, range: scaleRange ?? range, startY: bottom, endY: top });
             } else {
               context.strokeStyle = selected ? '#fff4c2' : '#ffe0a3';
-              drawEventCurve(context, event, ranges.get(index), rectangle, bottom, top, { steps: 24, padding: 4, lineWidth: 1.5, drawConstant: true });
+              drawEventCurve(context, event, scaleRange ?? ranges.get(index), rectangle, bottom, top, { steps: 24, padding: 4, lineWidth: 1.5, drawConstant: true });
             }
           }
         }
@@ -1198,6 +1216,7 @@ export class Timeline {
       this.drawMultiLineEvents(playBeat);
       drawClipboard(this, context, width, height, 'events');
       this.eventInteraction.draw(context, width);
+      this.eventValueScale?.draw(context, width, height);
       this.drawMultiLineBeatLabels(context, width, height, 'events');
       this.drawJudgement(context, width, height, playBeat, 'events');
       return;
@@ -1216,6 +1235,7 @@ export class Timeline {
     }
     this.eventRects = [];
     this.eventTypes.forEach((type, channel) => {
+      const scaleRange = this.eventValueScale?.range(type, session.lineIndex);
       const { channelWidth, left: horizontal = channel * channelWidth, x: barX, width: barWidth } = this.eventColumnBounds(channel, width);
       context.strokeStyle = '#334154'; context.beginPath(); context.moveTo(horizontal, 0); context.lineTo(horizontal, height); context.stroke();
       const entries = this.eventIndexes[channel].query(this.eventBeatAt(height, type), this.eventBeatAt(0, type));
@@ -1265,8 +1285,12 @@ export class Timeline {
         if (this.drawEventCurves !== false && !entry.item.trajectory && channelWidth >= (this.eventCurveThreshold ?? 24)) {
           if (seamless) {
             if (!curveBatches.has(chain)) curveBatches.set(chain, []);
-            curveBatches.get(chain).push({ event: entry.item, range: chain, startY: bottom, endY: vertical });
-          } else { drawEventCurve(context, entry.item, chain, rectangle, bottom, vertical); context.lineWidth = 1; }
+            curveBatches.get(chain).push({ event: entry.item, range: scaleRange ?? chain, startY: bottom, endY: vertical });
+          } else {
+            if (scaleRange) drawEventCurve(context, entry.item, scaleRange, rectangle, bottom, vertical, { drawConstant: true });
+            else drawEventCurve(context, entry.item, chain, rectangle, bottom, vertical);
+            context.lineWidth = 1;
+          }
         }
       }
       context.strokeStyle = '#ffa334';
@@ -1317,6 +1341,7 @@ export class Timeline {
       } context.setLineDash([]);
     }
     this.eventInteraction.draw(context, width);
+    this.eventValueScale?.draw(context, width, height);
     this.drawJudgement(context, width, height, playBeat, 'events');
   }
 

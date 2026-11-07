@@ -55,6 +55,7 @@ import { ChartDiagnostics } from '../platform/chart-diagnostics.mjs';
 import { DiagnosticsPanel } from './diagnostics-panel.mjs';
 import { DiagnosticHighlight } from './diagnostic-highlight.mjs';
 import { diagnosticKey } from '../core/chart-diagnostics.mjs';
+import { diagnosticShaderTarget } from '../application/diagnostic-target.mjs';
 import { createPlacedLine, normalizeNoteDefaults, normalizeLineDefaults } from '../core/placement-defaults.mjs';
 import { LineSwitcher } from './line-switcher.mjs';
 import { stepLine } from '../core/line-overview.mjs';
@@ -199,6 +200,10 @@ const displayFields = [
   ['judgement-width', 'judgementWidth', DEFAULT_EDITOR_PREFERENCES.judgementWidth], ['judgement-alpha', 'judgementAlpha', DEFAULT_EDITOR_PREFERENCES.judgementAlpha],
   ['rpe-event-drag', 'rpeEventDrag', DEFAULT_EDITOR_PREFERENCES.rpeEventDrag],
   ['xy-binding', 'xyBinding', DEFAULT_EDITOR_PREFERENCES.xyBinding],
+  ['movement-vector', 'movementVector', DEFAULT_EDITOR_PREFERENCES.movementVector],
+  ['event-value-scale', 'eventValueScale', DEFAULT_EDITOR_PREFERENCES.eventValueScale],
+  ['event-value-scale-snap', 'eventValueScaleSnap', DEFAULT_EDITOR_PREFERENCES.eventValueScaleSnap],
+  ['event-value-scale-step', 'eventValueScaleStep', DEFAULT_EDITOR_PREFERENCES.eventValueScaleStep],
   ['default-line-thickness', 'lineScale', 1.5],
   ['line-switcher-enabled', 'lineSwitcher', true],
   ['overlapping-line-picker', 'overlappingLinePicker', DEFAULT_EDITOR_PREFERENCES.overlappingLinePicker],
@@ -392,7 +397,13 @@ const stopMultiLineScrollDrag = event => {
 timeline.multiLineScrollElement.addEventListener('pointerup', stopMultiLineScrollDrag);
 timeline.multiLineScrollElement.addEventListener('pointercancel', stopMultiLineScrollDrag);
 timeline.multiLineScrollElement.addEventListener('lostpointercapture', stopMultiLineScrollDrag);
-const batchControls = new BatchControls(element('.stage'), timeline, () => session, () => !atHome && (!preview.visible || directPlacement.active) && !noiseEditor.active && !globalEvents.active, error => reportError(error));
+const valueScaleOptions = {
+  get enabled() { return editorPreferences.eventValueScale ?? DEFAULT_EDITOR_PREFERENCES.eventValueScale; },
+  get snap() { return editorPreferences.eventValueScaleSnap ?? DEFAULT_EDITOR_PREFERENCES.eventValueScaleSnap; },
+  get step() { return editorPreferences.eventValueScaleStep ?? DEFAULT_EDITOR_PREFERENCES.eventValueScaleStep; },
+  get available() { return !atHome && !noiseEditor.active && !globalEvents.active; },
+};
+const batchControls = new BatchControls(element('.stage'), timeline, () => session, () => !atHome && (!preview.visible || directPlacement.active) && !noiseEditor.active && !globalEvents.active, error => reportError(error), () => valueScaleOptions);
 const multiEdit = new MultiEditPanel(element('#multi-editor'), () => session, timeline, {
   close: () => activatePane('chart'), invalidate, notify: (message, severity) => notify(message, severity),
 });
@@ -943,6 +954,10 @@ function openTimelineContextMenu(event, canvas = null, markerIndex = null) {
     const point = entry && !preview.visible ? { x: source.left + timeline.noteHorizontal(entry.note.positionX, entry.lineIndex), y: source.top + timeline.noteVertical(entry.note, 'startTime', entry.lineIndex) } : { x: event.clientX, y: event.clientY };
     closeTimelineContextMenu(); eventSampler.finish(false); speedCurve.open(point);
   };
+  const scaleItem = element('#timeline-event-value-scale');
+  scaleItem.hidden = markerIndex !== null || canvas !== timeline.eventsCanvas || !valueScaleOptions.enabled || noiseEditor.active || globalEvents.active;
+  scaleItem.disabled = session.focus !== 'events' || !(session.eventSelection.size || [...session.multiEventSelection.values()].some(selection => selection.size));
+  scaleItem.onclick = () => { closeTimelineContextMenu(); batchControls.enterValueScale(); };
   element('#timeline-selection-interval').textContent = t('app.s3f3831b', { p0: timeline.selectionInterval ?? 1 });
   const selections = session.multiLineActive && session.multiLineMode === 'events'
     ? [...session.multiEventSelection].flatMap(([lineIndex, keys]) => [...keys].map(key => ({ lineIndex, key })))
@@ -1168,6 +1183,7 @@ function renderSession() {
   session.dragSensitivity = Number(element('#event-drag-sensitivity').value);
   session.rpeEventDrag = timeline.rpeEventDrag;
   session.xyBinding = element('#xy-binding').checked;
+  session.movementVector = !noiseEditor.active && !globalEvents.active && !preview.visible && element('#movement-vector').checked;
   updateLineInfo();
   session.eventWheelSteps = Object.fromEntries(['moveXEvents', 'moveYEvents', 'rotateEvents', 'alphaEvents', 'speedEvents', 'scaleXEvents', 'scaleYEvents'].flatMap((key, index) => Number.isFinite(preferences.originalSettings.scrollValueIncrement?.[index]) ? [[key, preferences.originalSettings.scrollValueIncrement[index]]] : []));
   timeline.origin = currentBeat();
@@ -1889,6 +1905,8 @@ function deleteDiagnosticIssue(issue) {
 function renderDiagnostics() { diagnostics.update(); diagnosticPanel.render(); }
 function locateDiagnosticIssue(issue) {
   if (issue.asset && !issue.shaderParameter) { activatePane('assets'); assetLibrary.selected = assetPath(assets, issue.asset, chartName); assetLibrary.render(); return; }
+  const shaderTarget = diagnosticShaderTarget(session.chart, issue);
+  if (shaderTarget) issue = { ...issue, line: shaderTarget.lineIndex, extended: true };
   diagnosticNavigation = true;
   let geometry;
   try {
@@ -1910,18 +1928,7 @@ function locateDiagnosticIssue(issue) {
       geometry = () => [noiseEditor.diagnosticBounds(issue.noiseArea, issue.noiseTrack, issue.index)].filter(Boolean);
     } else if (session.chart.judgeLineList[issue.line]) {
       if (noiseEditor.active) noiseEditor.close(); if (globalEvents.active) globalEvents.close();
-      const shaderIndex = issue.path.match(/^effects\.(\d+)/)?.[1];
-      let shader;
-      const parameterMatch = issue.shaderParameter && issue.path.match(/^(effects|shaderEvents|META\.effects)\[(\d+)\]/);
-      if (parameterMatch) {
-        const roots = parameterMatch[1] === 'META.effects' ? session.chart.META?.effects : session.chart[parameterMatch[1]], raw = roots?.[Number(parameterMatch[2])];
-        const index = shaderEvents(session.chart, issue.line).findIndex(event => event.vars === raw?.vars && event.shader === raw?.shader && event.order === raw?.order); if (index >= 0) shader = [null, 'paintEvents', String(index)];
-      }
-      if (shaderIndex !== undefined) {
-        const roots = [session.chart.effects, session.chart.shaderEvents, session.chart.META?.effects].filter(Array.isArray).flat();
-        const raw = roots[Number(shaderIndex)], events = shaderEvents(session.chart, issue.line);
-        const index = events.findIndex(event => event.vars === raw?.vars && event.shader === raw?.shader && event.order === raw?.order); if (index >= 0) shader = [null, 'paintEvents', String(index)];
-      }
+      const shader = shaderTarget ? [null, 'paintEvents', String(shaderTarget.index)] : null;
       const match = shader ?? issue.path.match(/^(\w+Events)\[(\d+)\]/) ?? (issue.eventType ? [null, issue.eventType, null] : null), noteIndex = issue.path.match(/^notes\[(\d+)\]/)?.[1], note = noteIndex !== undefined ? session.chart.judgeLineList[issue.line].notes[Number(noteIndex)] : null;
       const area = match ? 'events' : 'notes';
       if (session.multiLineActive && (session.multiLineMode !== area || !session.isTargetLine(issue.line))) session.setMultiLineEnabled(false);
@@ -2116,6 +2123,7 @@ window.addEventListener('keydown', async event => {
         session.multiLineSelection = new Map(session.targetLineIndices.map(lineIndex => [lineIndex, new Set((session.chart.judgeLineList?.[lineIndex]?.notes ?? []).map((note, index) => index))]));
         session.selection = new Set(session.multiLineSelection.get(session.lineIndex) ?? []);
       } else session.selection = new Set(session.notes.map((note, index) => index));
+      timeline.completeSelection(session.focus);
       session.notify();
     }
     else if (action === 'Copy') await copySelection();
@@ -2487,6 +2495,7 @@ function applyDisplaySettings() {
   timeline.seamlessEvents = element('#seamless-events').checked;
   timeline.rpeEventDrag = globalEvents.timeline.rpeEventDrag = element('#rpe-event-drag').checked;
   session.xyBinding = element('#xy-binding').checked;
+  session.movementVector = !noiseEditor.active && !globalEvents.active && !preview.visible && element('#movement-vector').checked;
   if (!timeline.rpeEventDrag) setEventEndpointDragHeld(false);
   timeline.drawEventCurves = element('#draw-event-curves').checked;
   timeline.selectionInterval = globalEvents.timeline.selectionInterval = Number(element('#selection-interval').value);
@@ -2535,6 +2544,7 @@ for (const [id, key] of displayFields.filter(([, key]) => key !== 'selectionInte
   else if (control.value.trim() && control.validity.valid && Number.isFinite(Number(control.value))) editorPreferences[key] = Number(control.value);
   else return;
   applyDisplaySettings(); persistEditor();
+  if (key === 'movementVector') session.notify();
 });
 timeline.eventPlacementType = timeline.eventTypes[0];
 

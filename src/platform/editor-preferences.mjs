@@ -13,7 +13,8 @@ Object.assign(ranges, { analysisAlpha: [0.02, 1], analysisWidth: [0.2, 1], lineS
 Object.assign(ranges, { judgementWidth: [0.5, 12], judgementAlpha: [0, 1] });
 Object.assign(ranges, { placementOpacity: [0, 1] });
 Object.assign(ranges, { noteSpacing: [0.05, 10], notesOnlyNoteScale: [0.1, 3] });
-const flags = ['snapX', 'realtime', 'hitEnabled', 'allLines', 'preservePitch', 'autoSave', 'autoplayView', 'highlight', 'drawEventCurves', 'seamlessEvents', 'seamlessNoiseAreas', 'notesOnly', 'showGameUI', 'viewportOverflow', 'lineNumbers', 'lineArrows', 'lineTint', 'mergeLineNumbers', 'pickPreviewLines', 'pickPreviewNoiseAreas', 'tipsEnabled', 'successNotifications', 'clipboardHistory', 'lineSwitcher', 'analysisEnabled', 'noteSourceHover', 'sampleAutoFit', 'pairedMovementSampling', 'wheelStopAtAudioStart', 'rpeEventDrag', 'xyBinding'];
+Object.assign(ranges, { eventValueScaleStep: [.001, 10] });
+const flags = ['snapX', 'realtime', 'hitEnabled', 'allLines', 'preservePitch', 'autoSave', 'autoplayView', 'highlight', 'drawEventCurves', 'seamlessEvents', 'seamlessNoiseAreas', 'notesOnly', 'showGameUI', 'viewportOverflow', 'lineNumbers', 'lineArrows', 'lineTint', 'mergeLineNumbers', 'pickPreviewLines', 'pickPreviewNoiseAreas', 'tipsEnabled', 'successNotifications', 'clipboardHistory', 'lineSwitcher', 'analysisEnabled', 'noteSourceHover', 'sampleAutoFit', 'pairedMovementSampling', 'wheelStopAtAudioStart', 'rpeEventDrag', 'xyBinding', 'movementVector'];
 export function normalizeEditorPreferences(value) {
   const result = {};
   if (!value || typeof value !== 'object') return result;
@@ -28,7 +29,7 @@ export function normalizeEditorPreferences(value) {
   for (const key of ['hitTapDelay', 'hitDragDelay', 'hitFlickDelay']) if (Number.isFinite(value[key])) result[key] = value[key];
   for (const [key, [minimum, maximum]] of Object.entries(ranges)) if (Number.isFinite(value[key])) result[key] = Math.max(minimum, Math.min(maximum, value[key]));
   if (result.division) result.division = Math.round(result.division);
-  for (const key of [...flags, 'forceSimpleNoise', 'includeBackupCharts', 'overlappingLinePicker', 'directPlacement']) if (typeof value[key] === 'boolean') result[key] = value[key];
+  for (const key of [...flags, 'forceSimpleNoise', 'includeBackupCharts', 'overlappingLinePicker', 'directPlacement', 'eventValueScale', 'eventValueScaleSnap']) if (typeof value[key] === 'boolean') result[key] = value[key];
   if (['compact', 'icons', 'wide'].includes(value.toolbarMode)) result.toolbarMode = value.toolbarMode;
   if (value.analysisMode === 'waveform' || value.analysisMode === 'spectrum') result.analysisMode = value.analysisMode;
   if (value.wheelInputMode === 'mouse' || value.wheelInputMode === 'trackpad') result.wheelInputMode = value.wheelInputMode;

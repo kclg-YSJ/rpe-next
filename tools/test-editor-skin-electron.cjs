@@ -254,7 +254,7 @@ app.whenReady().then(async () => {
     await win.reload(); await until(() => document.documentElement.dataset.editorSkin === 'test-skin');
     assert.equal(await run(() => getComputedStyle(document.querySelector('rpen-skin-recovery')).display), 'none');
     // Fresh startup retains Inkline as the only builtin.
-    assert.deepEqual(await run(async () => (await (await fetch('./assets/editor-skins/index.json')).json()).map(entry => entry.directory)), ['inkline']);
+    assert.deepEqual(await run(async () => (await (await fetch('./assets/editor-skins/index.json')).json()).map(entry => entry.directory)), ['inkline', 'rpe-classic']);
     await run(() => document.querySelector('#new').click()); await wait(200);
     for (const [width, height] of [[1000, 680], [600, 800]]) {
       win.setContentSize(width, height); await wait(160);

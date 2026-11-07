@@ -34,5 +34,76 @@
       "icons/undo.svg",
       "skin.json"
     ]
+  },
+  {
+    "directory": "rpe-classic",
+    "files": [
+      "ASSETS.md",
+      "LICENSE",
+      "LICENSE-OFL.txt",
+      "NOTICE",
+      "README.md",
+      "images/textbox.png",
+      "preview.svg",
+      "skin.json"
+    ],
+    "shared": {
+      "fonts/ui.woff": "editor-skins/inkline/fonts/ui.woff",
+      "icons/back-muted.svg": "editor-skins/inkline/icons/back-muted.svg",
+      "icons/check-dark.svg": "editor-skins/inkline/icons/check-dark.svg",
+      "icons/chevron-muted.svg": "editor-skins/inkline/icons/chevron-muted.svg",
+      "icons/clipboard-clear.svg": "editor-skins/inkline/icons/clipboard-clear.svg",
+      "icons/copy.svg": "editor-skins/inkline/icons/copy.svg",
+      "icons/cursor-gold.svg": "editor-skins/inkline/icons/cursor-gold.svg",
+      "icons/cursor.svg": "editor-skins/inkline/icons/cursor.svg",
+      "icons/cut.svg": "editor-skins/inkline/icons/cut.svg",
+      "icons/delete.svg": "editor-skins/inkline/icons/delete.svg",
+      "icons/gamepad-gold.svg": "editor-skins/inkline/icons/gamepad-gold.svg",
+      "icons/gamepad.svg": "editor-skins/inkline/icons/gamepad.svg",
+      "icons/help.svg": "editor-skins/inkline/icons/help.svg",
+      "icons/mirror.svg": "editor-skins/inkline/icons/mirror.svg",
+      "icons/paste.svg": "editor-skins/inkline/icons/paste.svg",
+      "icons/pause-dark.svg": "editor-skins/inkline/icons/pause-dark.svg",
+      "icons/play-dark.svg": "editor-skins/inkline/icons/play-dark.svg",
+      "icons/preview-gold.svg": "editor-skins/inkline/icons/preview-gold.svg",
+      "icons/preview.svg": "editor-skins/inkline/icons/preview.svg",
+      "icons/redo.svg": "editor-skins/inkline/icons/redo.svg",
+      "icons/rewind.svg": "editor-skins/inkline/icons/rewind.svg",
+      "icons/settings.svg": "editor-skins/inkline/icons/settings.svg",
+      "icons/single-gold.svg": "editor-skins/inkline/icons/single-gold.svg",
+      "icons/speaker-gold.svg": "editor-skins/inkline/icons/speaker-gold.svg",
+      "icons/speaker.svg": "editor-skins/inkline/icons/speaker.svg",
+      "icons/split.svg": "editor-skins/inkline/icons/split.svg",
+      "icons/step-muted.svg": "editor-skins/inkline/icons/step-muted.svg",
+      "icons/target.svg": "editor-skins/inkline/icons/target.svg",
+      "icons/toolbar-mode.svg": "editor-skins/inkline/icons/toolbar-mode.svg",
+      "icons/undo.svg": "editor-skins/inkline/icons/undo.svg"
+    },
+    "deferred": true,
+    "metadata": {
+      "protocol": "rpen-editor-skin",
+      "version": 1,
+      "id": "rpe-classic",
+      "name": {
+        "zh-CN": "RPE Classic · 经典编辑器",
+        "en-US": "RPE Classic · Editor"
+      },
+      "author": "cmdysj",
+      "description": {
+        "zh-CN": "经典 RPE 风格的编辑器界面。内置版选择后自动启用配套经典编辑布局，停用时以墨线为回退外观，不改变音符皮肤。独立导出版需要同时应用皮肤并启用同版本配套模组。",
+        "en-US": "A classic RPE editor interface. The bundled version loads its matching layout automatically when selected, with an Inkline fallback when disabled. Portable exports require the matching skin and layout mod together. Does not change note skins."
+      },
+      "colorScheme": "dark",
+      "skinVersion": "0.2.5",
+      "compatibility": {
+        "minApi": 3,
+        "maxApi": 3
+      },
+      "license": {
+        "zh-CN": "代码与原创图形使用PolyForm Noncommercial 1.0.0；旧RPE界面图片保留其原有权利，经典字体读取宿主资源。素材来源见NOTICE、ASSETS.md，墨线字体按OFL 1.1。 墨线字体、图标与样式沿用内置 Inkline。界面字体为 Noto Sans SC 子集（© 2014-2021 Adobe，SIL Open Font License 1.1，完整许可见字体内嵌元数据）；图标与样式为本皮肤原创。",
+        "en-US": "Code and original graphics: PolyForm Noncommercial 1.0.0. Original RPE UI images retain their existing rights; see NOTICE and ASSETS.md. The classic font is supplied by the host. Inkline font, icons and styles are reused from the built-in skin. The interface font is a Noto Sans SC subset (© 2014-2021 Adobe, SIL Open Font License 1.1; the full license is embedded in the font metadata); icons and styles are original to this skin."
+      }
+    },
+    "bytes": 3033641
   }
 ]

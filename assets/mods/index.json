@@ -1,6 +1,189 @@
 [
-  { "directory": "sky-dodge", "files": ["mod.json", "main.mjs", "collision.mjs", "model.mjs", "aircraft.mjs", "pickups.mjs", "style.css"] },
-  { "directory": "pixel-miner", "files": ["mod.json", "main.mjs", "model.mjs", "pixels.mjs", "controls.mjs", "custody.mjs", "sound.mjs", "style.css"] },
-  { "directory": "spatial-camera", "files": ["mod.json", "main.mjs", "camera.mjs", "events.mjs", "projection.mjs", "sprites.mjs", "inspector.mjs", "settings.mjs", "scene.mjs", "studio.mjs", "style.css", "README.zh-CN.md"] },
-  { "directory": "rpen-mod-market", "files": ["mod.json", "main.mjs", "transport.mjs", "client.mjs", "view.mjs", "text.mjs", "README.zh-CN.md"] }
+  {
+    "directory": "sky-dodge",
+    "files": [
+      "mod.json",
+      "main.mjs",
+      "collision.mjs",
+      "model.mjs",
+      "aircraft.mjs",
+      "pickups.mjs",
+      "style.css"
+    ]
+  },
+  {
+    "directory": "pixel-miner",
+    "files": [
+      "mod.json",
+      "main.mjs",
+      "model.mjs",
+      "pixels.mjs",
+      "controls.mjs",
+      "custody.mjs",
+      "sound.mjs",
+      "style.css"
+    ]
+  },
+  {
+    "directory": "spatial-camera",
+    "files": [
+      "mod.json",
+      "main.mjs",
+      "camera.mjs",
+      "events.mjs",
+      "projection.mjs",
+      "sprites.mjs",
+      "inspector.mjs",
+      "settings.mjs",
+      "scene.mjs",
+      "studio.mjs",
+      "style.css",
+      "README.zh-CN.md"
+    ]
+  },
+  {
+    "directory": "rpen-mod-market",
+    "files": [
+      "mod.json",
+      "main.mjs",
+      "transport.mjs",
+      "client.mjs",
+      "view.mjs",
+      "text.mjs",
+      "README.zh-CN.md"
+    ]
+  },
+  {
+    "directory": "rpe-classic-layout",
+    "files": [
+      "ASSETS.md",
+      "LICENSE",
+      "LICENSE-OFL.txt",
+      "NOTICE",
+      "README.md",
+      "audio-geometry.mjs",
+      "batch-panels.mjs",
+      "classic-canvas.json",
+      "compatibility.mjs",
+      "density.mjs",
+      "display-settings.mjs",
+      "easing-draft.mjs",
+      "event-curves.mjs",
+      "event-painter.mjs",
+      "event-renderer.mjs",
+      "fallback-appearance.mjs",
+      "footer-info.mjs",
+      "geometry.mjs",
+      "images/arrowdown.png",
+      "images/arrowup.png",
+      "images/ball.png",
+      "images/copy.png",
+      "images/direct-placement.svg",
+      "images/edit.png",
+      "images/event.png",
+      "images/godown.png",
+      "images/goup.png",
+      "images/help.png",
+      "images/heng.png",
+      "images/info.png",
+      "images/jump.png",
+      "images/layout.png",
+      "images/mask.png",
+      "images/more.png",
+      "images/mute.png",
+      "images/offset.png",
+      "images/operation.png",
+      "images/paste.png",
+      "images/pause1.png",
+      "images/play.png",
+      "images/ratio.png",
+      "images/replay.png",
+      "images/return.png",
+      "images/setting.png",
+      "images/shear.png",
+      "images/showback.png",
+      "images/shrink.png",
+      "images/shu.png",
+      "images/sliderbar.png",
+      "images/speed.png",
+      "images/switch.png",
+      "images/textbox.png",
+      "images/translate.png",
+      "interface-assets.mjs",
+      "interface.mjs",
+      "layout.css",
+      "main.mjs",
+      "messages.mjs",
+      "mod.json",
+      "mode-geometry.mjs",
+      "multi-note-renderer.mjs",
+      "ownership.mjs",
+      "property-easing.mjs",
+      "property-panels.mjs",
+      "property-pointer.mjs",
+      "selection-escape.mjs",
+      "timeline-surfaces.mjs"
+    ],
+    "deferred": true,
+    "metadata": {
+      "protocol": "rpen-mod",
+      "api": 1,
+      "id": "rpe-classic-layout",
+      "name": {
+        "zh-CN": "RPE Classic · 经典编辑布局",
+        "en-US": "RPE Classic · Editor layout"
+      },
+      "version": "0.2.5",
+      "x-tested-host": {
+        "name": "Re:PhiEdit Next",
+        "version": "0.13.2",
+        "revision": "a14101a0f642083830ab950cc62c12331adab3d4",
+        "checkedOn": "2026-11-07",
+        "sourceState": "Includes local event value scaling, movement vectors, and spatial surface updates",
+        "editorSkinApi": 3,
+        "modApi": 1
+      },
+      "author": "cmdysj",
+      "description": {
+        "zh-CN": "RPE Classic 编辑器皮肤的配套布局。内置版随皮肤选择自动启停；也可在此启用或停用。独立导出版需要同时应用同版本皮肤。保留原生编辑事务，不修改音符皮肤。",
+        "en-US": "The companion layout for the RPE Classic editor skin. The bundled layout follows skin selection and can also be enabled or disabled here. Portable exports require the matching skin. Preserves native editing transactions and note skins."
+      },
+      "entry": "main.mjs",
+      "dependencies": [],
+      "conflicts": [
+        "pixel-miner"
+      ],
+      "settings": {
+        "event-curve-width": {
+          "type": "number",
+          "label": {
+            "zh-CN": "事件曲线宽度",
+            "en-US": "Event curve width"
+          },
+          "default": 4.5,
+          "min": 0.5,
+          "max": 12,
+          "step": 0.25
+        },
+        "classic-layout": {
+          "type": "boolean",
+          "label": {
+            "zh-CN": "启用经典布局",
+            "en-US": "Classic layout"
+          },
+          "default": true
+        },
+        "native-layout-key": {
+          "type": "shortcut",
+          "label": {
+            "zh-CN": "临时切换墨线布局",
+            "en-US": "Toggle Inkline layout"
+          },
+          "default": "CTRL&ALT&L"
+        }
+      },
+      "x-bundled-revision": "rpen-2026-11-07"
+    },
+    "bytes": 383247
+  }
 ]

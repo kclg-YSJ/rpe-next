@@ -5,6 +5,8 @@ import { builtinMods,readMods,storeMod,deleteMod,importMod,exportMod } from '../
 import { download } from '../platform/files.mjs';
 import { installModApi } from './mod-api.mjs';
 import { localizedValue, t } from '../i18n.mjs';
+import { loadBuiltinPackage } from '../platform/builtin-packages.mjs';
+import { BuiltinSkinLayout } from './builtin-skin-layout.mjs';
 
 const ENABLED='rpe-next-mod-enabled-v1',OPTIONS='rpe-next-mod-options-v1',BOOT='rpe-next-mod-boot-v1';
 const read=(key,fallback)=>{try{return JSON.parse(localPreferences.getItem(key))??fallback;}catch{return fallback;}};
@@ -16,7 +18,7 @@ export class ModManager {
     Object.assign(this,{editor,notify,invalidate});this.records=new Map();this.errors=new Map();const options=read(OPTIONS,{});this.options=Object.assign(Object.create(null),object(options)?options:{});this.desired=new Set(Array.isArray(read(ENABLED,[]))?read(ENABLED,[]):[]);this.selected=null;this.busy=false;
     this.runtime=new ModRuntime({editor,notify,invalidate,changed:()=>this.updateStatus()});this.runtime.emergency=()=>this.disableAll(true);this.runtime.installInput();
     this.render();document.querySelector('#mods-open').onclick=()=>this.open();document.querySelector('#mods-status').onclick=()=>this.open();
-    window.rpenMods={apiVersion:MOD_API_VERSION,editor,runtime:this.runtime,manager:this,resolveModule:(...args)=>this.runtime.resolveModule(...args),disableAll:()=>this.disableAll(true)};installModApi(window.rpenMods);this.ready=this.load();
+    window.rpenMods={apiVersion:MOD_API_VERSION,editor,runtime:this.runtime,manager:this,resolveModule:(...args)=>this.runtime.resolveModule(...args),disableAll:()=>this.disableAll(true)};installModApi(window.rpenMods);this.skinLayout=new BuiltinSkinLayout(this);this.ready=this.load();this.skinLayout.start();
   }
   async load(){
     this.runtime.events.addEventListener('mod:unloaded',event=>{const {id,reason,error}=event.detail;if(reason==='error'){this.errors.set(id,error);this.desired.delete(id);this.persist();this.notify(t('mod-manager.s86b2076')+id+t('mod-manager.s2112669'),'warning');if(this.dialog.open)this.renderList();}const loaded=[...this.runtime.loaded.values()].filter(state=>state.record.manifest.dependencies.includes(id));for(const state of loaded)this.disable(state.id).catch(error=>this.notify(error.message,'error'));});
@@ -25,7 +27,7 @@ export class ModManager {
       for(const stored of await readMods())try{const record=parseModPackage(new Map(stored.files));if(!this.records.has(record.manifest.id))this.records.set(record.manifest.id,record);}catch(error){this.errors.set(stored.id,error.message);}
       const safe=new URL(location.href).searchParams.get('mods')==='off';const interrupted=read(BOOT,null);
       if(safe||interrupted){this.safe=true;this.banner.textContent=safe?t('mod-manager.se5ac3ae'):t('mod-manager.s7363c83');this.notify(this.banner.textContent,'warning');localPreferences.removeItem(BOOT);}
-      else {for(const id of [...this.desired])if(this.records.has(id))try{await this.enable(id,false);}catch(error){this.desired.delete(id);this.errors.set(id,error.message);this.notify(t('mod-manager.s10851d3', { p0: id, p1: error.message }),'error');}else this.desired.delete(id);this.persist();}
+      else {for(const id of [...this.desired])if(this.records.has(id))try{if(!this.skinLayout.isCompanion(id))await this.enable(id,false);}catch(error){this.desired.delete(id);this.errors.set(id,error.message);this.notify(t('mod-manager.s10851d3', { p0: id, p1: error.message }),'error');}else this.desired.delete(id);this.persist();}
       this.updateStatus();this.renderList();
     }catch(error){this.banner.textContent=t('mod-manager.s39621fa')+error.message;this.notify(this.banner.textContent,'warning');}
   }
@@ -53,8 +55,9 @@ export class ModManager {
   }
   renderDetails(){
     this.details.replaceChildren();const record=this.records.get(this.selected);if(!record){this.details.append(text('p',t('mod-manager.saf6ee2c')));return;}const {manifest}=record;const active=this.runtime.loaded.get(manifest.id);
+    if(record.deferred)loadBuiltinPackage(record).then(()=>{if(this.selected===record.manifest.id)this.renderDetails();}).catch(error=>{this.errors.set(manifest.id,error.message);this.message.textContent=error.message;});
     this.details.append(text('h3',localizedValue(manifest.name)),text('p',localizedValue(manifest.description)),text('p',`${manifest.id} · v${manifest.version} · API ${manifest.api} · ${localizedValue(manifest.author)}`,'hint'));
-    const actions=document.createElement('div');actions.className='mod-manager-toolbar';const toggle=button(active?t('mod-manager.s0880212'):t('mod-manager.sdf29e88'),()=>this.toggle(manifest.id));toggle.className=active?'':'primary';toggle.disabled=this.busy;actions.append(toggle,button(t('mod-manager.s6630c53'),()=>download(exportMod(record),manifest.id+'.rpenmod')));
+    const actions=document.createElement('div');actions.className='mod-manager-toolbar';const toggle=button(active?t('mod-manager.s0880212'):t('mod-manager.sdf29e88'),()=>this.toggle(manifest.id));toggle.className=active?'':'primary';toggle.disabled=this.busy;actions.append(toggle,button(t('mod-manager.s6630c53'),async()=>{try{await loadBuiltinPackage(record);download(exportMod(record),manifest.id+'.rpenmod');}catch(error){this.notify(error.message,'error');}}));
     if(!record.builtin)actions.append(button(t('mod-manager.s6567e7a'),()=>this.remove(manifest.id)));this.details.append(actions);
     if(this.errors.has(manifest.id))this.details.append(text('pre',this.errors.get(manifest.id),'mod-error'));
     if(manifest.dependencies.length)this.details.append(text('p',t('mod-manager.s8b3887b')+manifest.dependencies.join('、'),'hint'));if(manifest.conflicts.length)this.details.append(text('p',t('mod-manager.s4150629')+manifest.conflicts.join('、'),'hint'));
@@ -76,18 +79,20 @@ export class ModManager {
   settingsFor(record){const id=record.manifest.id;if(!Object.hasOwn(this.options,id)||!object(this.options[id]))this.options[id]=Object.create(null);const values=this.options[id];for(const [key,definition]of Object.entries(record.manifest.settings)){try{if(!Object.hasOwn(values,key))throw Error();modSettingValue(definition,values[key],key);}catch{values[key]=structuredClone(definition.default);}}return values;}
   async setSetting(id,key,value){const record=this.records.get(id);if(!record)throw Error(t('mod-manager.s9898e8d'));modSettingValue(Object.hasOwn(record.manifest.settings,key)?record.manifest.settings[key]:null,value,key);this.settingsFor(record)[key]=value;localPreferences.setItem(OPTIONS,JSON.stringify(this.options));const state=this.runtime.loaded.get(id);if(state){state.settings=this.options[id];this.runtime.emit('settings:'+id,{key,value});}}
   persist(){localPreferences.setItem(ENABLED,JSON.stringify([...this.desired]));localPreferences.setItem(OPTIONS,JSON.stringify(this.options));}
-  async enable(id,persist=true,chain=new Set()){
+  async enable(id,persist=true,chain=new Set(),transient=false){
     if(this.runtime.loaded.has(id)){await this.runtime.loaded.get(id).promise;return;}if(chain.has(id))throw Error(t('mod-manager.se372ea7')+[...chain,id].join(' → '));const record=this.records.get(id);if(!record)throw Error(t('mod-manager.s274b62e')+id);chain.add(id);
+    await loadBuiltinPackage(record);
+    if(!transient)await this.skinLayout?.prepare(id);
     const checkConflicts=()=>{for(const conflict of record.manifest.conflicts)if(this.runtime.loaded.has(conflict))throw Error(t('mod-manager.s08f0345')+conflict);for(const state of this.runtime.loaded.values())if(state.record.manifest.conflicts.includes(id))throw Error(t('mod-manager.s08f0345')+state.id);};checkConflicts();
-    for(const dependency of record.manifest.dependencies)await this.enable(dependency,persist,new Set(chain));
+    for(const dependency of record.manifest.dependencies)await this.enable(dependency,persist,new Set(chain),transient);
     checkConflicts();
     localPreferences.setItem(BOOT,JSON.stringify({id,time:Date.now()}));
-    try{const state=await this.runtime.load(record,this.settingsFor(record),(key,value)=>this.setSetting(id,key,value));if(state?.status==='loaded'&&this.runtime.loaded.get(id)===state){this.errors.delete(id);this.desired.add(id);if(persist)this.persist();}}
+    try{const state=await this.runtime.load(record,this.settingsFor(record),(key,value)=>this.setSetting(id,key,value));if(state?.status==='loaded'&&this.runtime.loaded.get(id)===state){this.errors.delete(id);if(!transient)this.desired.add(id);if(persist)this.persist();}}
     finally{localPreferences.removeItem(BOOT);}this.updateStatus();
   }
-  async disable(id){for(const state of [...this.runtime.loaded.values()])if(state.record.manifest.dependencies.includes(id))await this.disable(state.id);await this.runtime.unload(id);this.desired.delete(id);this.persist();this.updateStatus();}
+  async disable(id){this.skinLayout?.disabled(id);for(const state of [...this.runtime.loaded.values()])if(state.record.manifest.dependencies.includes(id))await this.disable(state.id);await this.runtime.unload(id);this.desired.delete(id);this.persist();this.updateStatus();}
   async toggle(id){if(this.busy)return;this.busy=true;try{if(this.runtime.loaded.has(id))await this.disable(id);else await this.enable(id);this.message.textContent=this.runtime.loaded.has(id)?t('mod-manager.s5bb376d'):t('mod-manager.sbc2295f');}catch(error){this.errors.set(id,error.stack??error.message);this.notify(error.message,'error');}finally{this.busy=false;this.renderList();}}
-  async disableAll(emergency=false){this.desired.clear();this.persist();for(const id of [...this.runtime.loaded.keys()].reverse())await this.runtime.unload(id);localPreferences.removeItem(BOOT);this.updateStatus();if(this.dialog.open)this.renderList();if(emergency)this.notify(t('mod-manager.sb66f83f'),'warning');}
+  async disableAll(emergency=false){this.skinLayout?.disabled();this.desired.clear();this.persist();for(const id of [...this.runtime.loaded.keys()].reverse())await this.runtime.unload(id);localPreferences.removeItem(BOOT);this.updateStatus();if(this.dialog.open)this.renderList();if(emergency)this.notify(t('mod-manager.sb66f83f'),'warning');}
   updateStatus(){const count=[...this.runtime.loaded.values()].filter(state=>state.status==='loaded').length;const node=document.querySelector('#mods-status');node.hidden=count===0;node.textContent=t('mod-manager.s0e1a497', { p0: count });node.title=t('mod-manager.sc43bb7d');this.invalidate();}
   async review(record){
     this.warning.replaceChildren(text('h2',t('mod-manager.se2ecae2')),text('p',`${localizedValue(record.manifest.name)} · ${record.manifest.version} · ${localizedValue(record.manifest.author)}`),text('p',t('mod-manager.s8d616da')),text('p',t('mod-manager.sc2a5ae9')));

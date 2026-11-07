@@ -1,0 +1,286 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 960 540"><metadata id="distribution-licenses">Required Notice: Copyright 2026 cmdysj.
+Required Notice: Re:PhiEdit Next is reconstructed from the original Re:PhiEdit (RPE) project using AI (GPT).
+
+RPE Classic 0.2.5 is an unofficial editor skin and layout mod for Re:PhiEdit Next.
+The layout, original direct-placement SVG and integration code use PolyForm Noncommercial License 1.0.0; see LICENSE.
+Inkline UI styles, icons and its Noto Sans SC subset are reused from Re:PhiEdit Next's built-in Inkline skin, with attribution to cmdysj.
+The Noto Sans SC subset retains Adobe copyright and SIL Open Font License 1.1; see LICENSE-OFL.txt and the embedded font metadata.
+Original RPE toolbar icons, slider/control images and the event-bar texture are reused without visual changes at the user's request. See ASSETS.md for their relative source paths and checksums. These resources retain their original rights and are not relicensed by the code license.
+The classic font is read from the user's installed editor. No legacy TTF is redistributed. Host resources remain subject to their original rights and licenses.
+The preview is a generated interface illustration. No chart, music, cover, note skin, user profile, credentials or personal test data is included.
+
+# 素材来源 / Asset provenance
+
+工具栏图标、滑条/控件图片和事件条纹理按用户要求直接复用原Re:PhiEdit (RPE)素材，保持原图像字节。原有权利归原作者所有；代码许可不改变这些素材的权利。event.png仅作事件条纹理使用，不注册或替换音符皮肤。
+Original Re:PhiEdit (RPE) UI images are reused unchanged. Their existing rights remain with the original authors. The code license does not relicense them. event.png is an event-bar UI texture; no note skin is installed or replaced.
+
+| 包内文件 / File | 相对来源 / Relative source | SHA-256 |
+| --- | --- | --- |
+| images/arrowdown.png | RPE Resources/Texture/arrowdown.png | 6035c39bdcce48fa2b2e7233cc956247c3bd05566ec980c61e34c0a93e99435c |
+| images/arrowup.png | RPE Resources/Texture/arrowup.png | e0106730ea18f585eafcfbfe58e53fb77b2e8e5cf8a88923f00c5b33a5221fd0 |
+| images/ball.png | RPE Resources/Texture/ball.png | 7bfd0283379bb885e4665c15bdabde205b2908a6570fd7a0c51b1061a712e319 |
+| images/copy.png | RPE Resources/Texture/icon/copy.png | a54a6bf449569bc76bbf2f9e562d5bc9d39ccdb84cb86838ecefb35dfd42cc19 |
+| images/edit.png | RPE Resources/Texture/icon/edit.png | f55d8f55a18f896c4a28f0a3a7e6b4b03c197896a6e7fe75dfc19b041a7d03b9 |
+| images/event.png | RPE Resources/Texture/Hold4.png | 9377fbc430224652f64c58df426690e021f09b76217e2607779938a0cc41f860 |
+| images/godown.png | RPE Resources/Texture/icon/godown.png | dcf126b3acb42a45dee3f26cc36c9b8febb474a3757124131c3c80293bc26cf0 |
+| images/goup.png | RPE Resources/Texture/icon/goup.png | ed9b8939d13e8010e3d5e3fe6f739c7e047833739f2229cf37ab63f2e6e7e4cf |
+| images/help.png | RPE Resources/Texture/icon/help.png | 7860324a35a95e24f574c8dbf7466b70cd59f85c2f8c81f2f8649efafff3412f |
+| images/heng.png | RPE Resources/Texture/icon/heng.png | f61dd5fdb456276ab9d46d9b16858690a718e9efc540347a892d7ca2f2a4c84c |
+| images/info.png | RPE Resources/Texture/icon/info.png | 925a3eb3d27d8fcc1fdc57525e23c36732a12dc23506ffa44408e39ac81dbee3 |
+| images/jump.png | RPE Resources/Texture/icon/jump.png | 41c6a222329b5ff1575724e5bbf531aab0eb46d61aac3e08d3c3bbbdd4031c87 |
+| images/layout.png | RPE Resources/Texture/icon/layout.png | 11b439d221d3613e987a6f5d4109870f7241c4a30dcc495d77c8a1eea09671df |
+| images/mask.png | RPE Resources/Texture/icon/mask.png | dbdf78747215e1e02f4ba972c84ae386b1db7f508b38d99838c4954dfaa56a02 |
+| images/more.png | RPE Resources/Texture/icon/more.png | a9251f268d0c489dc0b388131cc7c79b21424ca91ec86322471e6c0221b77c8e |
+| images/mute.png | RPE Resources/Texture/icon/mute.png | dd8cfc0333bd475aed2bb652b016dc646b10f97ebe269241f9e023ec3c246b36 |
+| images/offset.png | RPE Resources/Texture/icon/offset.png | 312ea06424cc6878120020e0da1a2a38925ce125080e4627c68c47ba7205bc5f |
+| images/operation.png | RPE Resources/Texture/icon/operation.png | 57afd294affe6d77db810e7e91ba5d68427585df2dd8b1fac9a74fd5a6de90da |
+| images/paste.png | RPE Resources/Texture/icon/paste.png | 6609191afa605f3148bed4866ef4171ec4c8728d12b8417ba15e714417a586c2 |
+| images/pause1.png | RPE Resources/Texture/icon/pause1.png | 5c149b66915b5ec1942463de58f7b3153a7736dc7bf0d0c1ef55b54358e1d5cd |
+| images/play.png | RPE Resources/Texture/icon/play.png | 44bc1b0431f1bf6f09bbdce38c0307e80c07521a6d73adf984b4692894cee46d |
+| images/ratio.png | RPE Resources/Texture/icon/ratio.png | 029b78a0821dbb33d37faf22d61826b14ee000df701d68db47abac332c14295e |
+| images/replay.png | RPE Resources/Texture/icon/replay.png | b6405bfb5e3cfb8b11eb39720b386517093b95e7ac58d0999543138e76a0236c |
+| images/return.png | RPE Resources/Texture/icon/return.png | 6619fb4d5ef87032abf4da2b73e1e2d31c0f320e47d1919660a2baf289cb5b2e |
+| images/setting.png | RPE Resources/Texture/icon/setting.png | ca37839412856b0e3fd4102cee683ada10bf770dd5c697b7144b0cde875c37bc |
+| images/shear.png | RPE Resources/Texture/icon/shear.png | fc5a72de2165e3ddc911e021e2c689fd7fc70fa34b0f867b40e21cce394f795b |
+| images/showback.png | RPE Resources/Texture/icon/showback.png | c15e3243f9d78ed9b4795286ee4c739ceaf12045c6e2273394f6fd7fdf640b7c |
+| images/shrink.png | RPE Resources/Texture/icon/shrink.png | 041fad0c1c643d6b7bcc79180ce65b593795dc803156ef3c1f8d4ac7e8b5430d |
+| images/shu.png | RPE Resources/Texture/icon/shu.png | a7e13f108959fe04143b0846dd4229fd81761da4a30bbfc7bcc83cc466f6751d |
+| images/sliderbar.png | RPE Resources/Texture/sliderbar.png | bb9981e706644b42c912da814248580798d1d6fb543151aaa3ea9ede1f90817d |
+| images/speed.png | RPE Resources/Texture/icon/speed.png | eb2dc40e9165a9d3e3fb3e3746947ac4b5b8edb39d3db56a9db908532c1b841b |
+| images/switch.png | RPE Resources/Texture/icon/switch.png | c673582e5137046e3589075d4d83ede4c04f6642363863ff87bb050b48f666ed |
+| images/textbox.png | RPE Resources/Texture/textbox.png | 79eb7d4d4da26cee0e38fa9b5d431d517f3990384eedc587cd349ef4d5a0e66c |
+| images/translate.png | RPE Resources/Texture/icon/translate.png | 371d84dda6e3a8e1f6ea8f5a37deb340b0c53afec20d5322954d39cb9c60ae2a |
+
+- images/direct-placement.svg: 本扩展已有的原创直接放置图标，PolyForm Noncommercial 1.0.0。
+- Inkline styles/icons: Re:PhiEdit Next built-in Inkline, author cmdysj, PolyForm Noncommercial 1.0.0.
+- fonts/ui.woff: built-in Inkline Noto Sans SC subset, © 2014–2021 Adobe; SIL Open Font License 1.1. See LICENSE-OFL.txt.
+- preview.svg: 本扩展生成的界面示意图，PolyForm Noncommercial 1.0.0，内嵌必要的许可与来源声明。
+- Classic UI font: supplied by the installed host as RPE; its TTF is excluded from this distribution.
+
+# PolyForm Noncommercial License 1.0.0
+
+&lt;https://polyformproject.org/licenses/noncommercial/1.0.0&gt;
+
+## Acceptance
+
+In order to get any license under these terms, you must agree
+to them as both strict obligations and conditions to all
+your licenses.
+
+## Copyright License
+
+The licensor grants you a copyright license for the
+software to do everything you might do with the software
+that would otherwise infringe the licensor's copyright
+in it for any permitted purpose.  However, you may
+only distribute the software according to [Distribution
+License](#distribution-license) and make changes or new works
+based on the software according to [Changes and New Works
+License](#changes-and-new-works-license).
+
+## Distribution License
+
+The licensor grants you an additional copyright license
+to distribute copies of the software.  Your license
+to distribute covers distributing the software with
+changes and new works permitted by [Changes and New Works
+License](#changes-and-new-works-license).
+
+## Notices
+
+You must ensure that anyone who gets a copy of any part of
+the software from you also gets a copy of these terms or the
+URL for them above, as well as copies of any plain-text lines
+beginning with `Required Notice:` that the licensor provided
+with the software.  For example:
+
+&gt; Required Notice: Copyright Yoyodyne, Inc. (http://example.com)
+
+## Changes and New Works License
+
+The licensor grants you an additional copyright license to
+make changes and new works based on the software for any
+permitted purpose.
+
+## Patent License
+
+The licensor grants you a patent license for the software that
+covers patent claims the licensor can license, or becomes able
+to license, that you would infringe by using the software.
+
+## Noncommercial Purposes
+
+Any noncommercial purpose is a permitted purpose.
+
+## Personal Uses
+
+Personal use for research, experiment, and testing for
+the benefit of public knowledge, personal study, private
+entertainment, hobby projects, amateur pursuits, or religious
+observance, without any anticipated commercial application,
+is use for a permitted purpose.
+
+## Noncommercial Organizations
+
+Use by any charitable organization, educational institution,
+public research organization, public safety or health
+organization, environmental protection organization,
+or government institution is use for a permitted purpose
+regardless of the source of funding or obligations resulting
+from the funding.
+
+## Fair Use
+
+You may have "fair use" rights for the software under the
+law. These terms do not limit them.
+
+## No Other Rights
+
+These terms do not allow you to sublicense or transfer any of
+your licenses to anyone else, or prevent the licensor from
+granting licenses to anyone else.  These terms do not imply
+any other licenses.
+
+## Patent Defense
+
+If you make any written claim that the software infringes or
+contributes to infringement of any patent, your patent license
+for the software granted under these terms ends immediately. If
+your company makes such a claim, your patent license ends
+immediately for work on behalf of your company.
+
+## Violations
+
+The first time you are notified in writing that you have
+violated any of these terms, or done anything with the software
+not covered by your licenses, your licenses can nonetheless
+continue if you come into full compliance with these terms,
+and take practical steps to correct past violations, within
+32 days of receiving notice.  Otherwise, all your licenses
+end immediately.
+
+## No Liability
+
+***As far as the law allows, the software comes as is, without
+any warranty or condition, and the licensor will not be liable
+to you for any damages arising out of these terms or the use
+or nature of the software, under any kind of legal claim.***
+
+## Definitions
+
+The **licensor** is the individual or entity offering these
+terms, and the **software** is the software the licensor makes
+available under these terms.
+
+**You** refers to the individual or entity agreeing to these
+terms.
+
+**Your company** is any legal entity, sole proprietorship,
+or other kind of organization that you work for, plus all
+organizations that have control over, are under the control of,
+or are under common control with that organization.  **Control**
+means ownership of substantially all the assets of an entity,
+or the power to direct its management and policies by vote,
+contract, or otherwise.  Control can be direct or indirect.
+
+**Your licenses** are all the licenses granted to you for the
+software under these terms.
+
+**Use** means anything you do with the software requiring one
+of your licenses.
+
+Copyright 2014-2021 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source'.
+Subset for the Inkline editor skin (GB2312 and editor interface characters); outlines unchanged.
+
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+This license is copied below, and is also available with a FAQ at:
+https://openfontlicense.org
+
+-----------------------------------------------------------
+SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007
+-----------------------------------------------------------
+
+PREAMBLE
+The goals of the Open Font License (OFL) are to stimulate worldwide
+development of collaborative font projects, to support the font creation
+efforts of academic and linguistic communities, and to provide a free and
+open framework in which fonts may be shared and improved in partnership
+with others.
+
+The OFL allows the licensed fonts to be used, studied, modified and
+redistributed freely as long as they are not sold by themselves. The
+fonts, including any derivative works, can be bundled, embedded,
+redistributed and/or sold with any software provided that any reserved
+names are not used by derivative works. The fonts and derivatives,
+however, cannot be released under any other type of license. The
+requirement for fonts to remain under this license does not apply
+to any document created using the fonts or their derivatives.
+
+DEFINITIONS
+"Font Software" refers to the set of files released by the Copyright
+Holder(s) under this license and clearly marked as such. This may
+include source files, build scripts and documentation.
+
+"Reserved Font Name" refers to any names specified as such after the
+copyright statement(s).
+
+"Original Version" refers to the collection of Font Software components as
+distributed by the Copyright Holder(s).
+
+"Modified Version" refers to any derivative made by adding to, deleting,
+or substituting -- in part or in whole -- any of the components of the
+Original Version, by changing formats or by porting the Font Software to a
+new environment.
+
+"Author" refers to any designer, engineer, programmer, technical
+writer or other person who contributed to the Font Software.
+
+PERMISSION &amp; CONDITIONS
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of the Font Software, to use, study, copy, merge, embed, modify,
+redistribute, and sell modified and unmodified copies of the Font
+Software, subject to the following conditions:
+
+1) Neither the Font Software nor any of its individual components,
+in Original or Modified Versions, may be sold by itself.
+
+2) Original or Modified Versions of the Font Software may be bundled,
+redistributed and/or sold with any software, provided that each copy
+contains the above copyright notice and this license. These can be
+included either as stand-alone text files, human-readable headers or
+in the appropriate machine-readable metadata fields within text or
+binary files as long as those fields can be easily viewed by the user.
+
+3) No Modified Version of the Font Software may use the Reserved Font
+Name(s) unless explicit written permission is granted by the corresponding
+Copyright Holder. This restriction only applies to the primary font name as
+presented to the users.
+
+4) The name(s) of the Copyright Holder(s) and the Author(s) of the Font
+Software shall not be used to promote, endorse or advertise any
+Modified Version, except to acknowledge the contribution(s) of the
+Copyright Holder(s) and the Author(s) or with their explicit written
+permission.
+
+5) The Font Software, modified or unmodified, in part or in whole,
+must be distributed entirely under this license, and must not be
+distributed under any other license. The requirement for fonts to
+remain under this license does not apply to any document created
+using the Font Software.
+
+TERMINATION
+This license becomes null and void if any of the above conditions are
+not met.
+
+DISCLAIMER
+THE FONT SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT
+OF COPYRIGHT, PATENT, TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL THE
+COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+INCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL
+DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
+OTHER DEALINGS IN THE FONT SOFTWARE.
+
+</metadata><path fill="#303030" d="M0 0h960v540H0z"/><path fill="#1f1f1f" d="M0 0h960v72H0z"/><g stroke="#ffd700" stroke-width="2" fill="none"><circle cx="26" cy="22" r="9"/><path d="M60 12v20m-8-10h16M90 14l12 8-12 8zM128 14v16m6-16v16M163 14a11 11 0 1010 16m-12-15 2-8 8 3M10 50h34m17 0h34m20 0h34M223 14h34m-34 8h34m-34 8h34M410 14h34m-34 8h34m-34 8h34"/></g><g fill="#dedede"><path d="M270 10h42v25h-42zM330 10h70v25h-70zM455 10h45v25h-45zM520 10h60v25h-60zM225 43h48v24h-48zM290 43h48v24h-48zM355 43h48v24h-48z"/></g><path fill="#201d1e" d="M22 72h300v414H22zM354 72h300v414H354z"/><g stroke="#5d6600" stroke-width="1"><path d="M22 72v414M52 72v414M82 72v414M112 72v414M142 72v414M172 72v414M202 72v414M232 72v414M262 72v414M292 72v414M322 72v414M384 72v414M444 72v414M504 72v414M564 72v414M624 72v414"/></g><g stroke="#176b0b"><path d="M22 120h300m-300 75h300m-300 150h300m-300 75h300M354 120h300m-300 75h300m-300 150h300m-300 75h300"/></g><g stroke="#9c1313"><path d="M22 270h300M354 270h300"/></g><g fill="#9bd9ff" stroke="#fff"><path d="M72 418h43v4H72zM200 270h43v4h-43zM138 120h43v4h-43zM248 195h43v4h-43z"/><path fill-opacity=".6" d="M138 272h43v148h-43z"/></g><g fill="#afd8e4" opacity=".55"><path d="M369 72h30v414h-30zM429 72h30v414h-30zM489 72h30v414h-30zM549 72h30v414h-30zM609 72h30v414h-30z"/></g><g stroke="#ff8000" stroke-width="3" fill="none"><path d="M357 479C410 450 395 270 414 120M475 479C490 340 525 320 533 72M597 479L647 72"/></g><path stroke="#fff" opacity=".35" stroke-width="4" d="M22 486h300M354 486h300"/><g fill="#777" stroke="#ccc" stroke-opacity=".3"><path fill="#00c800" d="M354 493h52v20h-52z"/><path d="M416 493h52v20h-52zM478 493h52v20h-52zM540 493h52v20h-52zM602 493h52v20h-52z"/></g><path fill="#00c800" d="M675 72h285v4H675z"/><g fill="#1f1f1f"><path d="M686 94h125v50H686zM821 94h125v50H821zM686 154h125v50H686zM821 154h125v50H821zM686 214h125v50H686zM821 214h125v50H821zM686 274h125v50H686zM821 274h125v50H821zM686 334h125v50H686zM821 334h125v50H821zM686 394h125v50H686zM821 394h125v50H821zM686 454h125v50H686zM821 454h125v50H821z"/></g><g fill="#fff" font-family="sans-serif" text-anchor="middle" font-size="16"><text x="750" y="124">Chart</text><text x="884" y="124">Events</text><text x="750" y="184">BPM</text><text x="884" y="184">Audio</text><text x="750" y="244">Lines</text><text x="884" y="244">Global</text><text x="750" y="304">Curves</text><text x="884" y="304">Noise</text><text x="750" y="364">Multi-line</text><text x="884" y="364">Text</text><text x="750" y="424">Assets</text><text x="884" y="424">Tools</text><text x="750" y="484">Edit</text><text x="884" y="484">View</text></g><g fill="#fff" font-family="sans-serif" font-size="16"><text x="677" y="27">RPE Classic</text><text x="677" y="56">Editor skin &amp; layout</text></g><text x="14" y="532" fill="#aaa" font-family="sans-serif" font-size="11">RPE Classic · interface preview</text></svg>

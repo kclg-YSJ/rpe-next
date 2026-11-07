@@ -187,7 +187,8 @@ export function parseEditorSkin(files) {
       }
     }
   }
-  if ([...files.keys()].some(path => !referenced.has(path))) fail(t('editor-skin.s990ffed'));
+  const documentation = /^(?:LICENSE(?:-[a-z0-9-]+)?(?:\.(?:txt|md))?|NOTICE(?:\.(?:txt|md))?|README\.md|ASSETS\.md)$/i;
+  if ([...files.keys()].some(path => !referenced.has(path) && !documentation.test(path))) fail(t('editor-skin.s990ffed'));
   if (!plain(skin.tokens ?? {})) fail(t('editor-skin.s68377cf'));
   for (const [key, value] of Object.entries(skin.tokens ?? {})) { if (!identifier.test(key)) fail(t('editor-skin.s387329b') + key); cssValue(value); }
   rules(skin.styles);

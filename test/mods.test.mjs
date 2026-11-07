@@ -102,6 +102,6 @@ test('经验球先受重力落地并停留，再向鼠标吸收，不会在出�
 });
 test('内置模组包清单可完整加载并通过语法检查',async()=>{
   const list=JSON.parse(await readFile(new URL('../assets/mods/index.json',import.meta.url),'utf8'));
-  assert.deepEqual(list.map(item=>item.directory),['sky-dodge','pixel-miner','spatial-camera','rpen-mod-market']);
+  assert.deepEqual(list.map(item=>item.directory),['sky-dodge','pixel-miner','spatial-camera','rpen-mod-market','rpe-classic-layout']);
   for(const item of list){const files=new Map(await Promise.all(item.files.map(async path=>[path,new Uint8Array(await readFile(new URL(`../assets/mods/${item.directory}/${path}`,import.meta.url)))])));assert.equal(parseModPackage(files).manifest.id,item.directory);}
 });

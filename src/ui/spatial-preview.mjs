@@ -13,6 +13,7 @@ import { localPreferences } from '../platform/local-preferences.mjs';
 import { parseBeat, formatBeat, fromNumber, beatValue } from '../core/beat.mjs';
 import { t } from '../i18n.mjs';
 import { SpatialGhosts } from './spatial-ghosts.mjs';
+import { SpatialShaderSurface } from './spatial-surface.mjs';
 import { evaluateNumericExpression } from '../core/numeric-expression.mjs';
 
 const RANGES={tilt:[0,65],future:[1,128],past:[0,32],size:[.3,.95],depth:[15,180],width:[.5,8],nodeSize:[2,9],fade:[.25,8]};
@@ -24,7 +25,7 @@ export class SpatialPreview {
   constructor(host,getContext,actions){
     this.host=host;this.getContext=getContext;Object.assign(this,actions);this.options={...DEFAULTS};
     try{const saved=JSON.parse(localPreferences.getItem('rpen-spatial-v1')||'{}');for(const key of Object.keys(DEFAULTS))if(typeof saved[key]===typeof DEFAULTS[key]&&(typeof saved[key]!=='number'||Number.isFinite(saved[key])))this.options[key]=RANGES[key]?Math.max(RANGES[key][0],Math.min(RANGES[key][1],saved[key])):saved[key];}catch{}
-    this.visible=false;this.progress=0;this.target=0;this.layers=new Map();this.projectionPool=new WeakMap();this.segmentPool=[];this.renderPanel();
+    this.visible=false;this.progress=0;this.target=0;this.layers=new Map();this.shaderSurfaces=new Map();this.projectionPool=new WeakMap();this.segmentPool=[];this.renderPanel();
   }
   get context(){return this.getContext();}
   get animating(){if(!this.visible||this.suspended||!this.interactive)return false;return this.progress!==this.target||Boolean(this.jobs&&this.jobIndex<this.jobs.length)||Boolean(this.ghosts?.pending);}
@@ -54,10 +55,11 @@ export class SpatialPreview {
     const tempo=this.context.tempo,beat=tempo.beat(tempo.seconds(event[source.field==='start'?'startTime':'endTime'],chart.judgeLineList[source.lineIndex].bpmfactor??1));
     return{lineIndex:source.lineIndex,beat,source:{...source,index,event,beat}};
   }
-  hideRenderer(renderer){const layer=this.layers.get(renderer);if(layer)for(const canvas of layer.canvases){canvas.hidden=true;const ctx=canvas.getContext?.('2d');ctx?.clearRect(0,0,canvas.width,canvas.height);}if(layer?.tooltip)layer.tooltip.hidden=true;if(layer?.highlights)layer.highlights.style.display='none';for(const canvas of [renderer.canvas,renderer.shaderCanvas,renderer.overlayCanvas])if(canvas){canvas.style.transform='';canvas.style.transformOrigin='';canvas.style.zIndex=canvas===renderer.overlayCanvas?'2':canvas===renderer.shaderCanvas?'1':'';}renderer.spatialForeground=false;renderer.spatialElements=null;this.ghosts?.hide(renderer);}
+  releaseShaderSurface(renderer){this.shaderSurfaces.get(renderer)?.restore();this.shaderSurfaces.delete(renderer);}
+  hideRenderer(renderer){this.releaseShaderSurface(renderer);const layer=this.layers.get(renderer);if(layer)for(const canvas of layer.canvases){canvas.hidden=true;const ctx=canvas.getContext?.('2d');ctx?.clearRect(0,0,canvas.width,canvas.height);}if(layer?.tooltip)layer.tooltip.hidden=true;if(layer?.highlights)layer.highlights.style.display='none';for(const canvas of [renderer.canvas,renderer.shaderCanvas,renderer.overlayCanvas])if(canvas){canvas.style.transform='';canvas.style.transformOrigin='';canvas.style.zIndex=canvas===renderer.overlayCanvas?'2':canvas===renderer.shaderCanvas?'1':'';}renderer.spatialForeground=false;renderer.spatialElements=null;this.ghosts?.hide(renderer);}
   start(){if(this.visible&&this.target)return;this.selected=null;this.source=null;this.visible=true;this.target=1;this.ownerSession=this.context.session;this.tracks??=new SpatialTracks();this.targets??=new SamplingTargets();this.indicated=null;this.enable.checked=true;this.context.showPreview?.();this.epoch=performance.now();this.onBlur??=()=>{if(this.drag||this.draft){this.cancel();this.syncInspector();}};window.addEventListener('blur',this.onBlur);this.invalidate();}
   disable(immediate=false){this.cancel();this.target=0;this.enable.checked=false;this.epoch=performance.now();this.jobs=[];if(immediate||!this.options.animation||!this.interactive){this.progress=0;this.cleanup();}this.invalidate();}
-  cleanup(){this.progress=this.target=0;window.removeEventListener('blur',this.onBlur);for(const [renderer,layer]of this.layers){layer.tooltip?.remove();layer.highlights?.remove();for(const canvas of layer.canvases){canvas.width=canvas.height=1;canvas.remove();}for(const canvas of [renderer.canvas,renderer.shaderCanvas,renderer.overlayCanvas])if(canvas){canvas.style.transform='';canvas.style.transformOrigin='';canvas.style.zIndex=canvas===renderer.overlayCanvas?'2':canvas===renderer.shaderCanvas?'1':'';}renderer.spatialForeground=false;renderer.spatialElements=null;}this.layers.clear();this.hitNodes=[];this.hitSegments=[];this.segmentPool=[];this.projectionPool=new WeakMap();this.lastLayer=null;this.pickIndex=null;this.pickMemo=null;this.snap=null;this.cursor=null;this.readout=null;this.overlaps=[];this.overlapSelect.hidden=true;this.tracks?.dispose();this.tracks=null;this.targets=null;this.ghosts?.dispose();this.ghosts=null;this.geometry=null;this.inputBase=null;this.selectionChart=null;this.ownerSession=null;this.liveSelected=null;this.visible=false;this.selected=null;this.source=null;this.reselect=null;this.jobs=[];this.jobIndex=0;this.syncInspector();}
+  cleanup(){this.progress=this.target=0;window.removeEventListener('blur',this.onBlur);for(const renderer of this.shaderSurfaces.keys())this.releaseShaderSurface(renderer);for(const [renderer,layer]of this.layers){layer.tooltip?.remove();layer.highlights?.remove();for(const canvas of layer.canvases){canvas.width=canvas.height=1;canvas.remove();}for(const canvas of [renderer.canvas,renderer.shaderCanvas,renderer.overlayCanvas])if(canvas){canvas.style.transform='';canvas.style.transformOrigin='';canvas.style.zIndex=canvas===renderer.overlayCanvas?'2':canvas===renderer.shaderCanvas?'1':'';}renderer.spatialForeground=false;renderer.spatialElements=null;}this.layers.clear();this.hitNodes=[];this.hitSegments=[];this.segmentPool=[];this.projectionPool=new WeakMap();this.lastLayer=null;this.pickIndex=null;this.pickMemo=null;this.snap=null;this.cursor=null;this.readout=null;this.overlaps=[];this.overlapSelect.hidden=true;this.tracks?.dispose();this.tracks=null;this.targets=null;this.ghosts?.dispose();this.ghosts=null;this.geometry=null;this.inputBase=null;this.selectionChart=null;this.ownerSession=null;this.liveSelected=null;this.visible=false;this.selected=null;this.source=null;this.reselect=null;this.jobs=[];this.jobIndex=0;this.syncInspector();}
   before(renderer){
     if(!this.visible)return;
     const base=this.drag?.base??(this.draft?this.inputBase:null);
@@ -65,6 +67,7 @@ export class SpatialPreview {
     this.suspended=Boolean(this.context.sampling?.());
     const active=!this.suspended&&this.interactive;
     if(!active||!renderer.visible){this.hideRenderer(renderer);return;}
+    if(!this.shaderSurfaces.has(renderer))this.shaderSurfaces.set(renderer,new SpatialShaderSurface(renderer));
     renderer.spatialForeground=true;
     renderer.spatialElements=this.options;
     for(const [other]of this.layers)if(other!==renderer)this.hideRenderer(other);

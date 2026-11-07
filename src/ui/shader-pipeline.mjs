@@ -93,7 +93,7 @@ highp vec4 rpenFragCoord;
 uniform vec2 rpenSurfaceSize;
 vec4 rpenFragCoord;
 #endif` : ''}
-${preserveAlpha ? 'float rpenCoverage = 0.0; bool rpenSampled = false;' : ''}
+${preserveAlpha ? 'uniform float rpenOutputStraight; float rpenCoverage = 0.0; bool rpenSampled = false;' : ''}
 vec4 rpeSample(sampler2D source, vec2 coordinate) {
   ${preserveAlpha ? 'rpenSampled = true;' : ''}
   vec2 local = (coordinate - ${origin}) / ${size};
@@ -113,7 +113,13 @@ void main() {
     rpeCoordinate = ${origin} + (v_texCoord - rpeRectMin) / (rpeRectMax - rpeRectMin) * ${size};
     ${fragmentCoordinates ? 'rpenFragCoord = vec4(gl_FragCoord.xy - rpeRectMin * rpenSurfaceSize, gl_FragCoord.zw);' : ''}
     rpeMain();
-    ${preserveAlpha ? 'gl_FragColor.a = min(gl_FragColor.a, rpenSampled ? rpenCoverage : texture2D(u_texture, v_texCoord).a);' : ''}
+    ${preserveAlpha ? `// Transparent scene samples and intermediate targets stay premultiplied.
+    // Only a straight-alpha final canvas needs straight RGB; unweighted soft-edge colours
+    // otherwise become bright outlines after chromatic/blur/camera sampling.
+    float rpenAlpha = rpenSampled ? rpenCoverage : texture2D(u_texture, v_texCoord).a;
+    gl_FragColor.a = min(gl_FragColor.a, rpenAlpha);
+    if (rpenSampled) gl_FragColor.rgb *= rpenAlpha > 0.00001 ? (rpenOutputStraight > 0.5 ? 1.0 : gl_FragColor.a) / rpenAlpha : 0.0;
+    else if (rpenOutputStraight < 0.5) gl_FragColor.rgb *= gl_FragColor.a;` : ''}
   }
 }
 `;
@@ -147,18 +153,22 @@ export class ShaderPipeline {
     if (this.canvas) this.canvas.width = this.canvas.height = 1;
     this.programs.clear(); this.programErrors?.clear(); this.gl = null; this.canvas = null; this.sourceTexture = this.pingTexture = this.pongTexture = this.framebuffer = this.buffer = null;
   }
-  constructor(invalidate = () => {}) { this.invalidate = invalidate; this.gl = null; this.canvas = null; this.programs = new Map(); this.sourceTexture = null; this.pingTexture = null; this.pongTexture = null; this.framebuffer = null; this.buffer = null; this.disabled = false; }
+  constructor(invalidate = () => {}, { premultipliedAlpha = false } = {}) { this.invalidate = invalidate; this.premultipliedAlpha = premultipliedAlpha; this.gl = null; this.canvas = null; this.programs = new Map(); this.sourceTexture = null; this.pingTexture = null; this.pongTexture = null; this.framebuffer = null; this.buffer = null; this.disabled = false; }
 
   ensure(canvas) {
     if (this.canvas === canvas && this.gl) return true;
     this.canvas = canvas;
     try {
-      const options = { alpha: true, premultipliedAlpha: false, preserveDrawingBuffer: false };
+      const options = { alpha: true, premultipliedAlpha: this.premultipliedAlpha, preserveDrawingBuffer: false };
       this.gl = canvas.getContext('webgl2', options); this.webgl2 = Boolean(this.gl);
       this.gl ??= canvas.getContext('webgl', options);
     }
     catch { this.gl = null; }
     if (!this.gl) { this.disabled = true; return false; }
+    this.premultipliedUpload = false;
+    // getContext's attributes are fixed by the first successful acquisition.
+    // Reused contexts and browser implementations may differ from our request.
+    this.outputStraight = this.gl.getContextAttributes()?.premultipliedAlpha !== true;
     const gl = this.gl;
     this.buffer = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, this.buffer);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 0, 0, 1, -1, 1, 0, -1, 1, 0, 1, 1, 1, 1, 1]), gl.STATIC_DRAW);
@@ -192,7 +202,7 @@ export class ShaderPipeline {
     const defaults = shaderDefaults(source);
     const attributes = { position: gl.getAttribLocation(program, 'a_position'), texCoord: gl.getAttribLocation(program, 'a_texCoord') };
     const body = shaderSourceBody(source);
-    const result = { program, uniforms, types, defaults, attributes, builtin: /^\/\/ @rpen-builtin\b/m.test(body) || !/uniform\s+(?:(?:lowp|mediump|highp)\s+)?sampler2D\s+screenTexture\b/.test(body) }; this.programs.set(key, result); return result;
+    const result = { program, uniforms, types, defaults, attributes, preserveAlpha, builtin: /^\/\/ @rpen-builtin\b/m.test(body) || !/uniform\s+(?:(?:lowp|mediump|highp)\s+)?sampler2D\s+screenTexture\b/.test(body) }; this.programs.set(key, result); return result;
   }
 
   setUniforms(result, values, seconds, width, height, rect, resolution) {
@@ -214,7 +224,7 @@ export class ShaderPipeline {
     const screen = result.builtin ? resolution ?? [1350, 900] : rect ? [width * (rect.max[0] - rect.min[0]), height * (rect.max[1] - rect.min[1])] : [width, height];
     set('u_texture', 0); set('u_time', seconds); set('screenSize', screen); set('rpenSurfaceSize', [width, height]); set('resolution', resolution ?? [1350, 900]); set('rpeRectMin', rect?.min ?? [0, 0]); set('rpeRectMax', rect?.max ?? [1, 1]);
     for (const [name, location] of result.uniforms) {
-      if (['u_texture', 'u_time', 'screenSize', 'rpenSurfaceSize', 'resolution', 'rpeRectMin', 'rpeRectMax'].includes(name)) continue;
+      if (['u_texture', 'u_time', 'screenSize', 'rpenSurfaceSize', 'resolution', 'rpeRectMin', 'rpeRectMax'].includes(name) || result.preserveAlpha && name === 'rpenOutputStraight') continue;
       const fallback = name === 'offset' && result.types.get(name) === gl.FLOAT_VEC2 ? [0, 0] : defaultShaderUniform(name, resolution);
       set(name, values[name] ?? result.defaults[name] ?? fallback);
     }
@@ -225,7 +235,9 @@ export class ShaderPipeline {
     const { position, texCoord } = result.attributes;
     if (position >= 0) { gl.enableVertexAttribArray(position); gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 16, 0); }
     if (texCoord >= 0) { gl.enableVertexAttribArray(texCoord); gl.vertexAttribPointer(texCoord, 2, gl.FLOAT, false, 16, 8); }
-    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, inputTexture); this.setUniforms(result, values, seconds, width, height, rect, resolution); gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, inputTexture); this.setUniforms(result, values, seconds, width, height, rect, resolution);
+    if (result.preserveAlpha) { const location = result.uniforms.get('rpenOutputStraight'); if (location !== undefined) gl.uniform1f(location, framebuffer || this.outputStraight === false ? 0 : 1); }
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
 
   prepareOverflowFilter(input, width, height, seconds, resolution, filter, passes, sourceFor) {
@@ -319,6 +331,8 @@ export class ShaderPipeline {
     const view = viewport ?? { left: 0, top: 0, width: display.width, height: display.height, scale: 1 };
     const rect = shaderViewport(view, display.width, display.height);
     const resolution = [view.width / (view.scale || 1), view.height / (view.scale || 1)];
+    const premultiplied = Boolean(filter?.preserveAlpha);
+    if (premultiplied !== Boolean(this.premultipliedUpload)) { gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, premultiplied); this.premultipliedUpload = premultiplied; }
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true); gl.bindTexture(gl.TEXTURE_2D, this.sourceTexture); gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, sourceCanvas);
     let input = this.sourceTexture; let output = this.pingTexture; let rendered = 0;
     const usable = [];

@@ -106,7 +106,22 @@ test('原 RPE 的常量垫底事件不使用缓动编号或切片，保留原数
 });
 test('Shader 参数内部曲线的数值、拍数与缓动也参与检查，重叠 Shader 仍不误报', () => {
   const c = createChart(); c.effects = [{ shader: 'chromatic', start: [0, 0, 1], end: [8, 0, 1], vars: { strength: [{ ...createEvent(0, Infinity, 3, 2), easingType: 99 }] } }];
-  const issues = diagnose(c); for (const code of ['eventTime', 'value', 'easing']) assert.ok(byCode(issues, code).some(issue => issue.path.includes('vars.strength')));
+  const issues = diagnose(c); for (const code of ['shaderParameterTime', 'value', 'easing']) assert.ok(byCode(issues, code).some(issue => issue.path.includes('vars.strength')));
+});
+
+test('Shader parameter beat, reversed time and audio-range errors have specific messages and keep ordinary event errors separate', () => {
+  const c = createChart();
+  c.effects = [{ shader: 'chromatic', start: [0, 0, 1], end: [8, 0, 1], vars: { power: [
+    createEvent(0, 1, 3, 2), { ...createEvent(0, 1, 1, 2), startTime: [NaN, 0, 1] }, createEvent(0, 1, 20, 21),
+  ] } }];
+  c.judgeLineList[0].eventLayers[0].moveXEvents = [createEvent(0, 1, 2, 1)];
+  const issues = diagnose(c, { duration: 4 });
+  assert.equal(byCode(issues, 'eventTime').length, 1);
+  for (const [code, segment] of [['shaderParameterTime', 0], ['shaderParameterBeat', 1], ['shaderParameterTimeRange', 2]]) {
+    const found = byCode(issues, code); assert.equal(found.length, 1); assert.equal(found[0].parameter, 'power');
+    assert.equal(found[0].segment, segment); assert.equal(found[0].shaderParameter, true);
+    assert.match(found[0].message, /power/); assert.match(found[0].message, new RegExp(String(segment + 1)));
+  }
 });
 test('素材解析沿用就近、精确、规范化、唯一文件名顺序，缺失和歧义分别报告', () => {
   const paths = ['pack/music.ogg', 'a/line.png', 'b/line.png', 's/HIT.WAV', 'skin/main.glsl', 'skin/config.json'];

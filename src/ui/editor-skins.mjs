@@ -7,6 +7,7 @@ import { assetUrl } from '../core/asset-url.mjs';
 import { storageFailure } from '../platform/storage.mjs';
 import { DEFAULT_APPEARANCE } from '../core/default-settings.mjs';
 import { localizedValue, t } from '../i18n.mjs';
+import { loadBuiltinPackage } from '../platform/builtin-packages.mjs';
 
 const ACTIVE_KEY = 'rpe-next-active-editor-skin-v1';
 const OPTIONS_KEY = 'rpe-next-editor-skin-options-v1';
@@ -62,7 +63,7 @@ export class EditorSkins {
     this.zip.onchange = () => this.importFiles(this.zip.files, false); this.directory.onchange = () => this.importFiles(this.directory.files, true);
     this.previewButton = action(t('editor-skins.sb467a66'), () => this.use(this.select.value, true).catch(error => this.error(error)));
     this.applyButton = action(t('editor-skins.s4562024'), () => this.use(this.select.value).catch(error => this.error(error)));
-    this.exportButton = action(t('editor-skins.se4b1b6e'), () => { const record = this.records.get(this.select.value); if (record) download(exportEditorSkin(record), record.skin.id + '.rpenskin'); });
+    this.exportButton = action(t('editor-skins.se4b1b6e'), async () => { try { const record = await loadBuiltinPackage(this.records.get(this.select.value)); if (record) download(exportEditorSkin(record), record.skin.id + '.rpenskin'); } catch (error) { this.error(error); } });
     this.deleteButton = action(t('editor-skins.saf73a77'), () => this.remove());
     this.resetParametersButton = action(t('editor-skins.s16b8238'), () => this.resetParameters(this.select.value).catch(error => this.error(error)));
     this.resetParametersButton.title = t('editor-skins.s2c06797');
@@ -83,6 +84,7 @@ export class EditorSkins {
   }
   showDetails() {
     const record = this.records.get(this.select.value);
+    if (record?.deferred) loadBuiltinPackage(record).then(() => { if (this.select.value === record.skin.id) this.showDetails(); }).catch(error => this.error(error));
     if (this.appearanceSkinId !== record?.skin.id) this.appearanceDisclosure.open = false;
     this.appearanceSkinId = record?.skin.id;
     this.appearanceDisclosure.hidden = !record || !Object.keys(record.skin.parameters ?? {}).length && !Object.keys(record.skin.variants ?? {}).length;
@@ -151,6 +153,8 @@ export class EditorSkins {
   async use(id, preview = false, retainDeadline = false) {
     const generation = ++this.generation; const record = this.records.get(id);
     if (id !== 'default' && !record) throw new Error(t('editor-skins.s2e4d8b3'));
+    if (record?.deferred) await loadBuiltinPackage(record);
+    if (generation !== this.generation) return;
     const appearance = this.drafts[id] ??= structuredClone(this.options[id] ?? { variant: record?.skin.systemVariants ? 'auto' : 'base', parameters: {} });
     const resolvedVariant = appearance.variant === 'auto' ? record?.skin.systemVariants?.[this.systemScheme.matches ? 'dark' : 'light'] ?? 'base' : appearance.variant;
     const prepared = record ? await this.runtime.prepare({ ...record, skin: resolveEditorSkin(record.skin, { ...appearance, variant: resolvedVariant }) }) : null;

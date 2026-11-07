@@ -26,6 +26,7 @@ import { SamplingTargets } from './sampling-targets.mjs';
 import { samplingPreferences } from '../platform/sampling-preferences.mjs';
 import { snapSamplePoint, snapSampleAngle, snapConstrainedPoint } from '../core/sampling-grid.mjs';
 import { drawSamplingGrid, drawSnapGuides } from './sampling-guides.mjs';
+import { copyEventValueMemory, rememberEventValueChange, withEventLock } from '../application/event-value-memory.mjs';
 
 function button(text, title, run) {
   const control = document.createElement('button'); control.type = 'button'; control.textContent = text; control.title = title; control.onclick = run; return control;
@@ -43,6 +44,16 @@ export class NoiseAreaEditor {
   constructor(host, canvas, getContext, options) {
     Object.assign(this, options); this.host = host; this.canvas = canvas; this.getContext = getContext;
     this.properties = document.querySelector('#noise-properties'); this.active = false; this.selected = -1; this.selection = new Set();
+    this.properties.addEventListener('pointerdown', event => {
+      this.propertyPointer?.release();
+      const release = finish => {
+        if (finish && finish.type !== 'blur' && finish.pointerId !== event.pointerId) return;
+        this.propertyPointer = null;
+        window.removeEventListener('pointerup', release, true); window.removeEventListener('pointercancel', release, true); window.removeEventListener('blur', release);
+      };
+      this.propertyPointer = { target: event.target, release };
+      window.addEventListener('pointerup', release, true); window.addEventListener('pointercancel', release, true); window.addEventListener('blur', release);
+    }, true);
     this.event = null; this.cursor = null; this.rects = []; this.clipboard = null; this.pending = null; this.draftChart = null; this.easingState = { open: false };
     this.distributions = new WeakMap(); this.hiddenLayers = new Set(); this.simpleLayers = new Set();
     this.areaList = new NoiseAreaList(index => this.select(index));
@@ -118,11 +129,12 @@ export class NoiseAreaEditor {
   replaceArea(area, base = this.context.session.chart) {
     return withNoiseAreas(base, (base.blockAreaList ?? []).map((entry, index) => index === this.selected ? area : entry));
   }
-  edit(change, finish = true) {
+  edit(change, finish = true, valueField) {
     if (!this.area()) return;
     try {
-      const previous = this.event ? this.area()[this.event.type]?.[this.event.index] : null;
-      const area = change(structuredClone(this.area()));
+      const source = this.area();
+      const previous = this.event ? source[this.event.type]?.[this.event.index] : null;
+      const area = change(structuredClone(source));
       if (previous) area[this.event.type][this.event.index] = rebaseCustomEventValues(previous, area[this.event.type][this.event.index]);
       if (previous?.linkgroup > 0 && this.event.type !== 'activeIntervals') {
         const next = area[this.event.type][this.event.index];
@@ -135,6 +147,9 @@ export class NoiseAreaEditor {
         });
       }
       this.draftChart = this.replaceArea(area);
+      const session = this.context.session;
+      copyEventValueMemory(session, ({ type, index }) => source[type]?.[index], ({ type, index }) => area[type]?.[index]);
+      if (previous) rememberEventValueChange(session, previous, area[this.event.type][this.event.index], valueField, this.event);
       if (finish) this.flush();
       this.invalidate();
     } catch (error) { if (finish) this.report(error); return false; }
@@ -409,7 +424,10 @@ export class NoiseAreaEditor {
     if (this.listTitle.textContent !== listTitle) this.listTitle.textContent = listTitle;
     this.areaList.update(this.areas(), this.selected);
     const signature = `${this.selected}/${this.event?.type}/${this.event?.index}`;
-    const focused = this.properties.contains(document.activeElement) && document.activeElement.matches('input,select') ? document.activeElement : null;
+    // Committing the old input during pointerdown must not replace the checkbox
+    // or button that is about to receive focus and the subsequent click.
+    const pointer = this.propertyPointer?.target;
+    const focused = pointer?.isConnected && this.properties.contains(pointer) ? pointer : this.properties.contains(document.activeElement) && document.activeElement.matches('input,select') ? document.activeElement : null;
     if (focused && signature === this.formSignature) {
       const snapshot = document.createElement('div'); this.renderProperties(snapshot);
       for (const control of snapshot.querySelectorAll('input,select')) { const existing = [...this.properties.querySelectorAll('input,select')].find(input => input.getAttribute('aria-label') === control.getAttribute('aria-label')); if (existing && existing !== focused) { existing.value = control.value; existing.checked = control.checked; } }
@@ -432,7 +450,7 @@ export class NoiseAreaEditor {
     const evaluateMovement = source => evaluateEventNumber(source, { type: sample.type, field: sample.field, event: this.area()[sample.type][sample.index], tempo: this.context.tempo });
     if (movementExpression) { setNumericExpressionResolver(input, evaluateMovement); input.title = t('noise-area.s61fd280'); }
     const read = () => kind === 'checkbox' ? input.checked : kind === 'beat' ? parseBeat(input.value) : kind === 'text' ? input.value : movementExpression && String(numericExpressionSource(input)).trim().endsWith('v') ? evaluateMovement(numericExpressionSource(input)) : (input.value.trim() ? Number(input.value) : NaN);
-    input.oninput = () => { try { const valid = this.edit(area => apply(area, read()), false); input.setCustomValidity(valid ? '' : t('noise-area.s615582b')); } catch (error) { input.setCustomValidity(error.message); } };
+    input.oninput = () => { try { const valid = this.edit(area => apply(area, read()), false, sample?.field); input.setCustomValidity(valid ? '' : t('noise-area.s615582b')); } catch (error) { input.setCustomValidity(error.message); } };
     input.onchange = () => { input.oninput(); if (input.checkValidity()) this.flush(); else this.notify(input.validationMessage, 'error'); };
     if (kind === 'number' || kind === 'duration' || kind === 'beat') {
       input.addEventListener('wheel', event => { event.preventDefault(); event.stopPropagation(); try { const increment = kind === 'beat' ? 1 / this.context.timeline.division : kind === 'duration' ? 0.001 : step; const current = kind === 'beat' ? beatValue(read()) : Number(input.value); const next = current + (event.deltaY < 0 ? increment : -increment); input.value = kind === 'beat' ? formatBeat(fromNumber(next)) : kind === 'duration' ? durationText(next) : round(next); input.onchange(); } catch (error) { this.report(error); } }, { passive: false });
@@ -457,7 +475,7 @@ export class NoiseAreaEditor {
       else {
         for (const [field, label] of [['start', t('noise-area.sdc6ff65')], ['end', t('noise-area.sa3dd3ca')]]) this.field(host, label, event[field], (item, value) => modifyEvent(entry => { entry[field] = value; if (entry.inst) entry[field === 'start' ? 'end' : 'start'] = value; })(item), { step: type.startsWith('scale') ? 0.1 : 1, sample: { type, index, field } });
         if (noiseHasAnchor(type)) for (const axis of ['x', 'y']) this.field(host, t('noise-area.sbbcf4ca') + axis.toUpperCase(), event.anchor[axis], (item, value) => modifyEvent(entry => { entry.anchor[axis] = value; })(item), { sample: { type, index, field: 'anchor' } });
-        this.field(host, t('noise-area.s7787450'), event.inst, (item, value) => modifyEvent(entry => { entry.inst = value ? 1 : 0; if (value) entry.end = entry.start; })(item), { kind: 'checkbox' });
+        this.field(host, t('noise-area.s7787450'), event.inst, (item, value) => { item[type][index] = withEventLock(this.context.session, this.area()[type][index], value); return item; }, { kind: 'checkbox' });
         this.field(host, t('noise-area.s7941eab'), event.linkgroup ?? 0, (item, value) => modifyEvent(entry => { entry.linkgroup = Math.max(0, Math.round(value)); })(item));
         if (event.linkgroup > 0) host.append(button(t('noise-area.s6e49702') + event.linkgroup, t('noise-area.sbe454d5'), () => { this.selection = new Set(NOISE_TRACKS.slice(1).flatMap(([track]) => (this.area()[track] ?? []).flatMap((entry, position) => entry.linkgroup === event.linkgroup ? [track + ':' + position] : []))); this.render(); this.invalidate(); }));
         if (!event.customEasing) this.field(host, t('noise-area.s727b7cd'), event.easingType ?? 1, (item, value) => modifyEvent(entry => { Object.assign(entry, withStandardEasing(entry, value)); delete entry.customEasing; })(item), { choices: EASING_NAMES.map((name, position) => [position + 1, (position + 1) + ' · ' + name]) });
@@ -492,8 +510,11 @@ export class NoiseAreaEditor {
     if (!this.sampleMode) return;
     for (const { renderer, original } of this.sampleZoom ?? []) renderer.viewDivisor = original;
     this.sampleZoom = null;
-    const chart = this.draftChart; if(this.sampleMode.base!==this.context.session.chart)apply=false; this.sampleMode = null; this.sampleDrag = null; this.draftChart = null; this.syncChrome();
-    if (apply && chart) { try { this.commit(t('noise-area.seaab4c2'), chart); } catch (error) { this.report(error); } }
+    const chart = this.draftChart, mode = this.sampleMode; if(mode.base!==this.context.session.chart)apply=false; this.sampleMode = null; this.sampleDrag = null; this.draftChart = null; this.syncChrome();
+    if (apply && chart) { try {
+      this.commit(t('noise-area.seaab4c2'), chart);
+      if (mode.type) rememberEventValueChange(this.context.session, mode.base.blockAreaList[this.selected]?.[mode.type]?.[mode.index], this.context.session.chart.blockAreaList[this.selected]?.[mode.type]?.[mode.index], mode.field, mode);
+    } catch (error) { this.report(error); } }
     this.render(); this.invalidate();
   }
   fitSampleView() {
