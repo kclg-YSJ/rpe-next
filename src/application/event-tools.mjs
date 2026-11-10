@@ -3,7 +3,7 @@ import { beatValue, fromNumber } from '../core/beat.mjs';
 import { easing, bezier } from '../core/easing.mjs';
 import { EVENT_TYPES } from '../core/chart.mjs';
 import { snapTime } from '../core/edit-grid.mjs';
-import { eventList, eventListAt, eventKey, selectedEvents, selectedEventEntries, chartWithEventLists, commitEventLists } from './event-commands.mjs';
+import { eventListAt, eventKey, eventSelections, selectedEventEntries, chartWithEventLists, commitEventListEdits } from './event-commands.mjs';
 import { assertChart } from '../core/chart.mjs';
 import { t } from '../i18n.mjs';
 
@@ -41,41 +41,56 @@ export function cutEventParts(type, event, { division = 4, density = 4, beat, te
 }
 
 export function cutSelectedEvents(session, options = {}) {
-  const updates = new Map(); const selection = new Set(); let changed = 0; let generated = 0; let skipped = 0;
-  for (const type of new Set(selectedEvents(session).map(entry => entry.type))) {
-    const events = [];
-    eventList(session, type).forEach((event, index) => {
-      const selected = session.eventSelection.has(eventKey(type, index));
-      const parts = selected ? cutEventParts(type, event, options) : null;
-      if (selected && !parts) skipped++;
-      if (parts) { changed++; generated += parts.length; }
-      if (generated > 100000) throw new Error(t('event-tools.sdb5f35f'));
-      for (const item of parts ?? [event]) events.push({ item, selected });
-    });
-    events.sort((left, right) => beatValue(left.item.startTime) - beatValue(right.item.startTime));
-    events.forEach((entry, index) => { if (entry.selected) selection.add(eventKey(type, index)); });
-    updates.set(type, events.map(entry => entry.item));
+  const edits = new Map(); let changed = 0; let generated = 0; let skipped = 0;
+  const seconds = options.tempo && Number.isFinite(options.beat) ? options.tempo.seconds(options.beat, options.factor ?? session.line?.bpmfactor ?? 1) : null;
+  for (const [lineIndex, keys] of eventSelections(session)) {
+    const updates = new Map(), selection = new Set(), factor = session.chart.judgeLineList[lineIndex]?.bpmfactor ?? 1;
+    const localOptions = { ...options, factor, beat: seconds === null ? options.beat : options.tempo.beat(seconds, factor) };
+    for (const type of new Set([...keys].map(key => String(key).split(':')[0]))) {
+      const events = []; let columnChanged = false;
+      eventListAt(session, lineIndex, type).forEach((event, index) => {
+        const selected = keys.has(eventKey(type, index));
+        const parts = selected ? cutEventParts(type, event, localOptions) : null;
+        if (selected && !parts) skipped++;
+        if (parts) { columnChanged = true; changed++; generated += parts.length; }
+        if (generated > 100000) throw new Error(t('event-tools.sdb5f35f'));
+        for (const item of parts ?? [event]) events.push({ item, selected });
+      });
+      if (!columnChanged) {
+        for (const key of keys) if (String(key).split(':')[0] === type) selection.add(key);
+        continue;
+      }
+      events.sort((left, right) => beatValue(left.item.startTime) - beatValue(right.item.startTime));
+      events.forEach((entry, index) => { if (entry.selected) selection.add(eventKey(type, index)); });
+      updates.set(type, events.map(entry => entry.item));
+    }
+    if (updates.size) edits.set(lineIndex, { updates, selection });
   }
-  if (changed) commitEventLists(session, t('event-tools.s9fda3f9'), updates, selection);
+  if (changed) commitEventListEdits(session, t('event-tools.s9fda3f9'), edits);
   return { changed, generated, skipped };
 }
 
 export function stickSelectedEvents(session) {
-  const updates = new Map(); let changed = 0; let skipped = 0;
-  for (const type of new Set(selectedEvents(session).map(entry => entry.type))) {
-    const events = [...eventList(session, type)];
-    if (type === 'paintEvents') { skipped += selectedEvents(session).filter(entry => entry.type === type).length; continue; }
-    const order = events.map((event, index) => ({ event, index })).sort((left, right) => beatValue(left.event.startTime) - beatValue(right.event.startTime) || left.index - right.index);
-    order.forEach((entry, position) => {
-      if (!session.eventSelection.has(eventKey(type, entry.index))) return;
-      if (!position) { skipped++; return; }
-      const previous = events[order[position - 1].index];
-      const start = structuredClone(previous.end);
-      events[entry.index] = { ...entry.event, start, ...(entry.event.inst ? { end: structuredClone(start) } : {}) }; changed++;
-    });
-    updates.set(type, events);
+  const edits = new Map(); let changed = 0; let skipped = 0;
+  for (const [lineIndex, keys] of eventSelections(session)) {
+    const updates = new Map();
+    for (const type of new Set([...keys].map(key => String(key).split(':')[0]))) {
+      const events = [...eventListAt(session, lineIndex, type)];
+      if (type === 'paintEvents') { skipped += events.filter((event, index) => keys.has(eventKey(type, index))).length; continue; }
+      const order = events.map((event, index) => ({ event, index })).sort((left, right) => beatValue(left.event.startTime) - beatValue(right.event.startTime) || left.index - right.index);
+      let columnChanged = false;
+      order.forEach((entry, position) => {
+        if (!keys.has(eventKey(type, entry.index))) return;
+        if (!position) { skipped++; return; }
+        const previous = events[order[position - 1].index];
+        const start = structuredClone(previous.end);
+        events[entry.index] = { ...entry.event, start, ...(entry.event.inst ? { end: structuredClone(start) } : {}) }; columnChanged = true; changed++;
+      });
+      if (columnChanged) updates.set(type, events);
+    }
+    if (updates.size) edits.set(lineIndex, { updates, selection: keys });
   }
-  if (changed) commitEventLists(session, t('event-tools.s411a288'), updates);
+  if (changed) commitEventListEdits(session, t('event-tools.s411a288'), edits);
   return { changed, skipped };
 }
 

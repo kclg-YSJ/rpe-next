@@ -58,6 +58,7 @@ function distribution(options, random) {
     return value * multiplier;
   };
 }
+export { distribution as batchDistribution, randomSource as batchRandom };
 
 function scopeFor(item, kind, line, index, count) {
   const start = beatValue(item.startTime); const end = beatValue(item.endTime);

@@ -86,6 +86,28 @@ export function commitEventLists(session, label, updates, selection = session.ev
   session.commit(label, chart, beforeSelection);
 }
 
+// Column tools may replace/sort whole tracks. Keep their new indices on the
+// original owners and commit all selected lines as one undoable transaction.
+export function commitEventListEdits(session, label, edits) {
+  let chart = session.chart;
+  for (const [lineIndex, { updates }] of edits) if (updates.size) chart = chartWithEventLists(chart, lineIndex, session.eventLayer, updates);
+  if (chart === session.chart) return false;
+  assertChart(chart);
+  const beforeSelection = session.selectionState();
+  if (session.multiLineActive && session.multiLineMode === 'events') {
+    const selections = new Map(session.multiEventSelection);
+    for (const [lineIndex, edit] of edits) if (edit.selection) selections.set(lineIndex, new Set(edit.selection));
+    session.multiEventSelection = selections;
+    session.eventSelection = new Set(selections.get(session.lineIndex) ?? []);
+  } else {
+    const selected = edits.get(session.lineIndex)?.selection;
+    if (selected) session.eventSelection = new Set(selected);
+  }
+  session.focus = 'events'; session.selection.clear();
+  session.commit(label, chart, beforeSelection);
+  return true;
+}
+
 export function transformedEventLists(session, lineIndex, selection, transform, { xyTiming = false, onValueChange } = {}) {
   const updates = new Map();
   const linked = new Map();
@@ -256,15 +278,26 @@ function splitEventOriginal(event, beat, tempo, factor = 1) {
 }
 
 export function splitSelectedEvents(session, beat, tempo) {
-  const updates = new Map(); const selection = [];
-  for (const { type, index, event } of selectedEvents(session)) {
-    if (beatValue(event.startTime) >= beat || beatValue(event.endTime) <= beat) continue;
-    const [first, second] = splitEventOriginal(event, beat, tempo, session.line.bpmfactor ?? 1);
-    if (!updates.has(type)) updates.set(type, [...eventList(session, type)]);
-    const events = updates.get(type); events[index] = first; events.push(second);
-    events.sort((left, right) => beatValue(left.startTime) - beatValue(right.startTime) || beatValue(left.endTime) - beatValue(right.endTime));
-    for (let nextIndex = 0; nextIndex < events.length; nextIndex++) if (events[nextIndex] === first || events[nextIndex] === second) selection.push(eventKey(type, nextIndex));
+  const edits = new Map(), seconds = tempo.seconds(beat, session.line?.bpmfactor ?? 1);
+  for (const [lineIndex, keys] of eventSelections(session)) {
+    const updates = new Map(), selection = new Set(keys), factor = session.chart.judgeLineList[lineIndex]?.bpmfactor ?? 1;
+    const at = tempo.beat(seconds, factor);
+    for (const type of new Set([...keys].map(key => String(key).split(':')[0]))) {
+      let changed = false;
+      const events = eventListAt(session, lineIndex, type).flatMap((event, index) => {
+        const selected = keys.has(eventKey(type, index));
+        if (!selected || beatValue(event.startTime) >= at || beatValue(event.endTime) <= at) return [{ event, selected }];
+        changed = true;
+        return splitEventOriginal(event, at, tempo, factor).map(event => ({ event, selected: true }));
+      });
+      if (!changed) continue;
+      events.sort((a, b) => beatValue(a.event.startTime) - beatValue(b.event.startTime) || beatValue(a.event.endTime) - beatValue(b.event.endTime));
+      for (const key of keys) if (String(key).split(':')[0] === type) selection.delete(key);
+      events.forEach((entry, index) => { if (entry.selected) selection.add(eventKey(type, index)); });
+      updates.set(type, events.map(entry => entry.event));
+    }
+    if (updates.size) edits.set(lineIndex, { updates, selection });
   }
-  if (!updates.size) throw new Error(t('event-commands.sbc12772'));
-  commitEventLists(session, t('event-commands.se11f352'), updates, selection);
+  if (!edits.size) throw new Error(t('event-commands.sbc12772'));
+  commitEventListEdits(session, t('event-commands.se11f352'), edits);
 }

@@ -59,12 +59,12 @@ test('长上下文自动压缩，保留完整本轮记录与工具配对，而�
   let compressions = 0, chat = 0, ended;
   const agent = engine(async request => {
     if (request.system === AGENT_COMPACTION_PROMPT) { compressions++; assert.deepEqual(request.tools, []); assert.ok(!JSON.stringify(request.messages).includes('private-old-thinking')); return { role: 'assistant', content: '用户要求整理谱面；已修改十个音符，需核查最新状态。' }; }
-    chat++; assert.ok(request.messages[0].content.startsWith(AGENT_MEMORY_PREFIX)); assert.equal(request.messages.at(-1).content, '继续'); return { role: 'assistant', content: 'done' };
+    chat++; assert.ok(request.messages[0].content.startsWith(AGENT_MEMORY_PREFIX)); assert.equal(request.messages.findLast(message => message.role === 'user' && !message.rpen_context).content, '继续'); return { role: 'assistant', content: 'done' };
   }, { contextBudget: 8192 });
   const history = Array.from({ length: 40 }, (_, index) => [{ role: 'user', content: '旧任务 ' + index + ' 数据'.repeat(400) }, { role: 'assistant', content: '结果'.repeat(400), reasoning_content: 'private-old-thinking' }]).flat();
   agent.addEventListener('turn-end', event => { ended = event.detail; }); await agent.run('继续', { history });
   assert.ok(compressions > 0); assert.equal(chat, 1); assert.equal(ended.status, 'completed'); assert.equal(ended.compacted, true);
-  assert.deepEqual(ended.messages.map(message => message.role), ['user', 'assistant']); assert.equal(ended.messages[0].content, '继续'); assert.ok(ended.contextMessages.length < history.length);
+  assert.deepEqual(ended.messages.filter(message => !message.rpen_context).map(message => message.role), ['user', 'assistant']); assert.equal(ended.messages[0].content, '继续'); assert.ok(ended.contextMessages.length < history.length);
 });
 
 test('请求进行中插话会取消未完成响应并重新规划，保留完整请求状态且隐藏密钥', async () => {
@@ -77,7 +77,7 @@ test('请求进行中插话会取消未完成响应并重新规划，保留完�
   agent.addEventListener('exchange-end', event => exchanges.push(event.detail)); agent.addEventListener('turn-end', event => { ended = event.detail; });
   const running = agent.run('原任务'); while (!pending) await wait(); assert.equal(agent.steer('改为移动预览时间'), true); await running;
   assert.equal(ended.status, 'completed'); assert.deepEqual(exchanges.map(exchange => exchange.status), ['interrupted', 'completed']);
-  assert.deepEqual(ended.messages.filter(message => message.role === 'user').map(message => message.content), ['原任务', '改为移动预览时间']); assert.ok(!JSON.stringify(exchanges).includes('sk-private-fixture')); assert.equal(agent.steer('idle'), false);
+  assert.deepEqual(ended.messages.filter(message => message.role === 'user' && !message.rpen_context).map(message => message.content), ['原任务', '改为移动预览时间']); assert.ok(!JSON.stringify(exchanges).includes('sk-private-fixture')); assert.equal(agent.steer('idle'), false);
 });
 
 test('多工具执行中插话取消剩余修改，所有工具调用仍有对应返回', async () => {

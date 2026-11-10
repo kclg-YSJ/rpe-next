@@ -18,6 +18,7 @@ const flags = ['snapX', 'realtime', 'hitEnabled', 'allLines', 'preservePitch', '
 export function normalizeEditorPreferences(value) {
   const result = {};
   if (!value || typeof value !== 'object') return result;
+  if (typeof value.clearHitsOnResume === 'boolean') result.clearHitsOnResume = value.clearHitsOnResume;
   if (value.multiLineEventVisibility && typeof value.multiLineEventVisibility === 'object') result.multiLineEventVisibility = Object.fromEntries(multiLineEventTypes.filter(type => typeof value.multiLineEventVisibility[type] === 'boolean').map(type => [type, value.multiLineEventVisibility[type]]));
   if (value.lineEventDefaults && typeof value.lineEventDefaults === 'object' && !Array.isArray(value.lineEventDefaults)) result.lineEventDefaults = normalizeLineDefaults(value.lineEventDefaults);
   if (validFpsLimit(value.fpsLimit)) result.fpsLimit = value.fpsLimit;

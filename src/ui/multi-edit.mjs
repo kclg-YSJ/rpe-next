@@ -11,14 +11,14 @@ import { runEventTool } from './event-tools.mjs';
 import { editorSkinContext } from './editor-skin-canvas.mjs';
 import { t } from '../i18n.mjs';
 
-function control(root, title, value, options) {
+export function control(root, title, value, options) {
   const label = document.createElement('label'); label.className = 'field'; label.append(title);
   const input = document.createElement(options ? 'select' : 'input'); input.setAttribute('aria-label', title);
   if (options) for (const [key, text] of options) input.append(new Option(text, key));
   input.value = value; label.append(input); root.append(label); return input;
 }
 
-function distributionFields(root, prefix = '') {
+export function distributionFields(root, prefix = '') {
   const lower = control(root, t('multi-edit.s09ddb64', { p0: prefix }), '0'); const upper = control(root, t('multi-edit.sda34019', { p0: prefix }), '0');
   const easingType = control(root, t('multi-edit.s5ee79a3', { p0: prefix }), '1', EASING_NAMES.map((name, index) => [index + 1, `${index + 1} · ${name}`]));
   const cycle = control(root, t('multi-edit.s635e391', { p0: prefix }), '1'); const disturbance = control(root, t('multi-edit.s31b13fc', { p0: prefix }), '0');

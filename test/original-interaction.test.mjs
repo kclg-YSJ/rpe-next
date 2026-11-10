@@ -38,16 +38,21 @@ test('滚轮向上暂停并定位真实时间，继续从新位置播放；准�
   assert.ok(Math.abs(wheelSeconds(-100, 120, 5, 2, false, 0, true) - 0.6) < 1e-10);
 });
 
-test('滚轮起点默认限制到音频零秒，延迟允许有限负拍，关闭后可越界且偏好持久化', () => {
+test('滚轮起点默认覆盖音频零秒和谱面零拍，负延迟可退到初始化事件，关闭后可越界且偏好持久化', () => {
   const audio = { time: 0.01, duration: 120, rate: 1, pause() {}, seek(seconds) { this.time = seconds; } };
   const playback = new EditorPlayback(audio, { stop() {} }, () => {});
   const tempo = new TempoMap([{ startTime: [0, 0, 1], bpm: 120 }]); const settings = { scrollSpeed: 5 };
   assert.equal(migratePreferences().settings.wheelStopAtAudioStart, true);
-  for (const offset of [0, 0.5, -0.3]) {
-    audio.time = 0.01; playback.wheel({ deltaY: 100 }, settings, 1);
-    assert.equal(audio.time, 0); assert.ok(Math.abs(tempo.beat(audio.time - offset) + offset * 2) < 1e-9);
-    playback.wheel({ deltaY: 100, altKey: true }, settings, 2); assert.equal(audio.time, 0);
+  for (const offset of [0, 0.5, -0.003, -1.5]) for (const wheelInputMode of ['mouse', 'trackpad']) {
+    const earliest = Math.min(0, offset), preferences = { ...settings, wheelInputMode };
+    audio.time = earliest + .01; playback.wheel({ deltaY: 100 }, preferences, 1, offset);
+    assert.equal(audio.time, earliest); assert.ok(Math.abs(tempo.beat(audio.time - offset) - (earliest - offset) * 2) < 1e-9);
+    playback.wheel({ deltaY: 100, altKey: true }, preferences, 2, offset); assert.equal(audio.time, earliest);
+    playback.wheel({ deltaY: 100 }, { ...preferences, wheelStopAtAudioStart: false }, 3, offset); assert.ok(audio.time < earliest);
+    playback.wheel({ deltaY: 100 }, preferences, 4, offset); assert.equal(audio.time, earliest);
+    playback.wheel({ deltaY: -100 }, preferences, 5, offset); assert.ok(audio.time > earliest);
   }
+  audio.time = .01;
   playback.wheel({ deltaY: 100 }, { ...settings, wheelStopAtAudioStart: false }, 3);
   assert.ok(audio.time < 0);
   playback.wheel({ deltaY: 100 }, { ...settings, wheelStopAtAudioStart: true }, 4); assert.equal(audio.time, 0);

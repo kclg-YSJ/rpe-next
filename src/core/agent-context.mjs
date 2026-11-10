@@ -2,6 +2,30 @@ import { t } from '../i18n.mjs';
 export const AGENT_MEMORY_PREFIX = t('agent-context.s39718a0');
 export const AGENT_COMPACTION_PROMPT = t('agent-context.sc61702d');
 
+export function agentRuntimeContext(summary, config, capabilities, instruction = '') {
+  const { models, ...runtimeCapabilities } = capabilities;
+  return { role: 'user', rpen_context: true, content: t('agent-context.runtime') + '\n' + JSON.stringify({ summary, permission: config.permission, capabilities: runtimeCapabilities, instruction }) };
+}
+
+export function agentCacheUsage(usage = {}) {
+  const hit = usage.prompt_cache_hit_tokens ?? usage.prompt_tokens_details?.cached_tokens;
+  const miss = usage.prompt_cache_miss_tokens;
+  const cacheKnown = Number.isFinite(hit) || Number.isFinite(miss);
+  const cachedTokens = Math.max(0, hit ?? (cacheKnown ? (usage.prompt_tokens ?? 0) - miss : 0));
+  return { cacheKnown, cachedTokens, uncachedTokens: Math.max(0, miss ?? (usage.prompt_tokens ?? 0) - cachedTokens) };
+}
+
+// Keep the core schema prefix stable and remember discoveries even when the
+// discovered command was not called before this turn ended or was compacted.
+export function agentToolNames(messages) {
+  const names = new Set(AGENT_CORE_TOOLS);
+  for (const message of messages) {
+    for (const name of message.rpen_tools ?? []) if (typeof name === 'string') names.add(name);
+    for (const call of message.tool_calls ?? []) if (call.function?.name) names.add(call.function.name);
+  }
+  return names;
+}
+
 export function estimateAgentTokens(value) {
   let images = 0;
   const source = typeof value === 'string' ? value : JSON.stringify(value, (key, entry) => key === 'image_url' ? (images++, '[图像]') : entry);
@@ -32,7 +56,7 @@ export function agentContextSignature(config, context) {
 export function prepareAgentHistory(messages, { preserveToolReasoning = true } = {}) {
   return structuredClone(messages).map(message => {
     if (!preserveToolReasoning || !message.tool_calls?.length) { delete message.reasoning_content; delete message.reasoning_details; }
-    if (message.role === 'tool' && typeof message.content === 'string' && message.content.length > 16000) message.content = message.content.slice(0, 12000) + t('agent-context.s6268ab4');
+    if (message.role === 'tool' && !message.rpen_bounded_tool && typeof message.content === 'string' && message.content.length > 16000) message.content = message.content.slice(0, 12000) + t('agent-context.s6268ab4');
     return message;
   });
 }

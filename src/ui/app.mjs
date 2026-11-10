@@ -180,6 +180,7 @@ const displayFields = [
   ['editor-render-fps', 'editorRenderFps', DEFAULT_EDITOR_PREFERENCES.editorRenderFps],
   ['editor-render-auto-play', 'editorRenderAutoPlay', DEFAULT_EDITOR_PREFERENCES.editorRenderAutoPlay],
   ['key-display', 'keyDisplay', DEFAULT_EDITOR_PREFERENCES.keyDisplay],
+  ['clear-hits-on-resume', 'clearHitsOnResume', DEFAULT_EDITOR_PREFERENCES.clearHitsOnResume],
   ['selection-interval', 'selectionInterval', DEFAULT_EDITOR_PREFERENCES.selectionInterval],
   ['include-backup-charts', 'includeBackupCharts', false],
   ['text-selection-drag', 'textSelectionDrag', false],
@@ -307,6 +308,7 @@ function shaderDisplayName(event) {
 }
 timeline.shaderLabel = shaderDisplayName;
 const noiseEditor = new NoiseAreaEditor(element('#noise-panel'), element('#noise-editor-canvas'), () => ({ session, tempo, timeline, preview, realtimePreview, previewVisible: preview.visible, seconds: chartSeconds, sampleAutoFit: element('#sample-auto-fit').checked }), {
+  batchVisible: () => activePaneName === 'noise-properties',
   commit: (label, chart) => session.commit(label, chart), invalidate, notify, activate: activatePane,
   onContextMenu: event => openTimelineContextMenu(event),
   pause: () => playback.pause(), seek: beat => seekBeat(beat), wheel: event => previewWheel(event),
@@ -765,7 +767,7 @@ const previewWheel = event => {
   event.preventDefault();
   linePicker.hide();
   if (preview.visible && event.ctrlKey) { switchLineWithWheel(event.deltaY); return; }
-  playback.wheel(event, { ...preferences.settings, scrollSpeed: editorPreferences.scrollSpeed ?? preferences.settings.scrollSpeed, wheelInputMode: editorPreferences.wheelInputMode ?? preferences.settings.wheelInputMode, wheelStopAtAudioStart: editorPreferences.wheelStopAtAudioStart ?? preferences.settings.wheelStopAtAudioStart ?? true }, performance.now() / 1000);
+  playback.wheel(event, { ...preferences.settings, scrollSpeed: editorPreferences.scrollSpeed ?? preferences.settings.scrollSpeed, wheelInputMode: editorPreferences.wheelInputMode ?? preferences.settings.wheelInputMode, wheelStopAtAudioStart: editorPreferences.wheelStopAtAudioStart ?? preferences.settings.wheelStopAtAudioStart ?? true }, performance.now() / 1000, offsetSeconds());
 };
 element('.preview-wrap').addEventListener('wheel', previewWheel, { passive: false });
 const pickPreviewLine = (renderer, event) => {
@@ -1500,7 +1502,7 @@ function seekBeat(value, pause = true) {
 }
 
 async function togglePlayback() {
-  if (!audio.playing && !playback.pending) preview.effectsSince = realtimePreview.effectsSince = chartSeconds() - 0.001;
+  if (!audio.playing && !playback.pending && (editorPreferences.clearHitsOnResume ?? DEFAULT_EDITOR_PREFERENCES.clearHitsOnResume)) preview.effectsSince = realtimePreview.effectsSince = chartSeconds() - 0.001;
   await playback.toggle(session.chart);
   invalidate();
 }
@@ -2098,7 +2100,7 @@ window.addEventListener('keydown', async event => {
   if (noiseTrackingPanel.action(action)) { event.preventDefault(); event.stopImmediatePropagation(); return; }
   if (noteTrackingPanel.action(action)) { event.preventDefault(); event.stopImmediatePropagation(); return; }
   if (noiseEditor.active && (!preview.visible || noiseEditor.sampleMode)) {
-    try { if (noiseEditor.action(action)) { event.preventDefault(); event.stopImmediatePropagation(); return; } }
+    try { if (noiseEditor.action(action, event)) { event.preventDefault(); event.stopImmediatePropagation(); return; } }
     catch (error) { event.preventDefault(); reportError(error); return; }
   }
     if (action || ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) releaseShortcutFocus(target);

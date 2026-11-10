@@ -7,6 +7,7 @@ import { DiagnosticAssetIndex, resourceDiagnostics, compatibilityDiagnostics } f
 import { diagnosticPatch, applyDiagnosticPatch } from '../src/platform/diagnostic-patch.mjs';
 import { ChartDiagnostics } from '../src/platform/chart-diagnostics.mjs';
 import { GlobalEventRegistry } from '../src/core/global-events.mjs';
+import { createNoiseArea } from '../src/core/noise-areas.mjs';
 
 const byCode = (issues, code) => issues.filter(issue => issue.code === code);
 
@@ -70,6 +71,47 @@ test('跨音频边界的事件保留，完全处于范围外的事件报错，�
   const c = createChart(); c.judgeLineList[0].eventLayers[0].moveXEvents = [createEvent(0, 0, -100, 100), createEvent(0, 1, -5, -1), createEvent(0, 1, 10, 12), createEvent(0, 0, 4, 4)];
   assert.deepEqual(byCode(diagnose(c, { duration: 4 }), 'timeRange').map(issue => issue.index), [1, 2]);
   assert.equal(byCode(diagnose(c, { duration: 4 }), 'eventTime').length, 0);
+});
+
+test('负延迟允许第零拍初始化事件，提前越界和音频结尾仍报错，音符检查保持原音频边界', () => {
+  const c = createChart(); c.META.offset = -1500; const line = c.judgeLineList[0];
+  line.bpmfactor = 2;
+  line.eventLayers[0].moveXEvents = [createEvent(0, 0, 0, 0), createEvent(0, 1, 0, .1), createEvent(0, 0, -.02, -.02), createEvent(0, 0, -.01, -.01), createEvent(0, 0, 5.56, 5.56)];
+  line.notes = [createNote(1, 0, 0), createNote(1, 1.5, 0)];
+  const issues = byCode(diagnose(c, { duration: 4 }), 'timeRange');
+  assert.deepEqual(issues.filter(issue => issue.path.startsWith('moveXEvents')).map(issue => issue.index), [2, 4]);
+  assert.deepEqual(issues.filter(issue => issue.path.startsWith('notes')).map(issue => issue.index), [0]);
+  assert.equal(issues.length, 3);
+  assert.equal(byCode(diagnose(createChart(), { duration: 4 }), 'timeRange').length, 0);
+  for (const offset of [0, 1000]) {
+    const chart = createChart(); chart.META.offset = offset;
+    chart.judgeLineList[0].eventLayers[0].moveXEvents = [createEvent(0, 0, -offset / 500, -offset / 500), createEvent(0, 0, -offset / 500 - .1, -offset / 500 - .1)];
+    assert.deepEqual(byCode(diagnose(chart), 'timeRange').map(issue => issue.index), [1]);
+  }
+});
+
+test('负延迟的扩展、着色器参数、噪域和全局事件共用第零拍边界，过早事件仍检出', () => {
+  const c = createChart(); c.META.offset = -1500;
+  const events = [createEvent(0, 0, 0, 0), createEvent(0, 1, 0, .1), createEvent(0, 0, -.1, -.1)];
+  c.judgeLineList[0].extended.scaleXEvents = events;
+  c.effects = [{ shader: 'chromatic', start: [0, 0, 1], end: [1, 0, 1], vars: { power: events } }];
+  c.blockAreaList = [{ ...createNoiseArea(0, 1), moveXEvents: events }, createNoiseArea(-1, -.5)];
+  c.globalEvents = { version: 1, types: { fixture: { columns: { x: { valueType: 'number', events } } } } };
+  const issues = diagnose(c, { duration: 4 });
+  assert.deepEqual(byCode(issues, 'timeRange').map(issue => issue.path).sort(), ['blockAreaList[0].moveXEvents[2]', 'blockAreaList[1]', 'globalEvents.fixture.x[2]', 'scaleXEvents[2]']);
+  assert.deepEqual(byCode(issues, 'shaderParameterTimeRange').map(issue => issue.segment), [2]);
+});
+
+test('修改延迟使事件范围缓存失效，重复检查及修改其他轨道仍复用原缓存', () => {
+  const c = createChart(); c.META.offset = 1000; let reads = 0;
+  c.judgeLineList[0].eventLayers[0].moveXEvents = [{ ...createEvent(0, 0, -.1, -.1), get startTime() { reads++; return fromNumber(-.1); } }];
+  assert.equal(byCode(diagnose(c), 'timeRange').length, 0); assert.equal(reads, 1);
+  reads = 0; diagnose(c); assert.equal(reads, 0);
+  const negative = { ...c, META: { ...c.META, offset: -1500 } };
+  assert.equal(byCode(diagnose(negative), 'timeRange').length, 1); assert.equal(reads, 1);
+  reads = 0; diagnose(negative); assert.equal(reads, 0);
+  const edited = { ...negative, judgeLineList: [{ ...negative.judgeLineList[0], eventLayers: [{ ...negative.judgeLineList[0].eventLayers[0], moveYEvents: [createEvent(5)] }] }] };
+  diagnose(edited); assert.equal(reads, 0);
 });
 test('Hold 身体覆盖 Tap、不同起拍 Hold 交叠，排序与输入顺序无关，Fake/Drag/混合 Flick 不参与', () => {
   const c = createChart(); c.judgeLineList[0].notes = [createNote(2, 1, 0, 5), createNote(1, 3, 0), createNote(2, 2, 0, 6), createNote(4, 3, 0), createNote(3, 3, 0), { ...createNote(1, 4, 0), isFake: true }, { ...createNote(1, 3, 0), above: 2 }, createNote(1, 3, 1)];

@@ -1,5 +1,6 @@
 import { AGENT_PERMISSIONS, agentAbort, checkAgentSignal } from '../core/agent-commands.mjs';
-import { AGENT_CORE_TOOLS, AGENT_COMPACTION_PROMPT, AGENT_MEMORY_PREFIX, estimateAgentTokens, prepareAgentHistory, agentContextCut, trimAgentImages, agentContextPolicy, agentContextUsage } from '../core/agent-context.mjs';
+import { AGENT_COMPACTION_PROMPT, AGENT_MEMORY_PREFIX, estimateAgentTokens, prepareAgentHistory, agentContextCut, trimAgentImages, agentContextPolicy, agentContextUsage, agentRuntimeContext, agentToolNames, agentCacheUsage } from '../core/agent-context.mjs';
+import { agentOutputLimit } from '../core/agent-routing.mjs';
 import { t } from '../i18n.mjs';
 import { agentImages, agentUserMessage } from '../core/agent-images.mjs';
 
@@ -32,9 +33,8 @@ export class EditorAgent extends EventTarget {
     const guard = () => this.context().session === owner && !controller.signal.aborted;
     const redact = value => JSON.parse(JSON.stringify(value, (name, entry) => typeof entry === 'string' ? entry.replaceAll(config.key, '[已隐藏]') : entry));
     let capabilities = provider.capabilities?.(config.model) ?? {};
-    const selectedTools = new Set(AGENT_CORE_TOOLS);
-    for (const message of messages) for (const call of message.tool_calls ?? []) if (call.function?.name) selectedTools.add(call.function.name);
-    const tools = () => this.commands.entries.has('agent_tools') ? this.commands.tools().filter(tool => selectedTools.has(tool.function.name)) : this.commands.tools();
+    const selectedTools = agentToolNames(messages), definitions = new Map(this.commands.tools().map(tool => [tool.function.name, tool]));
+    const tools = () => definitions.has('agent_tools') ? [...selectedTools].flatMap(name => definitions.has(name) ? [definitions.get(name)] : []) : [...definitions.values()];
     let policy = agentContextPolicy(config, capabilities), budget = policy.threshold;
     const reportContext = (tokens = estimateAgentTokens({ system, tools: tools(), messages }), estimated = true) => {
       this.contextUsage = agentContextUsage(tokens, { ...policy, threshold: budget }, estimated); this.event('context-usage', this.contextUsage);
@@ -46,7 +46,10 @@ export class EditorAgent extends EventTarget {
       statistics.promptTokens += value.prompt_tokens ?? 0; statistics.completionTokens += value.completion_tokens ?? 0;
       statistics.totalTokens += value.total_tokens ?? (value.prompt_tokens ?? 0) + (value.completion_tokens ?? 0);
       statistics.reasoningTokens += value.completion_tokens_details?.reasoning_tokens ?? 0;
-      statistics.cachedTokens += value.prompt_cache_hit_tokens ?? value.prompt_tokens_details?.cached_tokens ?? 0;
+      const cache = agentCacheUsage(value);
+      statistics.cachedTokens += cache.cachedTokens;
+      statistics.uncachedTokens = (statistics.uncachedTokens ?? 0) + (cache.cacheKnown ? cache.uncachedTokens : 0);
+      statistics.cacheKnown ||= cache.cacheKnown;
     };
     const invoke = async (request, purpose) => {
       checkAgentSignal(controller.signal); if (!guard()) throw agentAbort();
@@ -97,7 +100,7 @@ export class EditorAgent extends EventTarget {
       }
       const retained = messages.slice(cut);
       if (!retained.length && !compactOnly) retained.push({ role: 'user', content: currentInstruction });
-      messages = [{ role: 'user', content: AGENT_MEMORY_PREFIX + summary }, ...retained];
+      messages = [{ role: 'user', content: AGENT_MEMORY_PREFIX + summary, rpen_tools: [...selectedTools] }, ...retained];
       compacted = true; statistics.compactions++;
       this.event('compaction-end', { summary, beforeTokens: before, afterTokens: estimateAgentTokens({ system, tools: currentTools, messages }) }); reportContext();
       checkpoint = structuredClone(messages); return true;
@@ -110,10 +113,15 @@ export class EditorAgent extends EventTarget {
     this.log.push({ role: 'user', text }); this.event('user', { text, runId, startedAt: statistics.startedAt }); this.event('state', { busy: true });
     try {
       if (provider.modelInfo) { try { capabilities = { ...capabilities, ...await provider.modelInfo(config, { signal: controller.signal }) }; } catch (error) { checkAgentSignal(controller.signal); } }
+      statistics.requestedMaxTokens = config.maxTokens ?? 65536;
+      config.maxTokens = statistics.maxTokens = agentOutputLimit(config, capabilities);
       policy = agentContextPolicy(config, capabilities); budget = policy.threshold;
       if (images.length && !capabilities.images) throw Error(t('agent-images.unsupported'));
       trimAgentImages(messages, Boolean(capabilities.images), runId); checkpoint = structuredClone(messages);
-      system = this.prompt() + t('agent.s1f13b73') + JSON.stringify(this.context().summary) + t('agent.s112fe43') + config.permission + t('agent.s2078fe0') + JSON.stringify(capabilities) + '\n' + instruction;
+      system = this.prompt();
+      const contextMessage = agentRuntimeContext(this.context().summary, config, capabilities, instruction);
+      messages.push(contextMessage);
+      transcript.push(contextMessage); checkpoint = structuredClone(messages); checkpointTranscript = structuredClone(transcript);
       reportContext();
       if (compactOnly) {
         await compress(true);
@@ -160,9 +168,14 @@ export class EditorAgent extends EventTarget {
             if (controller.signal.aborted) throw error;
             result = { ok: false, cancelled: toolController.signal.aborted, error: String(error.message).replaceAll(config.key, '[已隐藏]') };
           } finally { if (this.toolController === toolController) this.toolController = null; }
-          if (call.function.name === 'agent_tools' && result.ok) for (const entry of result.result?.commands ?? []) selectedTools.add(entry.name);
+          if (call.function.name === 'agent_tools' && result.ok) for (const entry of result.result?.commands ?? []) {
+            const registered = this.commands.entries.get(entry.name);
+            if (registered && !definitions.has(entry.name)) definitions.set(entry.name, { type: 'function', function: { name: registered.name, description: registered.description, parameters: registered.parameters } });
+            selectedTools.add(entry.name);
+          }
           const image = result.result?.image; if (image) delete result.result.image;
-          const content = JSON.stringify(result), message = { role: 'tool', tool_call_id: call.id, content: content.length > 60000 ? JSON.stringify({ ok: false, error: t('agent.s7497cbc'), characters: content.length }) : content };
+          const content = JSON.stringify(result), message = { role: 'tool', tool_call_id: call.id, rpen_bounded_tool: true, content: content.length > 60000 ? JSON.stringify({ ok: false, error: t('agent.s7497cbc'), characters: content.length }) : content,
+            ...(call.function.name === 'agent_tools' ? { rpen_tools: [...selectedTools] } : {}) };
           messages.push(message); transcript.push(message);
           this.log.push({ role: 'tool', name: call.function.name, text: content }); this.event('tool-end', { id: call.id, name: call.function.name, result });
           if (image && capabilities.images) images.push({ role: 'user', content: [{ type: 'text', text: t('agent.sa72ef18') + call.function.name + t('agent.s4d1f0a3') }, { type: 'image_url', image_url: { url: image } }] });

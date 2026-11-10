@@ -1,6 +1,6 @@
 import { checkAgentSignal } from '../core/agent-commands.mjs';
 import { t } from '../i18n.mjs';
-import { agentRoutePreset, agentRequestUrl, agentReasoningParameters } from '../core/agent-routing.mjs';
+import { agentRoutePreset, agentRequestUrl, agentReasoningParameters, agentOutputLimit } from '../core/agent-routing.mjs';
 import { agentApiError, agentConnectionError, agentResponseText } from '../core/agent-network-errors.mjs';
 
 export class AgentProviders extends EventTarget {
@@ -89,7 +89,7 @@ export function createCompatibleProvider(preset, request) {
         }
         return message;
       })], ...(tools?.length ? { tools } : {}), stream: true, stream_options: { include_usage: true },
-        [format === 'openai' ? 'max_completion_tokens' : 'max_tokens']: Math.min(config.maxTokens ?? 65536, metadata.get(identityOf(config))?.value.maxOutputTokens ?? Infinity), ...agentReasoningParameters({ ...config, reasoningFormat: format }, metadata.get(identityOf(config))?.value) };
+        [format === 'openai' ? 'max_completion_tokens' : 'max_tokens']: agentOutputLimit(config, metadata.get(identityOf(config))?.value), ...agentReasoningParameters({ ...config, reasoningFormat: format }, metadata.get(identityOf(config))?.value) };
       onTrace?.({ request: { url: agentRequestUrl('/chat/completions', config.baseUrl || preset.baseUrl), method: 'POST', headers: { Authorization: '[已隐藏]', 'Content-Type': 'application/json' }, body } });
       let pending = '', content = '', reasoning = '', finish = '', receivedDone = false, usage = null, model = config.model; const calls = new Map();
       const reasoningDetails = [];

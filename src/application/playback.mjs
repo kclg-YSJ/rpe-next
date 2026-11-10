@@ -36,7 +36,7 @@ export class EditorPlayback {
       }
     } finally { if (this.request === request) this.pending = false; }
   }
-  wheel(event, settings, now) {
+  wheel(event, settings, now, offset = 0) {
     const deltaMode = event.deltaMode ?? 0;
     const deltaY = event.deltaY;
     if (!Number.isFinite(deltaY) || deltaY === 0) return;
@@ -46,6 +46,7 @@ export class EditorPlayback {
     this.lastWheel = now;
     const delta = wheelSeconds(deltaY, this.audio.duration, settings.scrollSpeed, this.audio.rate, settings.scrollAcceleration, now - this.burstStart, event.altKey, deltaMode, inputMode);
     const target = this.audio.time + delta;
-    this.seek(settings.wheelStopAtAudioStart === false ? target : Math.max(0, target));
+    const earliest = Number.isFinite(offset) ? Math.min(0, offset) : 0;
+    this.seek(settings.wheelStopAtAudioStart === false ? target : Math.max(earliest, target));
   }
 }

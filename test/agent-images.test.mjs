@@ -62,5 +62,5 @@ test('运行过程中图片可随插话进入当前任务，取消旧请求后�
   const session = {}; agent.context = () => ({ session, summary: {} });
   const running = agent.run('start'); await waiting; assert.equal(agent.steer('see this', [image(1)]), true); await running;
   assert.equal(calls, 2); assert.equal(request.messages.findLast(message => message.role === 'user').content[1].type, 'image_url');
-  assert.equal(agent.turnMessages.filter(message => message.role === 'user').length, 2);
+  assert.equal(agent.turnMessages.filter(message => message.role === 'user' && !message.rpen_context).length, 2);
 });

@@ -12,6 +12,11 @@ export const AGENT_ROUTE_PRESETS = Object.freeze([
 export const AGENT_REASONING_FORMATS = Object.freeze(['deepseek', 'openrouter', 'openai', 'siliconflow', 'qwen', 'kimi', 'none']);
 export const AGENT_EFFORTS = Object.freeze(['auto', 'none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']);
 export const AGENT_PROFILE_FIELDS = Object.freeze(['provider', 'model', 'baseUrl', 'reasoningFormat', 'reasoningEffort', 'thinking', 'maxTokens', 'contextBudget', 'rememberKey']);
+export const validAgentMaxTokens = value => Number.isSafeInteger(value) && value >= 1024;
+export function agentOutputLimit(config, metadata = {}) {
+  const requested = validAgentMaxTokens(config.maxTokens) ? config.maxTokens : 65536;
+  return Number.isSafeInteger(metadata.maxOutputTokens) && metadata.maxOutputTokens > 0 ? Math.min(requested, metadata.maxOutputTokens) : requested;
+}
 export const agentRoutePreset = id => AGENT_ROUTE_PRESETS.find(entry => entry.id === id);
 export const agentEffortLabel = effort => t('agent-route.effort.' + effort);
 export function agentEffortDefault(config, metadata) {
@@ -49,13 +54,14 @@ export function agentProfileSettings(saved = {}) {
     profile.name = profile.name.trim().slice(0, 100) || profile.provider;
     if (!AGENT_REASONING_FORMATS.includes(profile.reasoningFormat)) profile.reasoningFormat = 'none';
     if (!AGENT_EFFORTS.includes(profile.reasoningEffort)) profile.reasoningEffort = 'auto';
-    if (!Number.isInteger(profile.maxTokens) || profile.maxTokens < 1024 || profile.maxTokens > 65536) profile.maxTokens = 65536;
+    if (!validAgentMaxTokens(profile.maxTokens)) profile.maxTokens = 65536;
     if (!Number.isInteger(profile.contextBudget) || profile.contextBudget !== 0 && (profile.contextBudget < 8192 || profile.contextBudget > 16777216)) profile.contextBudget = 0;
     profiles.push(profile); identifiers.add(profile.id);
   }
   if (!profiles.length) {
     const legacy = createAgentProfile(saved.provider ?? 'deepseek');
     for (const field of AGENT_PROFILE_FIELDS) if (typeof saved[field] === typeof legacy[field]) legacy[field] = saved[field];
+    if (!validAgentMaxTokens(legacy.maxTokens)) legacy.maxTokens = 65536;
     profiles.push(legacy);
   }
   const activeProfile = profiles.some(profile => profile.id === saved.activeProfile) ? saved.activeProfile : profiles[0].id;

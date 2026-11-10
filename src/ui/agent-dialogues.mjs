@@ -2,7 +2,7 @@ import { AgentConversations, conversationMessages } from '../application/agent-c
 import { renderAgentMarkdown } from './agent-markdown.mjs';
 import { AgentConversationRepository } from '../platform/agent-store.mjs';
 import { showAgentExchange } from './agent-inspector.mjs';
-import { AGENT_CORE_TOOLS, agentContextPolicy, agentContextUsage, agentContextSignature, estimateAgentTokens, prepareAgentHistory } from '../core/agent-context.mjs';
+import { agentContextPolicy, agentContextUsage, agentContextSignature, estimateAgentTokens, prepareAgentHistory, agentRuntimeContext, agentToolNames, agentCacheUsage } from '../core/agent-context.mjs';
 import { t } from '../i18n.mjs';
 import { agentEffortLabel } from '../core/agent-routing.mjs';
 import { AgentRoutingControls } from './agent-routing-controls.mjs';
@@ -22,7 +22,9 @@ export function submitAgentText(event, submit) {
 }
 export function agentUsageText(stats) {
   if (!stats) return '';
-  return [stats.model, stats.reasoningEffort ? agentEffortLabel(stats.reasoningEffort) : '', stats.startedAt ? new Date(stats.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '', time(stats.durationMs ?? 0), stats.usageKnown ? t('agent-dialogues.s1f73712', { p0: stats.promptTokens, p1: stats.completionTokens, p2: stats.totalTokens }) : t('agent-dialogues.s0e03625'), stats.reasoningTokens ? t('agent-dialogues.s7321f8c', { p0: stats.reasoningTokens }) : '', stats.cachedTokens ? t('agent-dialogues.s5f7da44', { p0: stats.cachedTokens }) : '', stats.requests ? t('agent-dialogues.s3b8c12f', { p0: stats.requests }) : '', stats.tools ? t('agent-dialogues.sbc85fe9', { p0: stats.tools }) : ''].filter(Boolean).join(' · ');
+  const cache = stats.cacheKnown ? t('agent-cache.usage', { hit: stats.cachedTokens, miss: stats.uncachedTokens, ratio: ((stats.cachedTokens + stats.uncachedTokens) ? 100 * stats.cachedTokens / (stats.cachedTokens + stats.uncachedTokens) : 0).toFixed(1) }) : stats.cachedTokens ? t('agent-dialogues.s5f7da44', { p0: stats.cachedTokens }) : '';
+  const output = stats.maxTokens && stats.maxTokens !== stats.requestedMaxTokens ? t('agent-output.applied', { limit: stats.maxTokens, requested: stats.requestedMaxTokens }) : '';
+  return [stats.model, stats.reasoningEffort ? agentEffortLabel(stats.reasoningEffort) : '', stats.startedAt ? new Date(stats.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '', time(stats.durationMs ?? 0), stats.usageKnown ? t('agent-dialogues.s1f73712', { p0: stats.promptTokens, p1: stats.completionTokens, p2: stats.totalTokens }) : t('agent-dialogues.s0e03625'), stats.reasoningTokens ? t('agent-dialogues.s7321f8c', { p0: stats.reasoningTokens }) : '', cache, output, stats.requests ? t('agent-dialogues.s3b8c12f', { p0: stats.requests }) : '', stats.tools ? t('agent-dialogues.sbc85fe9', { p0: stats.tools }) : ''].filter(Boolean).join(' · ');
 }
 
 export class AgentDialogues {
@@ -161,6 +163,7 @@ export class AgentDialogues {
       const view = this.running?.view, round = this.round; if (!view || !round) return;
       round.source = event.detail.text; round.thinking = event.detail.reasoning || round.thinking; this.renderRound(round, true);
       const usage = event.detail.usage, stats = { model: event.detail.model, durationMs: event.detail.durationMs, usageKnown: Boolean(usage), promptTokens: usage?.prompt_tokens ?? 0, completionTokens: usage?.completion_tokens ?? 0, totalTokens: usage?.total_tokens ?? 0, reasoningTokens: usage?.completion_tokens_details?.reasoning_tokens ?? 0 };
+      Object.assign(stats, agentCacheUsage(usage));
       this.roundMetrics(round, stats);
       if (event.detail.final) { view.answer.hidden = false; renderAgentMarkdown(view.answerContent, event.detail.text); if (event.detail.text) round.content.remove(); }
       if (!round.thinking && (event.detail.final || !round.source)) round.element.remove();
@@ -327,10 +330,9 @@ export class AgentDialogues {
     const running = this.running?.record === record && this.panel.agent.busy;
     let usage = running && this.panel.agent.contextUsage ? this.panel.agent.contextUsage : compatible ? agentContextUsage(stored.tokens, policy, stored.estimated) : null;
     if (!usage) {
-      const messages = prepareAgentHistory(conversationMessages(record)), selected = new Set(AGENT_CORE_TOOLS);
-      for (const message of messages) for (const call of message.tool_calls ?? []) selected.add(call.function.name);
-      const system = config.prompt + t('agent-dialogues.s1f13b73') + JSON.stringify(this.panel.adapter.summary()) + t('agent-dialogues.s112fe43') + config.permission + t('agent-dialogues.s2078fe0') + JSON.stringify(capabilities);
-      usage = agentContextUsage(estimateAgentTokens({ system, tools: this.panel.commands.tools().filter(tool => selected.has(tool.function.name)), messages }), policy);
+      const messages = prepareAgentHistory(conversationMessages(record)), selected = agentToolNames(messages);
+      messages.push(agentRuntimeContext(this.panel.adapter.summary(), config, capabilities));
+      usage = agentContextUsage(estimateAgentTokens({ system: config.prompt, tools: this.panel.commands.tools().filter(tool => selected.has(tool.function.name)), messages }), policy);
     }
     const ratio = Math.max(0, usage.ratio), percentage = (ratio * 100).toFixed(1) + '%';
     const number = usage.tokens >= 1000000 ? (usage.tokens / 1000000).toFixed(2) + 'M' : usage.tokens >= 1000 ? (usage.tokens / 1000).toFixed(1) + 'K' : String(usage.tokens);

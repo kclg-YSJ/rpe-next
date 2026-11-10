@@ -121,7 +121,10 @@ function shaderParameterIssues(event, location, seconds, options) {
 function outside(start, end, options, interval = false) {
   if (!Number.isFinite(start) || !Number.isFinite(end)) return false;
   const offset = options.offset ?? 0;
-  return (interval ? end : start) + offset < -.01 - 1e-8 || Number.isFinite(options.duration) && options.duration > 0 && (interval ? start : end) + offset > options.duration + .05 + 1e-8;
+  // Negative offsets place chart-zero initialization before the audio starts.
+  // Notes retain their audio bounds; event intervals may start at chart zero.
+  const earliest = interval ? Math.min(0, offset) : 0;
+  return (interval ? end : start) + offset < earliest - .01 - 1e-8 || Number.isFinite(options.duration) && options.duration > 0 && (interval ? start : end) + offset > options.duration + .05 + 1e-8;
 }
 
 function inspectLine(line, index, tempo, options) {

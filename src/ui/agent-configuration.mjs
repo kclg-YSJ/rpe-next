@@ -1,5 +1,5 @@
 import { DEFAULT_AGENT_PROMPT } from '../core/agent-prompt.mjs';
-import { AGENT_PROFILE_FIELDS, AGENT_REASONING_FORMATS, agentRoutePreset, createAgentProfile, agentBaseUrl, agentReasoningOptions, agentEffortLabel } from '../core/agent-routing.mjs';
+import { AGENT_PROFILE_FIELDS, AGENT_REASONING_FORMATS, agentRoutePreset, createAgentProfile, agentBaseUrl, agentReasoningOptions, agentEffortLabel, validAgentMaxTokens } from '../core/agent-routing.mjs';
 import { t } from '../i18n.mjs';
 
 const text = (tag, value, className = '') => { const node = document.createElement(tag); node.textContent = value; node.className = className; return node; };
@@ -55,7 +55,8 @@ export function showAgentConfiguration(panel) {
   const effort = field(t('agent-route.effort'), document.createElement('select'));
   const advanced = document.createElement('details'); advanced.className = 'agent-route-advanced'; advanced.append(text('summary', t('agent-route.advanced'))); form.append(advanced);
   const format = document.createElement('select'); for (const value of AGENT_REASONING_FORMATS) format.append(option(value, value === 'none' ? t('agent-route.noReasoningParameter') : value)); field(t('agent-route.format'), format, advanced);
-  const tokens = input('number', panel.settings.maxTokens); tokens.min = '1024'; tokens.max = '65536'; tokens.step = '1024'; field(t('agent-panel.s8b2fac1'), tokens);
+  const tokens = input('number', panel.settings.maxTokens); tokens.min = '1024'; tokens.step = '1'; field(t('agent-panel.s8b2fac1'), tokens);
+  const outputHint = text('p', '', 'hint'); form.append(outputHint);
   const rounds = input('number', panel.settings.maxRounds); rounds.min = '1'; rounds.max = '4096'; rounds.step = '1'; rounds.title = t('agent-panel.sb2cb09a'); field(t('agent-panel.s469251b'), rounds);
   const automatic = field(t('agent-panel.sa1bd627'), input('checkbox', '')); automatic.checked = panel.settings.autoCompact;
   const budgetMode = document.createElement('select'); budgetMode.append(option('auto', t('agent-panel.s073d0df')), option('custom', t('agent-panel.sc233989'))); field(t('agent-panel.secf753d'), budgetMode);
@@ -71,6 +72,7 @@ export function showAgentConfiguration(panel) {
   const updateEfforts = metadata => {
     const identity = [selected, model.value, baseUrl.value].join('\n'); if (metadata) modelMetadata.set(identity, metadata);
     metadata ??= modelMetadata.get(identity) ?? (selected === panel.settings.activeProfile && model.value === panel.settings.model && baseUrl.value === panel.settings.baseUrl ? panel.capabilities() : undefined);
+    outputHint.textContent = Number.isSafeInteger(metadata?.maxOutputTokens) && metadata.maxOutputTokens > 0 ? t('agent-output.modelLimit', { limit: metadata.maxOutputTokens }) : t('agent-output.hint');
     const value = effort.value || current().reasoningEffort, values = agentReasoningOptions({ ...current(), provider: provider.value, model: model.value, reasoningFormat: format.value }, metadata);
     effort.replaceChildren(...values.map(value => option(value, agentEffortLabel(value)))); effort.value = values.includes(value) ? value : 'auto'; effort.disabled = values.length < 2;
   };
@@ -79,7 +81,7 @@ export function showAgentConfiguration(panel) {
     if (loading) return false;
     const entry = current(), maxTokens = Number(tokens.value), contextBudget = budgetMode.value === 'auto' ? 0 : Number(budget.value);
     try {
-      if (!name.value.trim() || !model.value.trim() || !Number.isInteger(maxTokens) || maxTokens < 1024 || maxTokens > 65536) throw Error(t('agent-panel.s3188495'));
+      if (!name.value.trim() || !model.value.trim() || !validAgentMaxTokens(maxTokens)) throw Error(t('agent-panel.s3188495'));
       if (!Number.isInteger(contextBudget) || contextBudget !== 0 && (contextBudget < 8192 || contextBudget > 16777216)) throw Error(t('agent-panel.se32854e'));
       const address = agentRoutePreset(provider.value) ? agentBaseUrl(baseUrl.value) : baseUrl.value;
       Object.assign(entry, { name: name.value.trim(), provider: provider.value, model: model.value.trim(), baseUrl: address, reasoningFormat: format.value, reasoningEffort: effort.value, thinking: effort.value !== 'none', maxTokens, contextBudget, rememberKey: remember.checked });
