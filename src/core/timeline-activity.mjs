@@ -3,6 +3,7 @@ import { IntervalIndex } from './interval-index.mjs';
 import { EVENT_TYPES } from './chart.mjs';
 import { SPECIAL_TRACKS } from './editor-display.mjs';
 import { shaderEvents } from './shader-events.mjs';
+import { densityWindow } from './timeline-strip-settings.mjs';
 
 const trackIndex = events => new IntervalIndex(events, event => beatValue(event.startTime), event => beatValue(event.endTime));
 
@@ -47,17 +48,34 @@ export class TimelineActivity {
     });
   }
 
-  density(lineIndex, layer, extended, duration, height) {
+  density(lineIndex, layer, extended, duration, height, windowSeconds = 1) {
+    windowSeconds = densityWindow(windowSeconds);
     const bins = Math.max(96, Math.min(900, Math.max(Math.round(height), Math.ceil(duration * 8))));
-    const key = `${lineIndex}:${layer}:${extended}:${duration}:${bins}`;
+    const indices = Array.isArray(lineIndex) ? lineIndex : [lineIndex];
+    const key = `${indices.join(',')}:${layer}:${extended}:${duration}:${bins}:${windowSeconds}`;
     if (this.densityCache?.key === key) return this.densityCache;
-    const noteBins = new Uint32Array(bins); const eventBins = new Uint32Array(bins);
-    const add = (target, times) => { for (const seconds of times ?? []) target[Math.max(0, Math.min(bins - 1, Math.floor(seconds / duration * bins)))]++; };
-    const line = this.lines[lineIndex];
-    add(noteBins, line?.activity.notes);
-    add(eventBins, extended ? line?.activity.special.times : line?.activity.layers[layer]?.times);
-    if (extended) add(eventBins, line?.shaderTimes);
-    this.densityCache = { key, bins, noteBins, eventBins, maximum: Math.max(1, ...noteBins, ...eventBins) };
+    // Difference arrays reproduce Classic's centred one-second window in
+    // O(objects + bins), independent of chart duration and without sorting.
+    const noteDelta = new Float64Array(bins + 1), eventDelta = new Float64Array(bins + 1), unit = duration / bins, radius = windowSeconds / 2;
+    const add = (target, times) => { for (const seconds of times ?? []) {
+      if (!Number.isFinite(seconds) || seconds + radius < 0 || seconds - radius > duration) continue;
+      const first = Math.max(0, Math.ceil((seconds - radius) / unit - .5));
+      const last = Math.min(bins - 1, Math.floor((seconds + radius) / unit - .5));
+      if (first <= last) { target[first]++; target[last + 1]--; }
+    } };
+    for (const index of indices) {
+      const line = this.lines[index];
+      add(noteDelta, line?.activity.notes);
+      add(eventDelta, extended ? line?.activity.special.times : line?.activity.layers[layer]?.times);
+      if (extended) add(eventDelta, line?.shaderTimes);
+    }
+    const noteBins = new Float64Array(bins), eventBins = new Float64Array(bins);
+    let notes = 0, events = 0, noteMaximum = 1, eventMaximum = 1;
+    for (let i = 0; i < bins; i++) {
+      noteBins[i] = notes += noteDelta[i]; eventBins[i] = events += eventDelta[i];
+      noteMaximum = Math.max(noteMaximum, notes); eventMaximum = Math.max(eventMaximum, events);
+    }
+    this.densityCache = { key, bins, noteBins, eventBins, noteMaximum, eventMaximum, maximum: Math.max(noteMaximum, eventMaximum), windowSeconds };
     return this.densityCache;
   }
 

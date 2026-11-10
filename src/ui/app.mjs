@@ -17,7 +17,9 @@ import { showLargeChartPreview } from './large-chart-preview.mjs';
 import { LargeChartWorkspace } from './large-chart-workspace.mjs';
 import { readChartImport } from '../platform/chart-import.mjs';
 import { listDrafts, readDraft, saveSnapshot } from '../platform/recovery.mjs';
-import { Timeline, prepareCanvas } from './timeline.mjs';
+import { Timeline } from './timeline.mjs';
+import { selectionTimeRange } from '../application/selection-time-range.mjs';
+import { TimelineStrips } from './timeline-strips.mjs';
 import { Preview } from './preview.mjs';
 import { PreviewLinePicker } from './preview-line-picker.mjs';
 import { DirectPlacement } from './direct-placement.mjs';
@@ -103,7 +105,6 @@ import { SpeedCurvePanel, singleSpeedCurveNote } from './speed-curve.mjs';
 import { closeAnimationCurveEditor, animationCurvePlaybackActive, animationCurvePreviewState } from './custom-easing-controls.mjs';
 import { EditorSkins } from './editor-skins.mjs';
 import { NoteSkins } from './note-skins.mjs';
-import { editorSkinContext, editorCanvasRevision } from './editor-skin-canvas.mjs';
 import { editorSkinState, editorSkinSignal } from './editor-skin-state.mjs';
 import { pcmWave } from '../platform/pcm-wave.mjs';
 import { ModManager } from './mod-manager.mjs';
@@ -111,6 +112,7 @@ import { emitModHook } from '../core/mod-hooks.mjs';
 import { GlobalEventRegistry, registerPlaceholderGlobalEvent } from '../core/global-events.mjs';
 import { GlobalEventsEditor } from './global-events.mjs';
 import { initializeLocalPreferences, flushLocalPreferences, localPreferences } from '../platform/local-preferences.mjs';
+import { ProjectEditClock, chartEditSeconds } from '../platform/project-edit-clock.mjs';
 import { MultiLineStateStore } from '../platform/multi-line-state.mjs';
 import { SpatialLineStateStore, spatialLineState } from '../platform/spatial-line-state.mjs';
 import { multiLineState } from '../application/multi-line-edit.mjs';
@@ -140,8 +142,8 @@ catch (error) {
   host.append(message, retry); document.body.append(host); throw error;
 }
 if (globalThis.rpenDesktopStorage) {
-  globalThis.rpenFlushPreferences = async () => { speedCurve?.saveView(true); await agentPanel?.flush(); await flushLocalPreferences(); };
-  globalThis.rpenPrepareClose = async () => { await editorRecording?.finish(); multiLineStateStore.capture(); spatialLineStateStore.capture(); speedCurve?.saveView(true); await session.largeDocument?.flush(); await agentPanel?.stopAndFlush(); await flushLocalPreferences(); };
+  globalThis.rpenFlushPreferences = async () => { checkpointEditTime(); speedCurve?.saveView(true); await agentPanel?.flush(); await flushLocalPreferences(); };
+  globalThis.rpenPrepareClose = async () => { checkpointEditTime(); await editorRecording?.finish(); multiLineStateStore.capture(); spatialLineStateStore.capture(); speedCurve?.saveView(true); await session.largeDocument?.flush(); await agentPanel?.stopAndFlush(); await flushLocalPreferences(); };
 }
 
 const element = selector => document.querySelector(selector);
@@ -182,6 +184,9 @@ const displayFields = [
   ['key-display', 'keyDisplay', DEFAULT_EDITOR_PREFERENCES.keyDisplay],
   ['clear-hits-on-resume', 'clearHitsOnResume', DEFAULT_EDITOR_PREFERENCES.clearHitsOnResume],
   ['selection-interval', 'selectionInterval', DEFAULT_EDITOR_PREFERENCES.selectionInterval],
+  ['delete-with-extra-keys', 'deleteWithExtraKeys', DEFAULT_EDITOR_PREFERENCES.deleteWithExtraKeys],
+  ['density-strip-enabled', 'densityStrip', DEFAULT_EDITOR_PREFERENCES.densityStrip], ['history-strip-enabled', 'historyStrip', DEFAULT_EDITOR_PREFERENCES.historyStrip],
+  ['density-strip-brightness', 'densityStripBrightness', DEFAULT_EDITOR_PREFERENCES.densityStripBrightness], ['density-strip-window', 'densityStripWindow', DEFAULT_EDITOR_PREFERENCES.densityStripWindow],
   ['include-backup-charts', 'includeBackupCharts', false],
   ['text-selection-drag', 'textSelectionDrag', false],
   ['event-cut-density', 'cutDensity', 4],
@@ -263,7 +268,7 @@ let versionControl = null;
 let persistenceRequested = false;
 const manualSaves = new ManualSaveQueue(storeProject);
 let editorPreferences = { ...DEFAULT_EDITOR_PREFERENCES, ...readEditorPreferences() };
-const fileOptions = () => ({ includeBackupCharts: editorPreferences.includeBackupCharts === true });
+const fileOptions = () => ({ includeBackupCharts: editorPreferences.includeBackupCharts === true, editTime: checkpointEditTime });
 let atHome = true;
 let hasDocument = false;
 let renderStudio = null;
@@ -282,6 +287,7 @@ let loop = null;
 let activePaneName = 'chart';
 let lastSelectionSignature = '';
 let editTimeSeconds = 0;
+const projectEditClock = new ProjectEditClock();
 let editClockTick = performance.now();
 let lastDiagnosticSignature = null;
 let diagnosticAssetRevision = 0;
@@ -336,7 +342,7 @@ document.addEventListener('rpen-animation-curve-preview-changed', () => invalida
 const eventSampler = new EventSampler(element('.stage'), () => ({ session, tempo, preview, realtimePreview, previewVisible: preview.visible, timeline, seconds: chartSeconds, playing: () => audio.playing, sampleAutoFit: element('#sample-auto-fit').checked, pairedMovementSampling: element('#paired-movement-sampling').checked }), { invalidate, pause: () => playback.pause(), notify });
 const spatialTool = new SpatialTool(element('#spatial-editor'), () => ({ session, tempo, timeline, persistSpatialLines: () => spatialLineStateStore.capture(), previewVisible: preview.visible, showPreview: () => togglePreview(true, true, false, { autoplay: false }), hotkeys: () => ({ tap: preferences.hotkeys.AddTap, event: preferences.hotkeys.AddEvent, remove: preferences.hotkeys.Delete }), locked: () => Boolean(mods?.runtime.locks.size), sampling: () => eventSampler.active || Boolean(noiseEditor.sampleMode) }), { activate: activatePane, invalidate, pause: () => playback.pause(), notify, seek: beat => seekBeat(beat) });
 element('#spatial-tool').onclick = () => spatialTool.open();
-speedCurve = new SpeedCurvePanel(() => ({ session, timeline, preferences }), { invalidate, pause: () => playback.pause() });
+speedCurve = new SpeedCurvePanel(() => ({ session, timeline, preferences, editorPreferences }), { invalidate, pause: () => playback.pause() });
 const audioAnalysis = new AudioAnalysis(element('#audio-analysis-overlay'), () => timeline, () => audio, () => { persistEditor(); invalidate(); });
 const audioSources = new AudioSources(() => audio), audioOnsets = new AudioOnsets({ getTiming: sourceOffset => mapperTiming(session.chart, sourceOffset) }); audioAnalysis.attachSources(audioSources, notify, audioOnsets);
 audioAnalysis.requestFrame = () => invalidate();
@@ -487,46 +493,12 @@ const pasteGesture = new PasteGesture({
 });
 window.addEventListener('blur', () => pasteGesture.cancel());
 document.addEventListener('focusin', event => { if (isTextEntry(event.target)) pasteGesture.cancel(); });
-let stripCache;
-function createStripCanvas(width, height, role) {
-  const canvas = document.createElement('canvas'); const ratio = globalThis.devicePixelRatio || 1;
-  canvas.width = Math.max(1, Math.round(width * ratio)); canvas.height = Math.max(1, Math.round(height * ratio));
-  const context = editorSkinContext(canvas.getContext('2d'), role); context.setTransform(ratio, 0, 0, ratio, 0, 0); context.clearRect(0, 0, width, height);
-  return { canvas, context, width, height };
-}
+const timelineStrips = new TimelineStrips(element('#note-density'), element('#history-strip'));
 function drawTimelineStrips() {
-  const height = timeline.notesCanvas.clientHeight; const densityCanvas = element('#note-density'); const historyCanvas = element('#history-strip');
-  const width = densityCanvas.clientWidth; if (!height || !width) return;
-  timelineActivity.compile(session.chart, tempo);
+  if (!timelineStrips.options.densityStrip && !timelineStrips.options.historyStrip) return;
+  if (!(audio.duration > 0)) timelineActivity.compile(session.chart, tempo);
   const duration = Math.max(0.001, audio.duration > 0 ? audio.duration : timelineActivity.duration);
-  const historyEntries = session.recentEdits ?? [];
-  const historySignature = `${historyEntries.length}:${historyEntries.at(-1)?.start ?? ''}:${historyEntries.at(-1)?.end ?? ''}:${historyEntries.at(-1)?.label ?? ''}`;
-  const key = { chart: session.chart, line: session.lineIndex, layer: timeline.layer, extended: timeline.extended, duration, width, historyWidth: historyCanvas.clientWidth, height, historySignature, skinRevision: editorCanvasRevision() };
-  if (!stripCache || Object.keys(key).some(name => stripCache[name] !== key[name])) {
-    const noteFrame = createStripCanvas(width, height, 'density'); const historyFrame = createStripCanvas(historyCanvas.clientWidth, height, 'history');
-    const { bins, noteBins, eventBins, maximum } = timelineActivity.density(session.lineIndex, timeline.layer, timeline.extended, duration, height);
-    const logarithm = Math.log1p(maximum); const half = Math.max(1, width / 2 - 2);
-    for (let index = 0; index < bins; index++) {
-      const y = height - (index + 1) * height / bins; const barHeight = Math.max(1, height / bins - 1);
-      const noteValue = noteBins[index] ? Math.log1p(noteBins[index]) / logarithm : 0;
-      const eventValue = eventBins[index] ? Math.log1p(eventBins[index]) / logarithm : 0;
-      if (noteValue) { noteFrame.context.fillStyle = '#56b9d4'; noteFrame.context.globalAlpha = noteValue; noteFrame.context.fillRect(2, y, half, barHeight); }
-      if (eventValue) { noteFrame.context.fillStyle = '#d39b55'; noteFrame.context.globalAlpha = eventValue; noteFrame.context.fillRect(width - half - 2, y, half, barHeight); }
-    }
-    const historyWidth = historyCanvas.clientWidth;
-    historyEntries.forEach((command, index) => {
-      const start = Math.max(0, Math.min(duration, command.start)); const end = Math.max(start, Math.min(duration, command.end));
-      const y1 = height - end / duration * height; const y2 = height - start / duration * height;
-      historyFrame.context.globalAlpha = Math.max(0.25, (index + 1) / Math.max(1, historyEntries.length)); historyFrame.context.fillStyle = '#c69b55';
-      historyFrame.context.fillRect(2, Math.min(y1, y2) - 1, historyWidth - 4, Math.max(2, Math.abs(y2 - y1) + 2));
-    });
-    stripCache = { ...key, note: noteFrame.canvas, history: historyFrame.canvas };
-  }
-  const noteFrame = prepareCanvas(densityCanvas); const historyFrame = prepareCanvas(historyCanvas);
-  densityCanvas.getContext('2d').drawImage(stripCache.note, 0, 0, width, height);
-  historyCanvas.getContext('2d').drawImage(stripCache.history, 0, 0, historyCanvas.clientWidth, height);
-  const markerY = height - Math.max(0, Math.min(duration, chartSeconds())) / duration * height;
-  for (const frame of [noteFrame, historyFrame]) { frame.context.strokeStyle = '#f5e59a'; frame.context.lineWidth = 1; frame.context.beginPath(); frame.context.moveTo(0, markerY + .5); frame.context.lineTo(frame.width, markerY + .5); frame.context.stroke(); }
+  timelineStrips.draw(session, tempo, timelineActivity, duration, chartSeconds(), timeline.selectionTimeRange, timeline.layer, timeline.extended);
 }
 function seekFromStrip(event) {
   const rect = event.currentTarget.getBoundingClientRect(); const ratio = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
@@ -664,15 +636,15 @@ function rotateTip() { const target = element('#tips'); if (!target || editorPre
 setInterval(rotateTip, 10000);
 const offsetSeconds = () => Number(session.chart.META.offset ?? 0) / 1000;
 const chartSeconds = () => audio.time - offsetSeconds();
-const resetEditClock = chart => {
-  editTimeSeconds = 0;
+const resetEditClock = (chart, sourceTime = 0) => {
+  editTimeSeconds = projectEditClock.attach(versionRepoId, chart, { EditTime: sourceTime }, performance.now());
   editClockTick = performance.now();
 };
 const advanceEditClock = timestamp => {
-  const elapsed = Math.max(0, (timestamp - editClockTick) / 1000);
-  if (hasDocument && !atHome && !document.hidden) editTimeSeconds += elapsed;
+  editTimeSeconds = projectEditClock.tick(timestamp, hasDocument && !atHome && !document.hidden);
   editClockTick = timestamp;
 };
+function checkpointEditTime() { advanceEditClock(performance.now()); projectEditClock.checkpoint(); return editTimeSeconds; }
 const formatEditTime = seconds => `${String(Math.floor(seconds / 3600)).padStart(2, '0')} h, ${String(Math.floor(seconds / 60) % 60).padStart(2, '0')} m, ${String(Math.floor(seconds) % 60).padStart(2, '0')} s`;
 const currentBeat = () => tempo.beat(chartSeconds(), noiseEditor.active || globalEvents.active ? 1 : session.line?.bpmfactor ?? 1);
 let collaborationJoining = false;
@@ -740,7 +712,7 @@ window.addEventListener('keydown', event => {
 timeline.onDragScroll = seconds => playback.seek(audio.time + seconds);
 const autoSave = new AutoSaveClock(async () => {
   if (session.largeDocument) { await session.largeDocument.flush(); return; }
-  const current = session; const document = current.chart; const snapshot = { ...document }; delete snapshot.chartTime;
+  const current = session; const document = current.chart; checkpointEditTime(); const snapshot = projectEditClock.snapshot(document); delete snapshot.chartTime;
   const media = [...assets], folders = [...assetFolders];
   await saveSnapshot(libraryProject?.id ?? recoveryId, chartName, snapshot, media, editorPreferences.autoSaveLimit ?? preferences.settings.autoSaveLimit, { lineIndex: current.lineIndex, vcsId: versionRepoId, multiLine: multiLineState(current) });
   if (current === session) { lastDraftDocument = document; lastDraftAssets = media; lastDraftFolders = folders; status(t('app.s43755f3')); notify(t('app.s0d49e0d'), 'success'); }
@@ -770,6 +742,10 @@ const previewWheel = event => {
   playback.wheel(event, { ...preferences.settings, scrollSpeed: editorPreferences.scrollSpeed ?? preferences.settings.scrollSpeed, wheelInputMode: editorPreferences.wheelInputMode ?? preferences.settings.wheelInputMode, wheelStopAtAudioStart: editorPreferences.wheelStopAtAudioStart ?? preferences.settings.wheelStopAtAudioStart ?? true }, performance.now() / 1000, offsetSeconds());
 };
 element('.preview-wrap').addEventListener('wheel', previewWheel, { passive: false });
+element('.canvases').addEventListener('wheel', event => {
+  if (event.defaultPrevented || event.target !== event.currentTarget || atHome || preview.visible) return;
+  event.preventDefault(); timeline.onWheel(event); invalidate();
+}, { passive: false });
 const pickPreviewLine = (renderer, event) => {
   if (directPlacement.active) return false;
   const matches = renderer.pickLines(event.clientX, event.clientY);
@@ -889,6 +865,7 @@ subscribeLibrary(change => {
 });
 
 function setHome(visible) {
+  checkpointEditTime();
   if (visible) closeShaderWorkspace();
   if (visible) speedCurve.close();
   if (visible) performanceMonitor?.finish('interrupted');
@@ -1266,6 +1243,13 @@ function renderSession() {
   const multiEventSignature = [...(session.multiEventSelection ?? new Map())].map(([line, values]) => `${line}:${[...values].sort().join(',')}`).sort().join('|');
   const multiNoteSignature = [...(session.multiLineSelection ?? new Map())].map(([line, values]) => `${line}:${[...values].sort((left, right) => left - right).join(',')}`).sort().join('|');
   const selectionSignature = `${session.lineIndex}:${session.eventLayer}|${session.focus}|${[...session.selection].sort((left, right) => left - right).join(',')}|${[...session.eventSelection].sort().join(',')}|${multiNoteSignature}|${multiEventSignature}|${session.largeDocument?.logicalSelection?.token??''}`;
+  const selectionRangeMode = session.multiLineActive ? session.multiLineMode : 'single';
+  if (!timelineStrips.options.historyStrip) { timeline.selectionTimeRange = null; timeline.selectionRangeChart = null; }
+  else if (timeline.selectionRangeChart !== session.chart || timeline.selectionRangeSignature !== selectionSignature || timeline.selectionRangeTempo !== tempo || timeline.selectionRangeMode !== selectionRangeMode) {
+    timeline.selectionRangeChart = session.chart; timeline.selectionRangeSignature = selectionSignature; timeline.selectionRangeTempo = tempo;
+    timeline.selectionRangeMode = selectionRangeMode;
+    timeline.selectionTimeRange = selectionTimeRange(session, tempo);
+  }
   if (selectionSignature !== lastSelectionSignature) {
     lastSelectionSignature = selectionSignature;
     const selectionCount = session.focus === 'events' ? selectedEventCount : selectedNoteCount;
@@ -1305,6 +1289,7 @@ function renderSession() {
 session.addEventListener('change', renderSession);
 
 function replaceChart(chart, name, nextAssets = new Map(), nextFolders = [], options = {}) {
+  checkpointEditTime();
   speedCurve.close();
   if (largeChartWorkspace) {
     const previous = largeChartWorkspace; largeChartWorkspace = null;
@@ -1335,6 +1320,7 @@ function replaceChart(chart, name, nextAssets = new Map(), nextFolders = [], opt
   hitSounds.stop(); hitSounds.onlyCurrentLine = false; element('#mute-current-line').setAttribute('aria-pressed', 'false'); element('#mute-current-line').classList.remove('active'); images.clear(); libraryProject = null;
   session.removeEventListener('change', renderSession);
   session = new EditorSession(chart, { lineEventDefaults: editorPreferences.lineEventDefaults });
+  session.getProjectEditTime = checkpointEditTime;
   multiLineStateStore.attach(session, options.viewStateKey ?? versionRepoId, options.multiLineState);
   spatialLineStateStore.attach(session, options.viewStateKey ?? versionRepoId, options.spatialLineState);
   if (options.dirty) session.history.markUnsaved();
@@ -1355,7 +1341,8 @@ function replaceChart(chart, name, nextAssets = new Map(), nextFolders = [], opt
   closeShaderWorkspace();
   const customShaderFiles = chartShaderFiles(chart, assets, name);
   if (customShaderFiles.length) notify(t('shader-editor.importScoped', { count: customShaderFiles.length }), 'warning', 8000);
-  resetEditClock(chart);
+  resetEditClock(chart, options.editTime);
+  session.recordRecentEdits = timelineStrips.options.historyStrip;
   hitSounds.setProject(chart, assets, name);
   images.load(chart, assets, name);
   timeline.origin = 0;
@@ -1404,6 +1391,7 @@ function guardReplace(action) {
 async function loadCandidate(candidate, nextAssets, options = {}) {
   attachExternalEffects([candidate], nextAssets);
   replaceChart(candidate.chart, candidate.name, nextAssets, options.folders ?? candidate.project?.assetFolders ?? [], { ...options, repoId: candidate.project?.vcsId ?? candidate.project?.id,
+    editTime: chartEditSeconds(candidate.chart, candidate.info ?? candidate.project?.info),
     viewStateKey: candidate.project?.id ?? candidate.project?.vcsId, multiLineState: candidate.project?.viewState?.multiLine, spatialLineState: candidate.project?.viewState?.spatialLines });
   libraryProject = candidate.project ?? null;
   if (candidate.project?.vcsId) versionRepoId = candidate.project.vcsId;
@@ -1509,6 +1497,7 @@ async function togglePlayback() {
 
 function save() {
   noiseEditor.flush();
+  checkpointEditTime();
   if (session.largeDocument) return session.largeDocument.save().then(summary => { renderSession(); if (summary && !summary.dirty) { status('超大谱工程已保存'); notify('超大谱工程已保存', 'success'); } });
   agentPanel?.flush().catch(reportError);
   if (!persistenceRequested) { persistenceRequested = true; requestPersistence().then(() => storagePanel.refresh()).catch(() => {}); }
@@ -1516,7 +1505,7 @@ function save() {
   mods?.runtime.emit('editor:save-started',{});
   const savingSession = session;
   return manualSaves.save(savingSession, () => {
-    const document = session.chart; const snapshot = { ...document }; delete snapshot.chartTime;
+    const document = session.chart; const snapshot = projectEditClock.snapshot(document); delete snapshot.chartTime;
     const project = { ...(libraryProject ?? { id: crypto.randomUUID(), source: t('app.s70d7944'), imported: Date.now() }),
       chart: snapshot, chartName, vcsId: versionRepoId, assets: [...assets], assetFolders: [...assetFolders], bytes: [...assets.values()].reduce((sum, bytes) => sum + bytes.length, 0), updated: Date.now(), viewState: { lineIndex: session.lineIndex, multiLine: multiLineState(session), spatialLines: spatialLineState(session) } };
     status(t('app.se64da0d'));
@@ -2062,6 +2051,7 @@ window.addEventListener('keydown', event => {
 window.addEventListener('keyup', event => { if (!lineSwitchModifierMatches(event)) lineSwitchDigits = 0; }, true);
 window.addEventListener('blur', () => { lineSwitchDigits = 0; });
 function setEventEndpointDragHeld(held) {
+  if (!held) timeline.freezeHoldEndpoint();
   if (!held) for (const interaction of [timeline.eventInteraction, globalEvents.timeline.eventInteraction]) if (interaction.drag?.endpoint && !interaction.drag.frozen) interaction.drag.frozen = interaction.previewEvent(interaction.drag.event);
   timeline.eventEndpointDragHeld = globalEvents.timeline.eventEndpointDragHeld = held;
   timeline.eventInteraction.updateCursor(); globalEvents.timeline.eventInteraction.updateCursor(); noiseEditor.syncHover(); invalidate();
@@ -2069,6 +2059,7 @@ function setEventEndpointDragHeld(held) {
 window.addEventListener('blur', () => {
   setEventEndpointDragHeld(false);
   if (timeline.eventInteraction.drag?.endpoint) timeline.cancelPlacement();
+  if (timeline.drag?.endpoint) timeline.cancelPlacement();
   if (globalEvents.timeline.eventInteraction.drag?.endpoint) globalEvents.timeline.cancelPlacement();
   if (noiseEditor.drag?.endpoint) noiseEditor.cancelGesture();
 });
@@ -2079,8 +2070,8 @@ window.addEventListener('keydown', async event => {
   if (batchControls.active) { event.preventDefault(); return; }
   const area = spatialTool.enabled && spatialTool.panel.interactive || globalEvents.active ? 'events' : timeline.hoverArea ?? session.focus;
   const hasMultiSelection = session.multiLineActive && ([...(session.multiLineSelection?.values() ?? [])].some(values => values.size) || [...(session.multiEventSelection?.values() ?? [])].some(values => values.size));
-  const hasSelection = globalEvents.active ? globalEvents.selection.size > 0 : noiseEditor.active ? noiseEditor.selection.size > 0 : Boolean(session.selection.size || session.eventSelection.size || hasMultiSelection);
-  const action = shortcutAction(event, preferences, area, { hasSelection: hasSelection && (!preview.visible || directPlacement.active) });
+  const hasSelection = spatialTool.enabled && spatialTool.panel?.source ? true : globalEvents.active ? globalEvents.selection.size > 0 : noiseEditor.active ? noiseEditor.selection.size > 0 : Boolean(session.selection.size || session.eventSelection.size || hasMultiSelection);
+  const action = shortcutAction(event, preferences, area, { hasSelection: hasSelection && (!preview.visible || directPlacement.active), deleteWithExtraKeys: editorPreferences.deleteWithExtraKeys ?? DEFAULT_EDITOR_PREFERENCES.deleteWithExtraKeys });
   if (action === 'EditorRecording') { event.preventDefault(); event.stopImmediatePropagation(); if (!event.repeat) void editorRecording.toggle(); return; }
   if (action === 'Esc' && (linePicker.active || directPlacement.active)) {
     if (linePicker.active) linePicker.hide(); else directPlacement.close();
@@ -2187,7 +2178,8 @@ window.addEventListener('keyup', event => {
 }, true);
 window.addEventListener('blur', () => { if (heldPreview) { togglePreview(false); heldPreview = null; } });
 
-window.addEventListener('beforeunload', event => { if (hasDocument && (session.history.dirty || assetDirty)) { event.preventDefault(); event.returnValue = ''; } });
+window.addEventListener('beforeunload', event => { checkpointEditTime(); if (hasDocument && (session.history.dirty || assetDirty)) { event.preventDefault(); event.returnValue = ''; } });
+document.addEventListener('visibilitychange', () => { checkpointEditTime(); });
 window.addEventListener('resize', invalidate);
 element('#modal').addEventListener('close', () => { if (atHome) home.refresh().catch(reportError); });
 const markerResizeObserver = new ResizeObserver(() => { renderTimelineMarkers(); invalidate(); });
@@ -2454,6 +2446,14 @@ readPreferences().then(saved => {
 }).catch(error => status(t('app.s01610aa', { p0: error.message })));
 
 function applyDisplaySettings() {
+  timelineStrips.options = { densityStrip: editorPreferences.densityStrip ?? true, historyStrip: editorPreferences.historyStrip ?? true, densityStripBrightness: editorPreferences.densityStripBrightness ?? DEFAULT_EDITOR_PREFERENCES.densityStripBrightness, densityStripWindow: editorPreferences.densityStripWindow ?? DEFAULT_EDITOR_PREFERENCES.densityStripWindow };
+  const strips = timelineStrips.options;
+  const editor = element('.editor'); editor.classList.toggle('density-strip-off', !strips.densityStrip); editor.classList.toggle('history-strip-off', !strips.historyStrip);
+  element('#note-density').hidden = !strips.densityStrip; element('#history-strip').hidden = !strips.historyStrip;
+  session.recordRecentEdits = strips.historyStrip;
+  if (!strips.densityStrip) timelineStrips.note = null;
+  if (!strips.historyStrip) { timelineStrips.edits = null; timeline.selectionTimeRange = null; timeline.selectionRangeChart = null; }
+  if (!strips.densityStrip || !strips.historyStrip) timelineStrips.key = null;
   session.lineEventDefaults = normalizeLineDefaults(editorPreferences.lineEventDefaults);
   timeline.noteSpacing = editorPreferences.noteSpacing ?? DEFAULT_EDITOR_PREFERENCES.noteSpacing;
   timeline.notesOnlyNoteScale = editorPreferences.notesOnlyNoteScale ?? DEFAULT_EDITOR_PREFERENCES.notesOnlyNoteScale;
@@ -2547,6 +2547,7 @@ for (const [id, key] of displayFields.filter(([, key]) => key !== 'selectionInte
   else return;
   applyDisplaySettings(); persistEditor();
   if (key === 'movementVector') session.notify();
+  if (key === 'historyStrip') session.notify();
 });
 timeline.eventPlacementType = timeline.eventTypes[0];
 
@@ -2585,7 +2586,7 @@ editorRecording = new EditorRecording(modEditor, {
     if (largeChartWorkspace) await largeChartWorkspace.prepareRecordingFrame(chartSeconds());
   },
   drawFrame(timestamp) { frame(timestamp, true); keyDisplay.draw(timestamp); },
-  end() { lastTick = 0; editClockTick = performance.now(); frameLimiter.nextFrame = null; keyDisplay.endRender(); }
+  end() { lastTick = 0; editClockTick = performance.now(); projectEditClock.last = editClockTick; frameLimiter.nextFrame = null; keyDisplay.endRender(); }
 });
 agentPanel = new AgentPanel(modEditor, { activate: activatePane, notify, prependSilence: applyAudioLeadingSilence,
   writeAsset: async (path, bytes, binding) => {

@@ -16,6 +16,7 @@ import { copyObjects, pasteObjects, cutObjects } from '../src/application/clipbo
 import { duplicateLine, reorderLine, deleteLine } from '../src/application/line-commands.mjs';
 import { beatValue } from '../src/core/beat.mjs';
 import { insertEventAt, selectEvent, deleteEvents } from '../src/application/event-commands.mjs';
+import { createLine } from '../src/core/chart.mjs';
 
 async function fixture(run) {
   const root = await mkdtemp(join(tmpdir(), 'rpen-large-edit-')), workspace = join(root, 'work');
@@ -36,7 +37,7 @@ async function fixture(run) {
       if (method === 'page') result = document.page(value);
       else if (method === 'edit') result = await document.edit(value);
       else if (method === 'travel') result = await document.travel(value);
-      else if (method === 'save') result = await document.saveDatabase(join(root, 'saved.rpenlarge'));
+      else if (method === 'save') result = await document.saveDatabase(join(root, 'saved.rpenlarge'), value.editTime);
       else if (method === 'selection') result = await document.selections.select(value);
       else if (method === 'selectionRead') result = document.selections.read(value);
       else if (method === 'selectionEdit') result = await document.selections.stage(value);
@@ -63,6 +64,12 @@ test('XY event transactions persist both axes together in large-chart storage an
   assert.equal(tracks().moveXEvents.length, 0); assert.equal(tracks().moveYEvents.length, 0);
   session.travel('undo'); await editor.flush(); assert.equal(tracks().moveXEvents.length, 1); assert.equal(tracks().moveYEvents.length, 1);
   assert.equal(document.page({ lines: [1], start: 9999, end: 10001 }).notes.length, 1); assert.deepEqual(errors, []);
+}));
+
+test('超大谱工程保存总编辑时间不新增音符事务，重开数据库保留累计秒数',()=>fixture(async({session,editor,document,root})=>{
+  session.getProjectEditTime=()=>125.5;const revision=document.revision;await editor.save();assert.equal(document.revision,revision);assert.equal(document.chart.rpeNextEditTime,125.5);
+  const destination=join(root,'saved.rpenlarge'),workspace=join(root,'reopen-time');await mkdir(workspace);const reopened=new LargeChartDocument(workspace);
+  try{const summary=await reopened.restoreDatabase(destination);assert.equal(summary.chart.rpeNextEditTime,125.5);assert.equal(summary.total,document.total);}finally{reopened.close();}
 }));
 
 test('ordinary placement, drag/property transforms, copy/cut/paste and history preserve unloaded notes', () => fixture(async ({ session, editor, document, errors }) => {
@@ -229,6 +236,27 @@ test('logical selection survives multi-line focus changes and Ctrl-style removal
   const id=document.page({lines:[1],start:9999,end:10001}).notes[0].note._rpenLargeRef.id;
   editor.selectRegions([],{append:true,remove:true,references:[id]});await editor.flush();assert.equal(editor.selectedCount,3);
   editor.selectRegions([],{append:true,references:[id]});await editor.flush();assert.equal(editor.selectedCount,4);
+}));
+
+test('磁盘多线粘贴和移线按有序面板位置映射，完整选择摘要含卸载部分时间', () => fixture(async ({session,editor,document,errors})=>{
+  const header=structuredClone(document.chart);while(header.judgeLineList.length<6)header.judgeLineList.push(createLine());
+  await document.edit({revision:document.revision,header,changes:[{line:0,note:createNote(1,20,10),count:1000000},{line:1,note:createNote(2,22,20,24),count:3}]});
+  editor.updateSummary(structuredClone(document.describe()));await editor.refresh();session.multiLineEnabled=true;session.multiLineMode='notes';session.multiLineIndices=[0,1,5,3];
+  editor.selectRegions([{line:0,start:20,end:24,left:9,right:11},{line:1,start:20,end:24,left:19,right:21}]);await editor.flush();assert.equal(editor.selectedCount,1000003);
+  assert.equal(editor.logicalSelection.firstSeconds,10);assert.equal(editor.logicalSelection.lastSeconds,12);
+  await copyObjects(session);assert.deepEqual(session.clipboardLineOrder,[0,1,5,3]);
+  // Use the disk clipboard path, as with a selection too large to preview.
+  session.clipboard=[{...session.clipboard[0],_rpenLargeClipboard:{owner:editor.summary.id,token:document.state('clipboardToken'),total:1000003}}];
+  pasteObjects(session,30,{targetLineIndex:1});await editor.flush();
+  assert.equal(document.page({lines:[1],start:30,end:30}).notes[0].note._rpenLargeRef.count,1000000);
+  assert.equal(document.page({lines:[5],start:32,end:34}).notes[0].note._rpenLargeRef.count,3);
+  session.travel('undo');await editor.flush();
+  pasteObjects(session,40,{targetLineIndex:5});await editor.flush();
+  assert.equal(document.page({lines:[5],start:40,end:40}).notes[0].note._rpenLargeRef.count,1000000);
+  assert.equal(document.page({lines:[3],start:42,end:44}).notes[0].note._rpenLargeRef.count,3);
+  editor.transformSelected('向右移一列',note=>note,{lineOffset:1});await editor.flush();
+  assert.equal(document.page({lines:[3],start:40,end:40}).notes[0].note._rpenLargeRef.count,1000000);
+  assert.equal(document.page({lines:[0],start:42,end:44}).notes.find(entry=>entry.note.positionX===20).note._rpenLargeRef.count,3);assert.deepEqual(errors,[]);
 }));
 
 test('unchanged logical transforms do not add history, and selection history remains usable after clearing and reselecting', () => fixture(async ({ session, editor, document }) => {

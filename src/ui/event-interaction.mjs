@@ -231,7 +231,8 @@ export class EventInteraction {
     if (this.drag.endpoint) {
       this.move(event); const drag = this.drag, session = this.timeline.getSession(), next = this.previewEvent(drag.event); this.drag = null;
       this.canvas.releasePointerCapture?.(event.pointerId);
-      if ((drag.moved || drag.scrolled) && session.chart === drag.chart && selectedEventEntries(session).length === 1 && selectedEventEntries(session)[0].event === drag.event) {
+      const selected = selectedEventEntries(session);
+      if (session.chart === drag.chart && selected.length === 1 && selected[0].event === drag.event && (beatValue(next.startTime) !== beatValue(drag.event.startTime) || beatValue(next.endTime) !== beatValue(drag.event.endTime))) {
         try { transformEvents(session, t('event-interaction.s18a93d4'), current => current === drag.event ? next : current, { xyTiming: Boolean(drag.xySnapshot) }); } catch (error) { this.reportError(error); }
       }
       this.updateCursor(); this.timeline.changed(); return;

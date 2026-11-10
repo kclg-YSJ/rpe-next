@@ -173,7 +173,7 @@ export function installLargeChartPreview({ ipcMain, service, window, origin, dia
         const job=service.job;if(!job||job.id!==id)throw Error('工程已关闭');let destination=job.savedPath;
         if(!destination||value?.saveAs){const choice=await dialog.showSaveDialog(window(),{title:'保存超大谱工程',defaultPath:destination??join(dirname(service.root),'谱面.rpenlarge'),filters:[{name:'超大谱工程',extensions:['rpenlarge']}]});if(choice.canceled)return{ok:true,result:null};destination=choice.filePath;}
         destination = await largeChartSaveDestination(destination, service.root);
-        result=await service.command(id,'save',destination);job.savedPath=destination;job.owner.savedPath=destination;await writeFile(join(job.workspace,'.owner.json'),JSON.stringify(job.owner));result.savedPath=destination;
+        result=await service.command(id,'save',{path:destination,editTime:value?.editTime});job.savedPath=destination;job.owner.savedPath=destination;await writeFile(join(job.workspace,'.owner.json'),JSON.stringify(job.owner));result.savedPath=destination;
       }
       else if (action === 'close') { generation++; result = await service.close({discard:value?.discard===true}); }
       else if (action === 'openCache') { if (service.root) { const error = await shell.openPath(service.root); if (error) throw Error(error); } }

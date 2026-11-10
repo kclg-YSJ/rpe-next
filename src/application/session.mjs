@@ -7,6 +7,7 @@ import { emitModHook } from '../core/mod-hooks.mjs';
 import { t } from '../i18n.mjs';
 import { normalizeLineGroups } from '../core/line-groups.mjs';
 import { normalizeNoteDefaults, normalizeLineDefaults, createPlacedLine, createPlacedNote } from '../core/placement-defaults.mjs';
+import { recentEditRange } from './recent-edit-range.mjs';
 
 export class EditorSession extends EventTarget {
   constructor(chart = createChart(), { lineEventDefaults } = {}) {
@@ -16,6 +17,8 @@ export class EditorSession extends EventTarget {
     this.selection = new Set();
     this.clipboard = [];
     this.clipboardNoteLines = [];
+    this.clipboardLineOrder = [];
+    this.clipboardBounds = null;
     this.eventSelection = new Set();
     this.eventClipboard = [];
     this.eventClipboardLines = [];
@@ -61,7 +64,7 @@ export class EditorSession extends EventTarget {
   normalizeMultiLine() {
     const length = this.chart.judgeLineList?.length ?? 0;
     if (this.multiLineExpression && this.multiLineResolvedIndices !== this.multiLineIndices) this.multiLineExpression = '';
-    this.multiLineIndices = [...new Set(this.multiLineIndices.filter(index => Number.isInteger(index) && index >= 0 && index < length))].sort((a, b) => a - b);
+    this.multiLineIndices = [...new Set(this.multiLineIndices.filter(index => Number.isInteger(index) && index >= 0 && index < length))];
     if (this.multiLineExpression) this.multiLineResolvedIndices = this.multiLineIndices;
     if (this.multiLineEnabled && !this.multiLineIndices.length && !this.multiLineExpression && length) this.multiLineIndices = [Math.max(0, Math.min(this.lineIndex, length - 1))];
   }
@@ -129,10 +132,12 @@ export class EditorSession extends EventTarget {
     if(change.normalizeAlpha!==false)chart = integerChartAlpha(chart, this.chart);
     if (this.largeDocument) return this.largeDocument.commit(label, chart, beforeSelection);
     if (this.collaboration) {const result=this.collaboration.commit(label, chart, beforeSelection);emitModHook('session:after-commit',{session:this,label,chart:this.chart});return result;}
-    if (this.history.commit(label, chart, { beforeSelection, afterSelection: this.selectionState() })) {
-      const time = Number.isFinite(this.editSeconds) ? Math.max(0, this.editSeconds) : 0;
-      this.recentEdits.push({ start: time, end: time, label });
-      if (this.recentEdits.length > 50) this.recentEdits.shift();
+    const before = this.chart, afterSelection = this.selectionState();
+    if (this.history.commit(label, chart, { beforeSelection, afterSelection })) {
+      if (this.recordRecentEdits !== false) {
+        this.recentEdits.push(recentEditRange(this, before, beforeSelection, afterSelection, label));
+        if (this.recentEdits.length > 50) this.recentEdits.shift();
+      }
     }
     this.notify();
     emitModHook('session:after-commit',{session:this,label,chart:this.chart});

@@ -9,11 +9,11 @@ const storage = () => { const values = new Map(); const writes = []; return { ge
 
 test('线号列表、模式、合并与关闭状态按谱面独立保存，不需要保存谱面且重启后恢复', () => {
   const disk = storage(), store = new MultiLineStateStore(disk), first = session(), second = session();
-  store.attach(first, 'A'); first.setMultiLineEnabled(true, 'events'); first.multiLineIndices = [0, 2, 4]; first.setMultiLineMerge(false);
+  store.attach(first, 'A'); first.setMultiLineEnabled(true, 'events'); first.multiLineIndices = [4, 0, 2]; first.setMultiLineMerge(false);
   first.setMultiLineEnabled(false); assert.equal(first.history.dirty, false);
   store.attach(second, 'B'); second.setMultiLineEnabled(true); second.multiLineIndices = [1, 3]; second.notify();
   store.detach(); const reopened = session(); new MultiLineStateStore(disk).attach(reopened, 'A');
-  assert.deepEqual(reopened.multiLineIndices, [0, 2, 4]); assert.equal(reopened.multiLineEnabled, false); assert.equal(reopened.multiLineMode, 'events'); assert.equal(reopened.multiLineMerge, false);
+  assert.deepEqual(reopened.multiLineIndices, [4, 0, 2]); assert.equal(reopened.multiLineEnabled, false); assert.equal(reopened.multiLineMode, 'events'); assert.equal(reopened.multiLineMerge, false);
   const other = session(); new MultiLineStateStore(disk).attach(other, 'B'); assert.deepEqual(other.multiLineIndices, [1, 3]);
 });
 

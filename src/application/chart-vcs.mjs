@@ -125,6 +125,7 @@ export class ChartRepository {
   async treeFromSnapshot(snapshot, { write = true } = {}) {
     const document = { ...snapshot.chart };
     delete document.chartTime;
+    delete document.rpeNextEditTime;
     const chartText = stringifyPreservingNumbers(document);
     const chart = await sha256Hex(chartText);
     const assets = [];

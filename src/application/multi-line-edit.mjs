@@ -2,16 +2,36 @@ import { groupLineIndices, groupNames, reservedLineGroupName } from '../core/lin
 import { t } from '../i18n.mjs';
 
 export function normalizeLineIndices(indices, lineCount) {
-  return [...new Set((indices ?? []).filter(index => Number.isInteger(index) && index >= 0 && index < lineCount))].sort((a, b) => a - b);
+  return [...new Set((indices ?? []).filter(index => Number.isInteger(index) && index >= 0 && index < lineCount))];
+}
+
+const linePositions = new WeakMap();
+const emptyLinePositions = new Map();
+export function lineOrderPositions(order) {
+  if (!order) return emptyLinePositions;
+  // Workspace and clipboard lists are replaced when their order changes.
+  let positions = linePositions.get(order);
+  if (!positions) { positions = new Map(order.map((line, index) => [line, index])); linePositions.set(order, positions); }
+  return positions;
+}
+export function lineOffsetMapper(lineCount, sourceOrder, targetOrder = sourceOrder, offset = 0) {
+  const positions = lineOrderPositions(sourceOrder);
+  return source => {
+    const position = positions.get(source);
+    if (position !== undefined && targetOrder?.length) return targetOrder[((position + offset) % targetOrder.length + targetOrder.length) % targetOrder.length];
+    return lineCount ? ((source + offset) % lineCount + lineCount) % lineCount : source + offset;
+  };
 }
 
 export function compileLineExpression(text, lineCount, chart = null) {
   const values = [];
   const dynamic = new Set();
+  const parts = [];
   const groups = new Map(groupNames(chart).map((name, index) => [name, index]));
   for (const token of String(text ?? '').trim().split(/\s+/).filter(Boolean)) {
+    const first = values.length;
     const range = token.split(':');
-    if (['@notes', '@events'].includes(token.toLowerCase())) dynamic.add(token.toLowerCase().slice(1));
+    if (['@notes', '@events'].includes(token.toLowerCase())) { const kind = token.toLowerCase().slice(1); dynamic.add(kind); parts.push(kind); }
     else if (token.toLowerCase() === 'all') values.push(...Array.from({ length: lineCount }, (unused, index) => index));
     else if (range.length === 1 && groups.has(token)) values.push(...groupLineIndices(chart, groups.get(token)));
     else if (range.length === 1 && /^[-+]?\d+$/.test(token)) values.push(Number(token));
@@ -20,32 +40,32 @@ export function compileLineExpression(text, lineCount, chart = null) {
       if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start > end) throw new Error(t('multi-line-edit.s144ae04', { p0: token }));
       for (let index = Math.max(0, start); index <= Math.min(lineCount - 1, end); index++) values.push(index);
     } else throw new Error(t('multi-line-edit.s6aa7d11', { p0: token }));
+    if (values.length > first) parts.push(values.slice(first));
   }
-  return { indices: normalizeLineIndices(values, lineCount), dynamic: [...dynamic] };
+  return { indices: normalizeLineIndices(values, lineCount), dynamic: [...dynamic], parts };
+}
+
+export function resolveLineExpression(compiled, current, lineCount) {
+  return normalizeLineIndices(compiled.parts.flatMap(part => typeof part === 'string' ? current[part] ?? [] : part), lineCount);
 }
 
 export function parseLineExpression(text, lineCount, chart = null, current) {
   const compiled = compileLineExpression(text, lineCount, chart);
   if (compiled.dynamic.length && !current) throw new Error(t('multi-line-edit.needsViewport'));
-  return normalizeLineIndices([...compiled.indices, ...compiled.dynamic.flatMap(kind => current[kind] ?? [])], lineCount);
+  return resolveLineExpression(compiled, current ?? {}, lineCount);
 }
 
 export function formatLineExpression(indices, chart = null) {
   const values = normalizeLineIndices(indices, Number.MAX_SAFE_INTEGER);
   if (chart?.judgeLineList?.length && values.length === chart.judgeLineList.length && values.every((value, index) => value === index)) return 'all';
-  const tokens = [];
-  const remaining = new Set(values);
-  if (chart) for (const [groupIndex, name] of groupNames(chart).entries()) {
-    if (groupIndex === 0 || !name || /\s/.test(name) || reservedLineGroupName(name)) continue;
-    const members = groupLineIndices(chart, groupIndex);
-    if (members.length && members.every(index => remaining.has(index))) { tokens.push(name); members.forEach(index => remaining.delete(index)); }
-  }
-  const numeric = [...remaining].sort((left, right) => left - right);
-  for (let index = 0; index < numeric.length;) {
+  const tokens = [], groups = chart ? groupNames(chart).flatMap((name, index) => index && name && !/\s/.test(name) && !reservedLineGroupName(name) ? [{ name, members: groupLineIndices(chart, index) }] : []) : [];
+  for (let index = 0; index < values.length;) {
+    const group = groups.find(group => group.members.length && group.members.every((line, i) => values[index + i] === line));
+    if (group) { tokens.push(group.name); index += group.members.length; continue; }
     let end = index;
-    while (end + 1 < numeric.length && numeric[end + 1] === numeric[end] + 1) end++;
+    while (end + 1 < values.length && values[end + 1] === values[end] + 1 && !groups.some(group => group.members.length && group.members[0] === values[end + 1])) end++;
     const length = end - index + 1;
-    tokens.push(length >= 3 ? `${numeric[index]}:${numeric[end]}` : numeric.slice(index, end + 1).join(' '));
+    tokens.push(length >= 3 ? `${values[index]}:${values[end]}` : values.slice(index, end + 1).join(' '));
     index = end + 1;
   }
   return tokens.join(' ');

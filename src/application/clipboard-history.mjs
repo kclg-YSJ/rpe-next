@@ -22,11 +22,11 @@ export class ClipboardHistory extends EventTarget {
   }
 
   remember(session) {
-    this.current = structuredClone({ notes: session.clipboard, noteLines: session.clipboardNoteLines ?? [], events: session.eventClipboard, eventLines: session.eventClipboardLines ?? [] });
+    this.current = structuredClone({ notes: session.clipboard, noteLines: session.clipboardNoteLines ?? [], events: session.eventClipboard, eventLines: session.eventClipboardLines ?? [], lineOrder: session.clipboardLineOrder ?? [], ...(session.clipboardBounds ? { bounds: session.clipboardBounds } : {}) });
     this.activeId = null;
     if (this.enabled && this.current.notes.length + this.current.events.length) {
       const signature = JSON.stringify(this.current);
-      const previous = this.entries.find(entry => JSON.stringify({ notes: entry.notes, noteLines: entry.noteLines ?? [], events: entry.events, eventLines: entry.eventLines ?? [] }) === signature);
+      const previous = this.entries.find(entry => JSON.stringify({ notes: entry.notes, noteLines: entry.noteLines ?? [], events: entry.events, eventLines: entry.eventLines ?? [], lineOrder: entry.lineOrder ?? [], ...(entry.bounds ? { bounds: entry.bounds } : {}) }) === signature);
       if (previous) this.entries = this.entries.filter(entry => entry !== previous);
       const entry = { ...structuredClone(this.current), id: previous?.id ?? crypto.randomUUID(), pinned: previous?.pinned ?? false,
         name: previous?.name ?? '', source: session.chart.META.name || '未命名谱面', line: session.lineIndex, created: Date.now() };
@@ -42,13 +42,15 @@ export class ClipboardHistory extends EventTarget {
   attach(session) {
     session.clipboard = structuredClone(this.current.notes); session.clipboardNoteLines = structuredClone(this.current.noteLines ?? session.clipboard.map(() => session.lineIndex));
     session.eventClipboard = structuredClone(this.current.events); session.eventClipboardLines = structuredClone(this.current.eventLines ?? session.eventClipboard.map(() => session.lineIndex));
+    session.clipboardLineOrder = structuredClone(this.current.lineOrder ?? []);
+    session.clipboardBounds = structuredClone(this.current.bounds ?? null);
     session.clipboardVisible = Boolean(this.current.notes.length + this.current.events.length);
   }
 
   use(session, id) {
     if (!this.enabled) return false;
     const entry = this.entries.find(entry => entry.id === id); if (!entry) return false;
-    this.current = structuredClone({ notes: entry.notes, noteLines: entry.noteLines ?? [], events: entry.events, eventLines: entry.eventLines ?? [] }); this.activeId = id;
+    this.current = structuredClone({ notes: entry.notes, noteLines: entry.noteLines ?? [], events: entry.events, eventLines: entry.eventLines ?? [], lineOrder: entry.lineOrder ?? [], ...(entry.bounds ? { bounds: entry.bounds } : {}) }); this.activeId = id;
     this.attach(session); this.changed(false); return true;
   }
 

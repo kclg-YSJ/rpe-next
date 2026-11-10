@@ -16,8 +16,9 @@ function movingCounts(times, bins, duration) {
 
 export function installDensity(api, state) {
   let previous = null, processed = null;
-  api.patch(TimelineActivity.prototype, 'density', original => function(lineIndex, layer, extended, duration, height) {
-    const base = original.call(this, lineIndex, layer, extended, duration, height);
+  api.patch(TimelineActivity.prototype, 'density', original => function(lineIndex, layer, extended, duration, height, windowSeconds) {
+    const base = original.call(this, lineIndex, layer, extended, duration, height, windowSeconds);
+    if (Number.isFinite(base.windowSeconds)) return base;
     if (!state.active || api.editor.session.largeDocument || this.chart !== api.editor.chart) return base;
     if (previous === base) return processed;
     const line = this.lines[lineIndex], bins = base.bins;
@@ -33,6 +34,7 @@ export function installDensity(api, state) {
   });
   const canvas = document.querySelector('#note-density'), contexts = new WeakMap(), pictures = new WeakMap();
   const recolor = source => {
+    if (source?.dataset?.timelineDensity === 'rpe') return source;
     if (pictures.has(source)) return pictures.get(source);
     if (!source?.getContext || !(source.width > 0 && source.height > 0)) return source;
     const input = source.getContext('2d'), data = input.getImageData(0,0,source.width,source.height);

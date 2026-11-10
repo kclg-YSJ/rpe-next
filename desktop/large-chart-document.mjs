@@ -280,8 +280,9 @@ export class LargeChartDocument extends LargeChartStore {
       return {...this.describe(),restoredSelection:selection?JSON.parse(selection[field]):undefined,sourceSelection:selection?JSON.parse(selection[direction==='undo'?'after':'before']):undefined};
     }catch(error){this.db.exec('ROLLBACK');this.chart=JSON.parse(old);this.compile();this.statsReady=false;this.describe();this.speedGroups=this.db.prepare('SELECT DISTINCT l AS line,v AS speed FROM notes WHERE n>0 LIMIT 257').all();throw error;}
   }
-  async saveDatabase(destination) {
+  async saveDatabase(destination, editTime) {
     if(!this.enabled)throw Error('超大谱尚未进入编辑模式');await this.diskBudget();
+    if(Number.isFinite(editTime)&&editTime>=0){this.chart={...this.chart,rpeNextEditTime:Math.max(this.chart.rpeNextEditTime??0,editTime)};this.setState('header',JSON.stringify(this.chart));}
     await this.budget();
     const pending=destination+'.'+randomUUID()+'.partial';
     try{

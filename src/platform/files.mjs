@@ -37,6 +37,10 @@ export async function openFiles(fileList, { confirmLargeArchive, includeBackupCh
   }
   if (!candidates.length) throw new Error(errors.join('\n') || t('files.s347b063'));
   attachExternalEffects(candidates, assets);
+  for (const candidate of candidates) {
+    const match = primaryInfo(assets, candidate.name);
+    if (match) { candidate.info = parseInfo(decodeLegacy(match[1])); const time = Number(candidate.info.EditTime); if (Number.isFinite(time) && time >= 0) candidate.chart.rpeNextEditTime = Math.max(candidate.chart.rpeNextEditTime ?? 0, time); }
+  }
   for (const candidate of candidates) if (candidate.chart.rpeNextLegacySource?.format === 'phigros-v3') {
     const references = resourceReferences(candidate.chart, assets, candidate.name, {}, { inferEmpty: true });
     candidate.chart.META = { ...candidate.chart.META, name: candidate.name.replaceAll('\\', '/').split('/').at(-1).replace(/\.json$/i, ''), ...references };
@@ -234,7 +238,8 @@ function packageInfo(chart, assets, chartName, outputName, identifier) {
   const fields = { Name: meta.name ?? info.Name ?? '', Path: path,
     Song: assetPath(assets, references.song, chartName) ?? '', Picture: assetPath(assets, references.background, chartName) ?? '',
     Chart: outputName, Level: meta.level ?? info.Level ?? '', Composer: meta.composer ?? info.Composer ?? '',
-    Charter: meta.charter ?? info.Charter ?? '', Illustration: meta.illustration ?? info.Illustration ?? '' };
+    Charter: meta.charter ?? info.Charter ?? '', Illustration: meta.illustration ?? info.Illustration ?? '',
+    ...(Number.isFinite(chart.rpeNextEditTime) ? { EditTime: chart.rpeNextEditTime } : {}) };
   return new TextEncoder().encode('#\n' + Object.entries(fields).map(([key, value]) => `${key}: ${singleLine(value)}\n`).join(''));
 }
 

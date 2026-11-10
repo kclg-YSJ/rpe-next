@@ -354,7 +354,7 @@ export function diffCharts(before, after) {
 
   const summary = [];
   const other = [];
-  const ignoredKeys = new Set(['META', 'BPMList', 'judgeLineList', 'chartTime']);
+  const ignoredKeys = new Set(['META', 'BPMList', 'judgeLineList', 'chartTime', 'rpeNextEditTime']);
   for (const key of new Set([...Object.keys(beforeChart), ...Object.keys(afterChart)])) {
     if (ignoredKeys.has(key)) continue;
     if (!deepEqual(beforeChart[key], afterChart[key])) other.push({ key, before: beforeChart[key], after: afterChart[key] });

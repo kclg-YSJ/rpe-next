@@ -18,7 +18,7 @@ export class LineNumberList {
   setRow(index, selected) {
     const values = new Set(this.state().indices);
     if (selected) values.add(index); else values.delete(index);
-    this.change([...values].sort((a, b) => a - b)); this.sync();
+    this.change([...values]); this.sync();
   }
   render() {
     if (this.list) { if(this.list.isConnected)this.scrollTop = this.list.scrollTop; this.list.remove(); }

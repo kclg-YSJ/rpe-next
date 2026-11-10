@@ -3,6 +3,7 @@ import { editSpeedCurveNode, addSpeedCurveNode, deleteSpeedCurveNode } from '../
 import { beatValue } from '../core/beat.mjs';
 import { isTextEntry } from './keyboard.mjs';
 import { shortcutAction } from '../core/preferences.mjs';
+import { DEFAULT_EDITOR_PREFERENCES } from '../core/default-settings.mjs';
 import { t } from '../i18n.mjs';
 import { readSpeedCurvePreferences, writeSpeedCurvePreferences } from '../platform/speed-curve-preferences.mjs';
 
@@ -141,7 +142,7 @@ export class SpeedCurvePanel {
     const inside = this.root.contains(event.target), body = event.target === this.root.ownerDocument.body;
     const point = this.pointerLocation && this.coords(this.pointerLocation), hovered = point && this.containsPlot(point);
     if (!inside && !(body && this.selected) && !hovered) return false;
-    const action = shortcutAction(event, this.context.preferences, 'events', { hasSelection: Boolean(this.selected) });
+    const action = shortcutAction(event, this.context.preferences, 'events', { hasSelection: Boolean(this.selected), deleteWithExtraKeys: this.context.editorPreferences?.deleteWithExtraKeys ?? DEFAULT_EDITOR_PREFERENCES.deleteWithExtraKeys });
     if (!['Delete', 'QuickDelete', 'AddTap'].includes(action)) return false;
     event.stopImmediatePropagation();
     // Leave native text editing intact, including a customized numeric key.

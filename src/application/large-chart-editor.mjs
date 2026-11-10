@@ -1,4 +1,5 @@
 import { selectionState, restoreSelection } from './selection-history.mjs';
+import { lineOffsetMapper } from './multi-line-edit.mjs';
 
 const referenceKey = '_rpenLargeRef';
 const copiesKey = '_rpenLargeCopies';
@@ -128,9 +129,10 @@ export class LargeChartEditor {
   selectAll(lines = this.session.targetLineIndices) {
     return this.selectRegions(lines.map(line => ({ line, start: -1e7, end: 1e7 })));
   }
-  transformSelected(label, transform, { lineOffset = 0, targetLine, remove = false } = {}) {
+  transformSelected(label, transform, { lineOffset = 0, lineOrder = this.session.multiLineActive ? this.session.multiLineIndices : null, targetLine, remove = false } = {}) {
     if (!this.logicalSelection) return false;
     const token = this.logicalSelection.token, beforeSelection = this.captureSelection(this.session.chart, selectionState(this.session));
+    const mapLine = lineOffsetMapper(this.header.judgeLineList.length, lineOrder, lineOrder, lineOffset);
     return this.run(async () => {
       const stage = await this.call('selectionEdit', this.summary.id, { action: 'begin', revision: this.revision, token });
       try {
@@ -139,7 +141,7 @@ export class LargeChartEditor {
           const page = await this.call('selectionRead', this.summary.id, { token, after: cursor });
           const changes = [];
           for (const entry of page.entries) {
-            let line = targetLine ?? ((entry.line + lineOffset) % this.header.judgeLineList.length + this.header.judgeLineList.length) % this.header.judgeLineList.length;
+            let line = targetLine ?? mapLine(entry.line);
             const produced = remove ? null : transform(entry.note, { lineIndex: entry.line, index: index++, count: entry.count });
             const note = produced?.note ?? produced; if(produced?.note)line=produced.line??line;
             if (!remove && (!note || typeof note !== 'object')) throw Error('批量音符修改缺少有效结果');
@@ -161,6 +163,8 @@ export class LargeChartEditor {
       result = await this.call('selectionCopy', this.summary.id, { token: this.logicalSelection.token });
       this.session.clipboard = result.sample ? [{ ...result.sample, _rpenLargeClipboard: { owner: this.summary.id, token: result.clipboard, total: result.total } }] : [];
       this.session.clipboardNoteLines = [result.firstLine]; this.session.eventClipboard = []; this.session.eventClipboardLines = []; this.session.clipboardVisible = true;
+      this.session.clipboardLineOrder = this.session.multiLineActive ? [...this.session.multiLineIndices] : [];
+      this.session.clipboardBounds = { start: result.firstSeconds, end: result.lastSeconds };
       if(result.groups<=40000){
         const notes=[],lines=[];let after=0,bytes=0;
         for(;;){const page=await this.call('selectionRead',this.summary.id,{token:this.logicalSelection.token,after});
@@ -178,7 +182,8 @@ export class LargeChartEditor {
     if (clipboard.owner !== this.summary.id) throw Error('此大选区的剪贴板属于另一个工程，请在原工程中粘贴');
     const state = this.captureSelection(this.session.chart, selectionState(this.session));
     return this.run(async () => {
-      const summary = await this.call('selectionPaste', this.summary.id, { revision: this.revision, clipboard: clipboard.token, beat, mirror, keepTime, targetLine: targetLineIndex, beforeSelection: state, afterSelection: state });
+      const summary = await this.call('selectionPaste', this.summary.id, { revision: this.revision, clipboard: clipboard.token, beat, mirror, keepTime, targetLine: targetLineIndex,
+        sourceOrder: this.session.clipboardLineOrder, targetOrder: this.session.multiLineActive ? this.session.multiLineIndices : undefined, beforeSelection: state, afterSelection: state });
       this.updateSummary(summary); this.logicalSelection = summary.selection; this.session.focus = 'notes'; this.session.multiSelectionIntent = 'notes'; await this.refresh();
     });
   }
@@ -244,7 +249,8 @@ export class LargeChartEditor {
   save(saveAs = false) {
     if(this.busy)return this.pending.catch(()=>{}).then(()=>this.save(saveAs));
     let saved = null;
-    if (!this.run(async () => { const summary = await this.call('save', this.summary.id, { saveAs }); if (summary) { this.updateSummary(summary); this.syncHistory(); saved = summary; } })) return Promise.resolve(null);
+    const editTime = this.session.getProjectEditTime?.();
+    if (!this.run(async () => { const summary = await this.call('save', this.summary.id, { saveAs, editTime }); if (summary) { this.updateSummary(summary); this.syncHistory(); saved = summary; } })) return Promise.resolve(null);
     return this.flush().then(()=>saved);
   }
   dispose() { this.disposed = true; this.session.largeDocument = null; }

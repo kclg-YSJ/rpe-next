@@ -12,6 +12,8 @@ import { shaderEvents } from '../src/core/shader-events.mjs';
 import { normalizeEditorPreferences } from '../src/platform/editor-preferences.mjs';
 import { lineFeatureLabels } from '../src/core/line-groups.mjs';
 import { Timeline } from '../src/ui/timeline.mjs';
+import { captureSelection, controlSelection, commitSelectionEdit } from '../src/application/batch-edit.mjs';
+import { ClipboardHistory } from '../src/application/clipboard-history.mjs';
 
 function sessionWithLines(count = 3) {
   const chart = createChart(); chart.judgeLineList = Array.from({ length: count }, (_, index) => createLine(`Line ${index + 1}`));
@@ -20,19 +22,20 @@ function sessionWithLines(count = 3) {
 
 function canvas() { return { clientWidth: 500, clientHeight: 600, style: {}, addEventListener() {}, focus() {}, setPointerCapture() {}, getBoundingClientRect() { return { left: 0, top: 0, width: 500, height: 600 }; }, getContext() { return { }; } }; }
 
-test('多线模式保持去重排序并在关闭时保留集合', () => {
+test('多线模式按添加顺序去重并在关闭时保留有序列表', () => {
   const session = sessionWithLines();
   session.setMultiLineEnabled(true); session.addMultiLine(2); session.addMultiLine(1); session.addMultiLine(2);
-  assert.deepEqual(session.multiLineIndices, [0, 1, 2]);
-  session.removeMultiLine(0); assert.deepEqual(session.multiLineIndices, [1, 2]);
-  session.setMultiLineEnabled(false); assert.equal(session.multiLineActive, false); assert.deepEqual(session.multiLineIndices, [1, 2]);
+  assert.deepEqual(session.multiLineIndices, [0, 2, 1]);
+  session.removeMultiLine(0); assert.deepEqual(session.multiLineIndices, [2, 1]);
+  session.setMultiLineEnabled(false); assert.equal(session.multiLineActive, false); assert.deepEqual(session.multiLineIndices, [2, 1]);
 });
 
 test('多线表达式支持分组名并在完整分组时优先显示分组名', () => {
   const session = sessionWithLines(4); session.chart.judgeLineGroup = ['Default', 'Verse'];
   session.chart.judgeLineList[1].Group = 1; session.chart.judgeLineList[2].Group = 1;
-  assert.deepEqual(parseLineExpression('Verse 0', 4, session.chart), [0, 1, 2]);
-  assert.equal(formatLineExpression([0, 1, 2], session.chart), 'Verse 0');
+  assert.deepEqual(parseLineExpression('Verse 0', 4, session.chart), [1, 2, 0]);
+  assert.equal(formatLineExpression([0, 1, 2], session.chart), '0 Verse');
+  assert.equal(formatLineExpression([1, 2, 0], session.chart), 'Verse 0');
 });
 
 test('all大小写不敏感并可与线号和组名混用，覆盖全部线时显示all', () => {
@@ -50,7 +53,7 @@ test('判定线列表标出非默认父线、绑定 UI、zOrder 和贴图', () =
 test('多线边界按钮按循环线组添加，音符可迁移到指定线', () => {
   const session = sessionWithLines(); session.setMultiLineEnabled(true); session.multiLineIndices = [0];
   session.addPreviousMultiLine(); assert.deepEqual(session.multiLineIndices, [0, 2]);
-  session.addNextMultiLine(); assert.deepEqual(session.multiLineIndices, [0, 1, 2]);
+  session.addNextMultiLine(); assert.deepEqual(session.multiLineIndices, [0, 2, 1]);
   session.setMultiLineEnabled(false); session.insertNotes([createNote(1, 1, 0)]); session.selection = new Set([0]); session.moveSelectionToLine(2);
   assert.equal(session.lineIndex, 2); assert.equal(session.chart.judgeLineList[0].notes.length, 0);
 });
@@ -136,7 +139,7 @@ test('多线剪贴板保留来源线并按目标面板映射相对线号', () =>
 
 test('多线线号表达式支持空格和闭区间并拒绝反向范围', () => {
   assert.deepEqual(parseLineExpression('0 2:4 4 8', 10), [0, 2, 3, 4, 8]);
-  assert.equal(formatLineExpression([4, 2, 3, 2]), '2:4');
+  assert.equal(formatLineExpression([4, 2, 3, 2]), '4 2 3');
   assert.throws(() => parseLineExpression('4:2', 10), /范围无效/);
   assert.deepEqual(parseLineExpression('-1 0 99', 3), [0]);
 });
@@ -151,9 +154,41 @@ test('多线事件和音符共享单线宽度，仍可保留事件显式覆盖',
 
 test('动态词元不区分大小写，和线号、范围、分组取并集，脱离视野时不静默忽略', () => {
   const chart=createChart();chart.judgeLineList=Array.from({length:6},()=>createLine());chart.judgeLineGroup=['Default','Verse'];chart.judgeLineList[5].Group=1;
-  assert.deepEqual(compileLineExpression('0 2:3 Verse @NOTES @Events @notes',6,chart),{indices:[0,2,3,5],dynamic:['notes','events']});
+  assert.deepEqual(compileLineExpression('0 2:3 Verse @NOTES @Events @notes',6,chart),{indices:[0,2,3,5],dynamic:['notes','events'],parts:[[0],[2,3],[5],'notes','events','notes']});
   assert.deepEqual(parseLineExpression('0 @notes @events',6,chart,{notes:[1,2],events:[2,4]}),[0,1,2,4]);
   assert.throws(()=>parseLineExpression('@notes',6,chart),/当前时间视野/);
+  assert.deepEqual(parseLineExpression('4 @notes 0 @events',6,chart,{notes:[2,1],events:[1,3]}),[4,2,1,0,3]);
+});
+
+test('不连续有序线号按面板位置粘贴、镜像和移线，来源遍历顺序不改变锚点', () => {
+  for (const mode of ['notes','events']) {
+    const session = sessionWithLines(6); session.multiLineEnabled = true; session.multiLineMode = mode; session.multiLineIndices = [0,1,5,3]; session.focus = mode;
+    for (const line of [0,1]) { session.chart.judgeLineList[line].notes = [createNote(1, line+1, (line+1)*10)]; session.chart.judgeLineList[line].eventLayers[0].moveXEvents = [createEvent(line, line+10, line+1,line+2)]; }
+    if (mode === 'notes') session.multiLineSelection = new Map([[1,new Set([0])],[0,new Set([0])]]);
+    else session.multiEventSelection = new Map([[1,new Set(['moveXEvents:0'])],[0,new Set(['moveXEvents:0'])]]);
+    copyObjects(session); assert.deepEqual(session.clipboardLineOrder,[0,1,5,3]);
+    for (const [target, expected] of [[1,[5,1]],[5,[3,5]],[3,[0,3]]]) {
+      const draft = projectClipboard(session, 10, {targetLineIndex:target, mirror:true,keepTime:true});
+      assert.deepEqual(mode === 'notes' ? draft.noteLines : draft.eventLines,expected);
+      if(mode==='notes') assert.deepEqual(draft.notes.map(note=>note.positionX),[-20,-10]);
+      else assert.deepEqual(draft.events.map(({event})=>event.start),[-1,-0]);
+    }
+    const history = new ClipboardHistory(); history.remember(session); const saved = structuredClone(history.entries), restored = new ClipboardHistory(); restored.restore(saved); restored.use(session,saved[0].id);
+    pasteObjects(session, 10, {targetLineIndex:5}); const selections=mode==='notes'?session.multiLineSelection:session.multiEventSelection;
+    assert.deepEqual([...selections.keys()].sort(),[3,5]); session.travel('undo');
+    const snapshot = captureSelection(session), result = controlSelection(snapshot,mode==='notes'?'note-line':'event-move',{dragX:mode==='notes'?50:75});
+    assert.deepEqual(result.changes.map(change=>[change.sourceLineIndex,change.lineIndex]).sort((a,b)=>a[0]-b[0]),[[0,1],[1,5]]); commitSelectionEdit(session,result,'移线');
+    assert.equal(session.chart.judgeLineList[1][mode==='notes'?'notes':'eventLayers'].length>0,true);
+    assert.deepEqual(session.multiLineIndices,[0,1,5,3]); session.travel('undo'); assert.deepEqual(session.multiLineIndices,[0,1,5,3]);
+  }
+});
+
+test('反序线号格式化往返保留顺序，动态词元在输入位置展开', () => {
+  const session=sessionWithLines(6),timeline=new Timeline(canvas(),canvas(),()=>session,()=>{},()=>{});
+  for(const order of [[2,1],[5,3,2,0,1],[3,2,1,0,5,4],[0,1,5,3]]) assert.deepEqual(parseLineExpression(formatLineExpression(order,session.chart),6,session.chart),order);
+  session.chart.judgeLineList[2].notes=[createNote(1,1,0)];session.chart.judgeLineList[4].notes=[createNote(1,1,0)];
+  timeline.currentLineActivity=()=>({chart:session.chart,tempo:timeline.tempo,start:0,end:1,layer:0,extended:false});
+  timeline.setMultiLineExpression('5 @notes 0');session.setMultiLineEnabled(true);assert.deepEqual(session.multiLineIndices,[5,2,4,0]);timeline.refreshMultiLineExpression();assert.deepEqual(session.multiLineIndices,[5,2,4,0]);
 });
 
 test('动态活动索引和 Ctrl+滚轮的筛选语义相同，覆盖 Hold、倍率、层和 shader', () => {
@@ -184,7 +219,7 @@ test('动态线号持续刷新、允许空结果、拖拽冻结、手动改选�
   const stable=session.multiLineIndices;assert.equal(timeline.refreshMultiLineExpression(),false);assert.equal(session.multiLineIndices,stable);
   timeline.eventInteraction.drag={kind:'move'};start=5.5;end=6.5;assert.equal(timeline.refreshMultiLineExpression(),false);assert.deepEqual(session.multiLineIndices,[1]);
   timeline.eventInteraction.drag=null;assert.equal(timeline.refreshMultiLineExpression(),true);assert.deepEqual(session.multiLineIndices,[2]);
-  session.addMultiLine(0);timeline.refreshMultiLineExpression();assert.equal(session.multiLineExpression,'');assert.deepEqual(session.multiLineIndices,[0,2]);
+  session.addMultiLine(0);timeline.refreshMultiLineExpression();assert.equal(session.multiLineExpression,'');assert.deepEqual(session.multiLineIndices,[2,0]);
   timeline.setMultiLineExpression('@notes');const line=session.chart.judgeLineList[2];
   session.commit('删除音符',{...session.chart,judgeLineList:session.chart.judgeLineList.map((item,i)=>i===2?{...item,notes:[]}:item)});timeline.refreshMultiLineExpression();assert.deepEqual(session.multiLineIndices,[]);
   session.travel('undo');timeline.refreshMultiLineExpression();assert.deepEqual(session.multiLineIndices,[2]);assert.equal(session.chart.judgeLineList[2],line);

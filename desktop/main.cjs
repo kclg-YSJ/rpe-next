@@ -46,6 +46,9 @@ else {
   app.on('window-all-closed', () => app.quit());
   app.whenReady().then(async () => {
     const root = await realpath(resolve(__dirname, '..'));
+    const { ChartExportDestination, installChartExport } = await import(pathToFileURL(resolve(__dirname, 'chart-export.mjs')).href);
+    const chartExports = await new ChartExportDestination(resolve(app.getPath('userData'), 'chart-export.json'), app.getPath('downloads')).initialize();
+    installChartExport({ ipcMain, service: chartExports, window: () => mainWindow, origin, dialog });
     const { LargeChartPreviewService, installLargeChartPreview } = await import(pathToFileURL(resolve(__dirname, 'large-chart-preview.mjs')).href);
     largePreview = new LargeChartPreviewService(resolve(app.getPath('userData'), 'large-chart-preview.json'), {
       progress: value => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('rpen-large-preview-progress', value); },

@@ -9,6 +9,7 @@ import { createEvent } from '../src/core/chart.mjs';
 import { transformEvents } from '../src/application/event-commands.mjs';
 import { withEventLock } from '../src/application/event-value-memory.mjs';
 import { registerModHook } from '../src/core/mod-hooks.mjs';
+import { TimelineActivity } from '../src/core/timeline-activity.mjs';
 
 // Match the host's @rpen import root while importing the real bundled modules.
 async function moduleUrl(name,imports={}){
@@ -19,7 +20,19 @@ async function moduleUrl(name,imports={}){
 const {installGeometry}=await import(await moduleUrl('geometry.mjs'));
 const {installModeGeometry}=await import(await moduleUrl('mode-geometry.mjs',{'./geometry.mjs':await moduleUrl('geometry.mjs')}));
 const {installEasingDraft}=await import(await moduleUrl('easing-draft.mjs'));
+const {installDensity}=await import(await moduleUrl('density.mjs'));
 function apiFor(editor){const cleanups=[];return{editor,patch(target,key,wrap){const descriptor=Object.getOwnPropertyDescriptor(target,key);target[key]=wrap(target[key]);cleanups.push(()=>{if(descriptor)Object.defineProperty(target,key,descriptor);else delete target[key];});},hook(name,callback,priority){cleanups.push(registerModHook(name,callback,priority));},dispose(fn){cleanups.push(fn);},close(){for(const fn of cleanups.reverse())fn();}};}
+
+test('经典皮肤复用本体的一秒密度与底图，不重复统计、平方透明度或读回像素',()=>{
+  const previous=globalThis.document,session=new EditorSession(),editor={session,chart:session.chart},images=[];
+  const raw={drawImage(source){images.push(source);}},canvas={getContext:()=>raw},api=apiFor(editor);
+  globalThis.document={querySelector:()=>canvas,createElement(){assert.fail('native raster should not be recolored');}};
+  try{
+    installDensity(api,{active:true});const activity=new TimelineActivity();activity.compile(session.chart,new TempoMap(session.chart.BPMList));const density=activity.density(0,0,false,10,400);
+    assert.equal(density.windowSeconds,1);assert.equal(activity.density(0,0,false,10,400),density);
+    const image={dataset:{timelineDensity:'rpe'},getContext(){assert.fail('native raster must not read pixels');}};canvas.getContext('2d').drawImage(image);assert.equal(images[0],image);
+  }finally{api.close();globalThis.document=previous;}
+});
 
 test('经典布局所有控制球的时间换算与实际网格一致，停用恢复本体映射',()=>{
   const session=new EditorSession(),canvas={clientHeight:900,clientWidth:675};

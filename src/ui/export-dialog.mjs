@@ -1,13 +1,14 @@
 import { prepareShaderExport } from '../platform/shader-export.mjs';
 import { showDialog } from './dialog.mjs';
-import { createChartExport, download, suggestDownloadName } from '../platform/files.mjs';
+import { createChartExport, suggestDownloadName } from '../platform/files.mjs';
+import { saveChartExport } from '../platform/chart-export-destination.mjs';
 import { chartExportStem } from '../core/export-filename.mjs';
 import { DEFAULT_TRAJECTORY_SPLIT } from '../core/trajectory-simplify.mjs';
 import { diagnoseNoiseAreas } from '../core/noise-areas.mjs';
 import { DEFAULT_BEZIER_EXPORT_MARGIN } from '../core/bezier-compat.mjs';
 import { t } from '../i18n.mjs';
 
-export function showExportDialog(chart, assets, chartName, onExport, identifier, { includeBackupCharts = false } = {}) {
+export function showExportDialog(chart, assets, chartName, onExport, identifier, { includeBackupCharts = false, editTime } = {}) {
   const host = showDialog(t('export-dialog.s50e57e1'), t('export-dialog.s80099ed'));
   const field = (title, control) => { const label = document.createElement('label'); label.className = 'field'; label.append(title, control); control.setAttribute('aria-label', title); host.append(label); return control; };
   const format = document.createElement('select');
@@ -63,9 +64,11 @@ export function showExportDialog(chart, assets, chartName, onExport, identifier,
       if (noiseIssues.length && !acknowledgement.checked) throw new Error(t('export-dialog.s4094dae'));
       if (compatibility === 'rpe' && chart.blockAreaList?.length && !removeNoise.checked) throw new Error(t('export-dialog.sac6ba5f'));
       if (compatibility === 'rpe' && hasGlobalEvents && !removeGlobal.checked) throw Error(t('export-dialog.se25f82b'));
-      const prepared = container === 'pez' ? await prepareShaderExport(chart, assets, chartName) : { chart, assets };
+      const source = editTime ? { ...chart, rpeNextEditTime: editTime() } : chart;
+      const prepared = container === 'pez' ? await prepareShaderExport(source, assets, chartName) : { chart: source, assets };
       const result = createChartExport(prepared.chart, prepared.assets, chartName, { bakeCustomEasing: bake.checked, includeUnusedFiles: unused.checked, includeBackupCharts, compatibility, format: container, compact: compact.checked, name: name.value, identifier, clampBezier: compatibility === 'rpe' && clampBezier.checked, bezierMargin: Number(margin.value), removeNoiseAreas: compatibility === 'rpe' && removeNoise.checked, removeGlobalEvents: compatibility === 'rpe' && removeGlobal.checked, split: { simplify: simplify.checked, tolerance: Number(tolerance.value) } });
-      const filename = download(result.blob, result.name); document.querySelector('#modal').close(); onExport(filename, container);
+      const filename = await saveChartExport(result.blob, result.name); if (filename === null) return;
+      document.querySelector('#modal').close(); onExport(filename, container);
     } catch (error) { document.querySelector('#modal-error').textContent = error.message; }
     finally { apply.disabled = false; }
   };

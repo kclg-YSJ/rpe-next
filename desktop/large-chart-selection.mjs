@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { largeRowNote } from './large-chart-document.mjs';
 import { beatValue, fromNumber } from '../src/core/beat.mjs';
+import { lineOffsetMapper, normalizeLineIndices } from '../src/application/multi-line-edit.mjs';
 
 // Logical selections live on disk. A renderer page is only a projection of
 // this set and is never used as the authority for rectangle selection.
@@ -18,9 +19,9 @@ export class DiskNoteSelection {
     return JSON.parse(row.summary);
   }
   summarize(token) {
-    const row = this.db.prepare(`SELECT SUM(s.n) AS total,COUNT(*) AS groups,MIN(n.b) AS firstBeat,MAX(n.z) AS lastBeat,MIN(n.x) AS minX,MAX(n.x) AS maxX,MIN(n.l) AS firstLine
+    const row = this.db.prepare(`SELECT SUM(s.n) AS total,COUNT(*) AS groups,MIN(n.b) AS firstBeat,MAX(n.z) AS lastBeat,MIN(n.s) AS firstSeconds,MAX(CASE WHEN n.t=2 THEN n.e ELSE n.s END) AS lastSeconds,MIN(n.x) AS minX,MAX(n.x) AS maxX,MIN(n.l) AS firstLine
       FROM selected_notes s JOIN notes n ON n.id=s.id WHERE s.selection=? AND n.n>0`).get(token);
-    const summary = { token, total: Number(row.total ?? 0), groups: row.groups, firstBeat: row.firstBeat ?? 0, lastBeat: row.lastBeat ?? 0, minX: row.minX ?? 0, maxX: row.maxX ?? 0, firstLine: row.firstLine ?? 0 };
+    const summary = { token, total: Number(row.total ?? 0), groups: row.groups, firstBeat: row.firstBeat ?? 0, lastBeat: row.lastBeat ?? 0, firstSeconds: row.firstSeconds ?? 0, lastSeconds: row.lastSeconds ?? 0, minX: row.minX ?? 0, maxX: row.maxX ?? 0, firstLine: row.firstLine ?? 0 };
     this.db.prepare('INSERT INTO note_selection_sets VALUES(?,?) ON CONFLICT(id) DO UPDATE SET summary=excluded.summary').run(token, JSON.stringify(summary));
     return summary;
   }
@@ -154,11 +155,17 @@ export class DiskNoteSelection {
       document.setState('clipboardToken', clipboard); this.db.exec('COMMIT'); return { ...summary, clipboard, sample };
     } catch (error) { this.db.exec('ROLLBACK'); throw error; }
   }
-  async paste({ revision, clipboard, beat, mirror = false, keepTime = false, targetLine = 0, beforeSelection, afterSelection }) {
+  async paste({ revision, clipboard, beat, mirror = false, keepTime = false, targetLine = 0, sourceOrder, targetOrder, beforeSelection, afterSelection }) {
     const document = this.document;
     if (clipboard !== document.state('clipboardToken') || !Number.isFinite(beat) || !document.chart.judgeLineList[targetLine]) throw Error('剪贴板已改变，请重新复制');
     const source = this.db.prepare("SELECT MIN(line) AS line,MIN(json_extract(j,'$.startTime[0]')+json_extract(j,'$.startTime[1]')/json_extract(j,'$.startTime[2]')) AS beat FROM note_clipboard").get();
     const token = randomUUID(), delta = keepTime ? 0 : beat - source.beat, lines = document.chart.judgeLineList.length;
+    const targets = normalizeLineIndices(targetOrder, lines), sources = normalizeLineIndices(sourceOrder?.length ? sourceOrder : targetOrder, lines);
+    const copiedLines = this.db.prepare('SELECT DISTINCT line FROM note_clipboard').all().map(row => row.line);
+    const positions = new Map(sources.map((line, index) => [line, index]));
+    const ordered = targets.includes(targetLine) && copiedLines.every(line => positions.has(line));
+    const anchor = ordered ? Math.min(...copiedLines.map(line => positions.get(line))) : source.line;
+    const mapLine = lineOffsetMapper(lines, ordered ? sources : null, ordered ? targets : null, ordered ? targets.indexOf(targetLine) - anchor : targetLine - anchor);
     const result = await document.transactionEdit('粘贴音符', async () => {
       let cursor = 0;
       const select = this.db.prepare('INSERT INTO selected_notes VALUES(?,?,?)');
@@ -167,7 +174,7 @@ export class DiskNoteSelection {
         for (const row of rows) {
           const note = JSON.parse(row.j); note.positionX *= mirror ? -1 : 1;
           if (delta) { note.startTime = fromNumber(beatValue(note.startTime) + delta); note.endTime = fromNumber(beatValue(note.endTime) + delta); }
-          const line = ((targetLine + row.line - source.line) % lines + lines) % lines;
+          const line = mapLine(row.line);
           const next = document.noteRow(note, line, { count: row.n }); document.remember(next.id); document.write(next); select.run(token, next.id, row.n); cursor = row.id;
         }
         document.flushTimes(); await document.diskBudget();

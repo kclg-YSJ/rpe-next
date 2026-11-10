@@ -15,7 +15,7 @@ try {
         else if(request.method==='page')result=store.page(request.value);
         else if(request.method==='edit')result=await store.edit(request.value);
         else if(request.method==='travel')result=await store.travel(request.value);
-        else if(request.method==='save')result=await store.saveDatabase(request.value);
+        else if(request.method==='save')result=await store.saveDatabase(typeof request.value==='string'?request.value:request.value.path,request.value?.editTime);
         else if(request.method==='hits')result=store.hits(request.value);
         else if(request.method==='soundNames')result=store.soundNames();
         else if(request.method==='selection')result=await store.selections.select(request.value);

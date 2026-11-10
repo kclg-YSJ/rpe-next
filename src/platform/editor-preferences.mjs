@@ -4,6 +4,7 @@ import { validFpsLimit } from '../core/frame-timing.mjs';
 import { validSelectionInterval } from '../core/selection-interval.mjs';
 import { normalizeLineDefaults } from '../core/placement-defaults.mjs';
 import { EVENT_TYPES } from '../core/chart.mjs';
+import { DENSITY_WINDOW_LIMITS } from '../core/timeline-strip-settings.mjs';
 
 const multiLineEventTypes = [...EVENT_TYPES, 'scaleXEvents', 'scaleYEvents', 'colorEvents', 'paintEvents', 'textEvents'];
 
@@ -14,10 +15,13 @@ Object.assign(ranges, { judgementWidth: [0.5, 12], judgementAlpha: [0, 1] });
 Object.assign(ranges, { placementOpacity: [0, 1] });
 Object.assign(ranges, { noteSpacing: [0.05, 10], notesOnlyNoteScale: [0.1, 3] });
 Object.assign(ranges, { eventValueScaleStep: [.001, 10] });
+Object.assign(ranges, { densityStripBrightness: [0, 1], densityStripWindow: DENSITY_WINDOW_LIMITS });
 const flags = ['snapX', 'realtime', 'hitEnabled', 'allLines', 'preservePitch', 'autoSave', 'autoplayView', 'highlight', 'drawEventCurves', 'seamlessEvents', 'seamlessNoiseAreas', 'notesOnly', 'showGameUI', 'viewportOverflow', 'lineNumbers', 'lineArrows', 'lineTint', 'mergeLineNumbers', 'pickPreviewLines', 'pickPreviewNoiseAreas', 'tipsEnabled', 'successNotifications', 'clipboardHistory', 'lineSwitcher', 'analysisEnabled', 'noteSourceHover', 'sampleAutoFit', 'pairedMovementSampling', 'wheelStopAtAudioStart', 'rpeEventDrag', 'xyBinding', 'movementVector'];
 export function normalizeEditorPreferences(value) {
   const result = {};
   if (!value || typeof value !== 'object') return result;
+  if (typeof value.deleteWithExtraKeys === 'boolean') result.deleteWithExtraKeys = value.deleteWithExtraKeys;
+  for (const key of ['densityStrip', 'historyStrip']) if (typeof value[key] === 'boolean') result[key] = value[key];
   if (typeof value.clearHitsOnResume === 'boolean') result.clearHitsOnResume = value.clearHitsOnResume;
   if (value.multiLineEventVisibility && typeof value.multiLineEventVisibility === 'object') result.multiLineEventVisibility = Object.fromEntries(multiLineEventTypes.filter(type => typeof value.multiLineEventVisibility[type] === 'boolean').map(type => [type, value.multiLineEventVisibility[type]]));
   if (value.lineEventDefaults && typeof value.lineEventDefaults === 'object' && !Array.isArray(value.lineEventDefaults)) result.lineEventDefaults = normalizeLineDefaults(value.lineEventDefaults);

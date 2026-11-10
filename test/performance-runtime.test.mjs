@@ -47,8 +47,8 @@ test('密度缓存只统计当前线与当前层；切线、编辑、BPM、尺�
   chart.judgeLineList[0].notes = [createNote(1, 2, 0)]; chart.judgeLineList[1].notes = [createNote(2, 10, 0, 20)];
   const tempo = new TempoMap(chart.BPMList); const activity = new TimelineActivity(); activity.compile(chart, tempo);
   const first = activity.density(0, 0, false, 12, 400);
-  assert.equal(first.noteBins.reduce((sum, count) => sum + count, 0), 1);
-  assert.equal(first.eventBins.reduce((sum, count) => sum + count, 0), 5);
+  assert.equal(first.windowSeconds, 1);
+  for(let i=0;i<first.bins;i++) { const seconds=(i+.5)*12/first.bins;assert.equal(first.noteBins[i],Math.abs(seconds-1)<=.5?1:0);assert.equal(first.eventBins[i],seconds<=.5?5:0); }
   assert.equal(activity.density(0, 0, false, 12, 400), first);
   assert.equal(activity.duration, 10);
   assert.notEqual(activity.density(1, 0, false, 12, 400), first);

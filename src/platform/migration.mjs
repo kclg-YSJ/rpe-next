@@ -91,6 +91,8 @@ export async function scanMigration(entries, sourceName, { includeBackupCharts =
         if (!candidate.META && !candidate.formatVersion) { skipped.push(project.path); project.auxiliary = true; continue; }
       }
       project.chart = parseDocument(text);
+      const editTime = Number(project.info.EditTime);
+      if (Number.isFinite(editTime) && editTime >= 0) project.chart.rpeNextEditTime = Math.max(project.chart.rpeNextEditTime ?? 0, editTime);
       const extra = lookup.get((project.directory + 'extra.json').toLowerCase());
       if (extra) {
         try {

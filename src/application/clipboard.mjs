@@ -4,6 +4,7 @@ import { chartWithEventLists, eventKey, eventList, eventListAt } from './event-c
 import { captureSelection, commitSelectionEdit, shiftedTime } from './batch-edit.mjs';
 import { t } from '../i18n.mjs';
 import { expandXyEntries } from './xy-binding.mjs';
+import { lineOffsetMapper, lineOrderPositions } from './multi-line-edit.mjs';
 
 export function copyObjects(session, { xy = false } = {}) {
   if (session.largeDocument?.logicalSelection && session.focus === 'notes') return session.largeDocument.copySelected();
@@ -15,6 +16,8 @@ export function copyObjects(session, { xy = false } = {}) {
   session.clipboardNoteLines = snapshot.notes.map(entry => Number.isInteger(entry.lineIndex) ? entry.lineIndex : session.lineIndex);
   session.eventClipboard = structuredClone(snapshot.events.map(({ type, event }) => ({ type, event })));
   session.eventClipboardLines = snapshot.events.map(entry => Number.isInteger(entry.lineIndex) ? entry.lineIndex : session.lineIndex);
+  session.clipboardLineOrder = session.multiLineActive ? [...session.multiLineIndices] : [];
+  session.clipboardBounds = null;
   session.clipboardVisible = true;
   return count;
 }
@@ -82,13 +85,14 @@ export function projectClipboard(session, beat, { mirror = false, keepTime = fal
   const noteLines = session.clipboard.map((unused, index) => Number.isInteger(session.clipboardNoteLines?.[index]) ? session.clipboardNoteLines[index] : session.lineIndex);
   const eventLines = session.eventClipboard.map((unused, index) => Number.isInteger(session.eventClipboardLines?.[index]) ? session.eventClipboardLines[index] : session.lineIndex);
   const sourceLines = [...noteLines, ...eventLines];
-  const sourceAnchor = sourceLines.length ? Math.min(...sourceLines) : session.lineIndex;
   const target = Number.isInteger(targetLineIndex) ? targetLineIndex : session.lineIndex;
-  const mapLine = source => {
-    const mapped = target + source - sourceAnchor;
-    if (!lineCount) return mapped;
-    return ((mapped % lineCount) + lineCount) % lineCount;
-  };
+  const targetOrder = session.multiLineActive ? session.multiLineIndices : null;
+  const sourceOrder = session.clipboardLineOrder?.length ? session.clipboardLineOrder : targetOrder;
+  const positions = lineOrderPositions(sourceOrder);
+  const ordered = targetOrder?.includes(target) && sourceLines.every(line => positions.has(line));
+  const sourceAnchor = sourceLines.length ? sourceLines.reduce((first, line) => (ordered ? positions.get(line) < positions.get(first) : line < first) ? line : first) : session.lineIndex;
+  const shift = ordered ? targetOrder.indexOf(target) - positions.get(sourceAnchor) : target - sourceAnchor;
+  const mapLine = lineOffsetMapper(lineCount, ordered ? sourceOrder : null, ordered ? targetOrder : null, shift);
   const notes = session.clipboard.map(note => ({ ...shiftedTime(note, delta), positionX: note.positionX * (mirror ? -1 : 1) }));
   const events = session.eventClipboard.map(({ type, event }) => {
     let next = shiftedTime(event, delta);

@@ -1,4 +1,5 @@
 const { contextBridge, ipcRenderer } = require('electron');
+contextBridge.exposeInMainWorld('rpenChartExport', { version: 1, save: (name, bytes) => ipcRenderer.invoke('rpen-chart-export', name, bytes) });
 contextBridge.exposeInMainWorld('rpenEditorCapture', {
   version: 1,
   call: (action, id) => ipcRenderer.invoke('rpen-editor-capture', action, id),
