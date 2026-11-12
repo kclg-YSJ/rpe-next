@@ -973,7 +973,7 @@ export default {
     'settings.s1371b92': "Positive values delay, negative values advance, in milliseconds; applied on the chart timeline and only affecting sound, while hit effects keep their original time.",
     'settings.s1ee44b7': "Sensitivity is relative to 1: each pixel equals the default step of the event type, lower is finer and higher is faster. Shift (×10, snaps to 10) and Alt (×0.1) modify it; the snap step is not affected.",
     'settings.saccc96a': "History is stored only in this browser. Pinned entries are never pushed out; disabling pauses recording and keeps existing history.",
-    'settings.s482ccb8': "Applies immediately and only changes the thickness of the default line.png, not its length, custom textures or chart events. 1 was the previous thickness; the default is 1.5.",
+    'settings.s482ccb8': "Applies immediately and only changes the thickness of the default line.png when the line has no Y-scale events; lines with Y-scale events use chart dimensions without this multiplier. The default is 1.5.",
     'settings.s1ea74b9': "Saves a recovery copy including media at a fixed interval; continuous editing does not postpone it. Manual saving updates the chart library. Y scale is absolute pixels per second and does not change with BPM or preview ratio.",
     'settings.s0200377': "Used when migrating from RPE, importing PEZ/ZIP and exporting chart archives. Autosave and backup files are ignored by default; recovery copies made by this editor are unaffected.",
     'settings.sd34afee': "Hotkey settings",

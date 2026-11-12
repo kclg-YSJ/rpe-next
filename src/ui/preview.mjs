@@ -382,7 +382,7 @@ export class Preview {
       if (pass.kind === 'line' && !runtime.line.extended?.textEvents?.length) {
         const texture = runtime.line.Texture && runtime.line.Texture !== 'line.png'
           ? this.images?.describe?.(runtime.line.Texture) ?? this.images?.images.get(runtime.line.Texture)
-          : { naturalWidth: DEFAULT_LINE_WIDTH, naturalHeight: DEFAULT_LINE_HEIGHT * this.lineScale };
+          : { naturalWidth: DEFAULT_LINE_WIDTH, naturalHeight: this.defaultLineThickness(runtime.line) };
         if (!texture || texture.naturalWidth && !textureInViewport(texture, runtime.line, center ? { ...state, x: state.x - center.x, y: state.y - center.y } : state, width, height, scale, renderViewport)) continue;
       }
       context.save();
@@ -608,6 +608,14 @@ export class Preview {
     context.restore();
   }
 
+  // The thickness preference is only a visibility aid for plain default
+  // lines. Y-scale events describe authored geometry, so multiplying them by
+  // the preference would distort the chart (for example scaleY 20 becoming
+  // 30) and can cover neighbouring lines.
+  defaultLineThickness(line) {
+    return DEFAULT_LINE_HEIGHT * (line.extended?.scaleYEvents?.length ? 1 : (this.lineScale ?? 1));
+  }
+
   drawLine(context, line, state, scale) {
     const anchor = line.anchor ?? [0.5, 0.5];
     context.save();
@@ -636,7 +644,7 @@ export class Preview {
       const source = rawTexture?.source ?? rawTexture;
       const texture = defaultLine ? this.skin?.tinted('line', state.color) : this.skin?.tintedSource(`line:${line.Texture}`, source, state.color);
       if (defaultLine) {
-        const height = DEFAULT_LINE_HEIGHT * this.lineScale * scale;
+        const height = this.defaultLineThickness(line) * scale;
         const left = -DEFAULT_LINE_WIDTH * scale * anchor[0], top = -height * (1 - anchor[1]);
         if (texture) context.drawImage(texture, left, top, DEFAULT_LINE_WIDTH * scale, height);
         else context.fillRect(left, top, DEFAULT_LINE_WIDTH * scale, height);
