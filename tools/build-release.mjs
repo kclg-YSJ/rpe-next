@@ -118,6 +118,9 @@ if (platform === 'linux') args.push('--no-sandbox');
 // there, as on Windows/Linux; these flags only apply to package verification.
 if (platform === 'darwin' && arch === 'arm64') args.push('--use-angle=metal', '--ignore-gpu-blocklist');
 else args.push('--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader');
+// The Intel macOS VM exposes no GPU device; its GPU sandbox also blocks the
+// SwiftShader Vulkan loader. Keep renderer sandboxing and signed artifacts.
+if (platform === 'darwin' && arch === 'x64') args.push('--disable-gpu-sandbox');
 console.log('Testing packaged application: ' + platform + '/' + arch + ' ' + kind);
 async function smokeApplication(path, profile, stage) {
   const smoke = await measureStage(stage, () => run(path, args, { env: { ...process.env, RPE_NATIVE_TEST_HOME: profile }, timeout: platform === 'darwin' && arch === 'x64' ? 480000 : 240000 }));
