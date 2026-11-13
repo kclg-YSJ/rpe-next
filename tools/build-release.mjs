@@ -14,6 +14,16 @@ import { macOSAdHocSignOptions, verifyMacOSAdHocSigning } from './macos-signing.
 import { prepareUpdatePackage } from '../desktop/update-package.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
+const stageSeconds = {};
+async function measureStage(name, action) {
+  const start = performance.now();
+  console.log('Release stage started: ' + name);
+  try { return await action(); }
+  finally {
+    stageSeconds[name] = Math.round((performance.now() - start) / 10) / 100;
+    console.log('Release stage finished: ' + name + ' (' + stageSeconds[name] + 's)');
+  }
+}
 const kind = process.argv.includes('--server') ? 'server' : 'editor';
 const platform = process.platform, arch = process.arch;
 if (!['win32', 'darwin', 'linux'].includes(platform) || !['x64', 'arm64'].includes(arch)) throw Error('Release builds require Windows, macOS or Linux on x64/ARM64');
@@ -85,7 +95,7 @@ function run(program, args, options = {}) {
     child.on('exit', code => { clearTimeout(timer); code === 0 ? accept(output) : reject(Error(program + ' exited ' + code + '\n' + output.slice(-5000))); });
   });
 }
-const packaged = await packager({
+const packaged = await measureStage('package-and-sign', () => packager({
   dir: stage, out: packageFolder, name: product, executableName, platform, arch,
   electronVersion: metadata.devDependencies.electron, appVersion: metadata.version,
   appBundleId: kind === 'server' ? 'io.github.kclg-ysj.rpe-next.server' : 'io.github.kclg-ysj.rpe-next',
@@ -94,7 +104,7 @@ const packaged = await packager({
   ...(kind === 'editor' && platform === 'darwin' ? { extendInfo: { NSMicrophoneUsageDescription: '按住语音输入快捷键时，在本机识别麦克风音频并填入文本框。Microphone audio is transcribed locally while the dictation key is held.' } } : {}),
   ...(platform === 'darwin' ? { osxSign: macOSAdHocSignOptions() } : {}),
   afterExtract: [async ({ buildPath }) => trimLocales(buildPath)]
-});
+}));
 if (packaged.length !== 1) throw Error('Unexpected package count');
 const directory = packaged[0];
 const bundle = platform === 'darwin' ? join(directory, product + '.app') : directory;
@@ -107,13 +117,13 @@ if (platform === 'linux') args.push('--no-sandbox');
 if (platform === 'darwin') args.push('--use-angle=metal', '--ignore-gpu-blocklist');
 else args.push('--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader');
 console.log('Testing packaged application: ' + platform + '/' + arch + ' ' + kind);
-async function smokeApplication(path, profile) {
-  const smoke = await run(path, args, { env: { ...process.env, RPE_NATIVE_TEST_HOME: profile }, timeout: platform === 'darwin' && arch === 'x64' ? 480000 : 240000 });
+async function smokeApplication(path, profile, stage) {
+  const smoke = await measureStage(stage, () => run(path, args, { env: { ...process.env, RPE_NATIVE_TEST_HOME: profile }, timeout: platform === 'darwin' && arch === 'x64' ? 480000 : 240000 }));
   if (kind === 'editor' ? !smoke.includes('"errors":[]') || !smoke.includes('real native IPC opens image parent') : !smoke.includes('"protocol":1') || !smoke.includes('"errors":[]')) throw Error('Packaged smoke result is incomplete');
   if (kind === 'editor' && !smoke.includes('built-in note skin files and images load through the packaged application protocol')) throw Error('Built-in note skin check is missing');
 }
 if (platform === 'darwin') await verifyMacOSAdHocSigning(bundle);
-await smokeApplication(executable, join(work, 'test-profile'));
+await smokeApplication(executable, join(work, 'test-profile'), 'packaged-application-test');
 
 const help = [
   product + ' ' + metadata.version, '',
@@ -137,7 +147,7 @@ if (platform === 'darwin') {
   archive = join(output, stem + '.dmg');
   for (let attempt = 0; ; attempt++) {
     try {
-      await run('hdiutil', ['create', '-fs', 'HFS+', '-volname', product, '-srcfolder', image, '-format', 'UDZO', '-imagekey', 'zlib-level=9', archive], { timeout: 600000 });
+      await measureStage('create-dmg', () => run('hdiutil', ['create', '-fs', 'HFS+', '-volname', product, '-srcfolder', image, '-format', 'UDZO', '-imagekey', 'zlib-level=9', archive], { timeout: 600000 }));
       break;
     } catch (error) {
       if (attempt >= 2 || !/Resource busy/i.test(error.message)) throw error;
@@ -158,7 +168,7 @@ if (platform === 'darwin') {
   }
   await verifyReleaseSourceDirectory(root, sourceCommit, sourcePaths, join(installed, 'Contents/Resources/app'));
   const signedProcesses = await verifyMacOSAdHocSigning(installed);
-  await smokeApplication(join(installed, 'Contents/MacOS', executableName), join(work, 'installed-test-profile'));
+  await smokeApplication(join(installed, 'Contents/MacOS', executableName), join(work, 'installed-test-profile'), 'dmg-installed-application-test');
   macOSVerification = { signedProcesses, installedFromDmg: true };
 } else {
   await writeFile(join(directory, '使用说明.txt'), '\uFEFF' + help);
@@ -190,9 +200,9 @@ if (kind === 'editor') {
   const application = join(prepared.source, platform === 'darwin' ? 'Contents/Resources/app' : 'resources/app');
   await verifyReleaseSourceDirectory(root, sourceCommit, sourcePaths, application);
   const installedExecutable = join(prepared.source, platform === 'darwin' ? 'Contents/MacOS/RePhiEdit-Next' : platform === 'win32' ? 'RePhiEdit-Next.exe' : 'RePhiEdit-Next');
-  await smokeApplication(installedExecutable, join(work, 'update-test-profile'));
+  await smokeApplication(installedExecutable, join(work, 'update-test-profile'), 'updated-application-test');
   updateVerification = { packagePrepared: true, sourceVerified: true, applicationStarts: true };
 }
-const manifest = { ...buildInfo, file: basename(archive), bytes, sha256, unpackedBytes: await directoryBytes(directory), removedLocaleBytes, sourceFilesVerified, verified: true, ...(macOSVerification ? { macOSVerification } : {}), ...(updateVerification ? { updateVerification } : {}) };
+const manifest = { ...buildInfo, file: basename(archive), bytes, sha256, unpackedBytes: await directoryBytes(directory), removedLocaleBytes, sourceFilesVerified, verified: true, stageSeconds, ...(macOSVerification ? { macOSVerification } : {}), ...(updateVerification ? { updateVerification } : {}) };
 await writeFile(join(output, stem + '.json'), JSON.stringify(manifest, null, 2) + '\n');
 console.log(JSON.stringify(manifest));
