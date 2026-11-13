@@ -20,6 +20,7 @@ assert.ok(names.has('schemas/animation-curve-v1.schema.json'));
 assert.ok(names.has('schemas/video-render-settings-v1.schema.json'));
 assert.ok(names.has('schemas/shader-library-v1.schema.json'));
 assert.ok(names.has('schemas/trajectory-v1.schema.json'));
+assert.ok(names.has('schemas/guide-lines-v1.schema.json'));
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 const pitchManifest = JSON.parse(await readFile(new URL('assets/vendor/basic-pitch/UPSTREAM.json', root), 'utf8'));
 for (const [name, entry] of Object.entries(pitchManifest.files)) {
@@ -36,7 +37,7 @@ assert.ok((await sourceIndex.query({ action: 'search', query: 'trajectoryChart',
 assert.ok(!sourceBundle.files.some(file => file.path.startsWith('.local-tools/') || file.path.endsWith('DESKTOP-STORAGE.zh-CN.md') || file.path.endsWith('OFFICIAL-IMPORT.zh-CN.md')));
 const mods=JSON.parse(await readFile(new URL('assets/mods/index.json',root),'utf8'));
 assert.deepEqual(mods.map(mod=>mod.directory),['sky-dodge','pixel-miner','spatial-camera','rpen-mod-market','rpe-classic-layout']);
-for (const name of names) assert.match(name, /^(?:index\.html|styles\.css|LICENSE|NOTICE|protocols\/(?:(?:EDITOR-SKIN|MOD|GLOBAL-EVENTS|AI-AGENT|ANIMATION-CURVES)-PROTOCOL|CHART-VERSION-CONTROL|AUDIO-SEPARATION|VIDEO-RENDER)\.zh-CN\.md|schemas\/(?:mod-(?:v1\.schema\.json|api-v1\.d\.ts)|editor-skin-(?:v1\.schema|components\.v1)\.json|animation-curve-v1\.schema\.json|video-render-settings-v1\.schema\.json|(?:shader-library|trajectory)-v1\.schema\.json)|\.nojekyll|assets\/.+|src\/(?:core|application|platform|ui|locales)\/.+|src\/i18n\.mjs)$/);
+for (const name of names) assert.match(name, /^(?:index\.html|styles\.css|LICENSE|NOTICE|protocols\/(?:(?:EDITOR-SKIN|MOD|GLOBAL-EVENTS|AI-AGENT|ANIMATION-CURVES)-PROTOCOL|CHART-VERSION-CONTROL|AUDIO-SEPARATION|VIDEO-RENDER)\.zh-CN\.md|schemas\/(?:mod-(?:v1\.schema\.json|api-v1\.d\.ts)|editor-skin-(?:v1\.schema|components\.v1)\.json|animation-curve-v1\.schema\.json|video-render-settings-v1\.schema\.json|(?:shader-library|trajectory|guide-lines)-v1\.schema\.json)|\.nojekyll|assets\/.+|src\/(?:core|application|platform|ui|locales)\/.+|src\/i18n\.mjs)$/);
 function checkReference(reference, file) {
   const resolved = new URL(reference, new URL(file, site));
   assert.ok(resolved.href.startsWith(site.href), `${file}: reference escapes site: ${reference}`);

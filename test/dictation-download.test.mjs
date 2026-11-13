@@ -97,7 +97,9 @@ test('取消与网络流报错同时发生时不遗漏原始请求的拒绝处�
     if (headers.Range) return ranged(options.data, headers.Range);
     return { ok: true, status: 200, headers: new Headers(), body: { getReader: () => ({
       closed: Promise.resolve(),
-      read: async () => { if (read) throw Error('network stream was aborted'); read = true; setTimeout(() => controller.abort(), 0); return { done: false, value: options.data }; },
+      // Trigger both failures from the same read. A zero-delay timer can run
+      // after all retries on fast filesystems, before any cancellation exists.
+      read: async () => { if (read) { controller.abort(); throw Error('network stream was aborted'); } read = true; return { done: false, value: options.data }; },
       cancel: async () => {},
     }) } };
   } }), error => error.name === 'AbortError');
