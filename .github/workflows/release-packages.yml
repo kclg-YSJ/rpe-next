@@ -33,9 +33,6 @@ jobs:
           - runner: windows-11-arm
             platform: windows
             arch: arm64
-          - runner: macos-15-intel
-            platform: macos
-            arch: x64
           - runner: macos-15
             platform: macos
             arch: arm64

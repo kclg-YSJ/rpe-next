@@ -51,7 +51,7 @@ Re:PhiEdit Next 由 **cmdysj** 基于原 **Re:PhiEdit（RPE）**，使用 **AI�
 | 系统 | 包格式 | 启动方式 |
 | --- | --- | --- |
 | Windows · x64 / ARM64 | ZIP | 解压后运行 `RePhiEdit-Next.exe` |
-| macOS · Intel / Apple 芯片 | DMG | 将应用拖入 Applications 后打开 |
+| macOS · Apple 芯片 | DMG | 将应用拖入 Applications 后打开 |
 | Linux · x64 / ARM64 | tar.xz | 解压后运行 `RePhiEdit-Next` |
 
 1. 在谱面库中新建谱面，或通过“打开 JSON / PEZ”导入谱面与素材。

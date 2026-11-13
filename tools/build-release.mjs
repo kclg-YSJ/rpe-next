@@ -114,30 +114,8 @@ const executable = platform === 'darwin' ? join(bundle, 'Contents/MacOS', execut
 if (platform === 'win32') execFileSync('icacls.exe', [directory, '/grant', '*S-1-15-2-1:(OI)(CI)(RX)', '/T', '/Q'], { windowsHide: true, stdio: 'pipe' });
 const args = kind === 'server' ? ['--smoke-test'] : ['--smoke-native', '--mods-off'];
 if (platform === 'linux') args.push('--no-sandbox');
-const softwareGraphics = ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'];
-let verificationGraphics = platform === 'darwin' ? 'metal' : 'swiftshader';
-if (platform === 'darwin' && arch === 'x64') {
-  // Hosted Intel VMs differ in their exposed graphics APIs. Probe the signed
-  // package before the full checks, and reuse the working backend at all three
-  // installation stages. The archive and user graphics settings stay intact.
-  const candidates = [
-    ['opengl', ['--use-gl=angle', '--use-angle=gl', '--ignore-gpu-blocklist']],
-    ['default', ['--ignore-gpu-blocklist']],
-    ['swiftshader', softwareGraphics],
-    ['swiftshader-in-process', [...softwareGraphics, '--in-process-gpu']]
-  ];
-  let selected;
-  for (const [name, flags] of candidates) {
-    try {
-      const result = await measureStage('graphics-probe-' + name, () => run(executable, ['--smoke-test', '--mods-off', ...flags], { timeout: 60000 }));
-      if (!result.includes('"webgl":true') || !result.includes('"errors":[]')) throw Error('WebGL package probe did not pass');
-      selected = flags; verificationGraphics = name; break;
-    } catch (error) { console.log('Package graphics backend unavailable: ' + name + '\n' + error.message.slice(-1500)); }
-  }
-  if (!selected) throw Error('No verified WebGL backend available on the Intel macOS build host');
-  args.push(...selected);
-} else if (platform === 'darwin') args.push('--use-angle=metal', '--ignore-gpu-blocklist');
-else args.push(...softwareGraphics);
+if (platform === 'darwin') args.push('--use-angle=metal', '--ignore-gpu-blocklist');
+else args.push('--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader');
 console.log('Testing packaged application: ' + platform + '/' + arch + ' ' + kind);
 async function smokeApplication(path, profile, stage) {
   const smoke = await measureStage(stage, () => run(path, args, { env: { ...process.env, RPE_NATIVE_TEST_HOME: profile }, timeout: platform === 'darwin' && arch === 'x64' ? 480000 : 240000 }));
@@ -225,6 +203,6 @@ if (kind === 'editor') {
   await smokeApplication(installedExecutable, join(work, 'update-test-profile'), 'updated-application-test');
   updateVerification = { packagePrepared: true, sourceVerified: true, applicationStarts: true };
 }
-const manifest = { ...buildInfo, file: basename(archive), bytes, sha256, unpackedBytes: await directoryBytes(directory), removedLocaleBytes, sourceFilesVerified, verified: true, stageSeconds, verificationGraphics, ...(macOSVerification ? { macOSVerification } : {}), ...(updateVerification ? { updateVerification } : {}) };
+const manifest = { ...buildInfo, file: basename(archive), bytes, sha256, unpackedBytes: await directoryBytes(directory), removedLocaleBytes, sourceFilesVerified, verified: true, stageSeconds, ...(macOSVerification ? { macOSVerification } : {}), ...(updateVerification ? { updateVerification } : {}) };
 await writeFile(join(output, stem + '.json'), JSON.stringify(manifest, null, 2) + '\n');
 console.log(JSON.stringify(manifest));

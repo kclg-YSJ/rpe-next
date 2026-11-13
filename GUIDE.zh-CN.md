@@ -139,7 +139,7 @@ Windows 也可双击 `start.cmd`。无需安装 npm 依赖。默认打开 `http:
 
 ## Windows 桌面测试版
 
-桌面包内置 Electron 运行环境，无需另装 Node.js 或浏览器。发布页提供 Windows、macOS、Linux 的 x64 / ARM64 桌面包；Windows 使用 ZIP，macOS 使用 DMG，Linux 使用 tar.xz。Windows 解压后运行 `RePhiEdit-Next.exe`，macOS 将应用拖入 Applications，Linux 解压后运行 `RePhiEdit-Next`。
+桌面包内置 Electron 运行环境，无需另装 Node.js 或浏览器。发布页提供 Windows、Linux 的 x64 / ARM64 桌面包，以及 macOS 的 Apple 芯片版；Windows 使用 ZIP，macOS 使用 DMG，Linux 使用 tar.xz。Windows 解压后运行 `RePhiEdit-Next.exe`，macOS 将应用拖入 Applications，Linux 解压后运行 `RePhiEdit-Next`。
 
 桌面版采用原生文件存储，默认谱面库位于系统“文档”目录的 `RePhiEdit Next/Library`；实际路径可在“设置 → 本地存储与外部备份”查看、打开和迁移。项目、恢复记录、皮肤、模组与设置写入库内，音乐、曲绘等资源按内容去重。`%APPDATA%\rpe-next-desktop` 保留桌面运行配置、缓存和库位置指针。桌面与网页版谱面库独立，可用 PEZ 转移项目。
 

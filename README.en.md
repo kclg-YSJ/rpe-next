@@ -51,7 +51,7 @@ The desktop edition also offers large-chart viewing and editing, plus local audi
 | System | Package | Launch |
 | --- | --- | --- |
 | Windows · x64 / ARM64 | ZIP | Extract and run `RePhiEdit-Next.exe` |
-| macOS · Intel / Apple silicon | DMG | Drag the app into Applications, then open it |
+| macOS · Apple silicon | DMG | Drag the app into Applications, then open it |
 | Linux · x64 / ARM64 | tar.xz | Extract and run `RePhiEdit-Next` |
 
 1. Create a chart in the library, or use **Open JSON / PEZ** to import a chart and its assets.
