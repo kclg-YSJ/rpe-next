@@ -3,7 +3,7 @@ import { beatValue, fromNumber } from '../core/beat.mjs';
 import { easing, bezier } from '../core/easing.mjs';
 import { EVENT_TYPES } from '../core/chart.mjs';
 import { snapTime } from '../core/edit-grid.mjs';
-import { eventListAt, eventKey, eventSelections, selectedEventEntries, chartWithEventLists, commitEventListEdits } from './event-commands.mjs';
+import { eventListAt, eventKey, eventSelections, boundEventSelections, selectedEventEntries, chartWithEventLists, commitEventListEdits } from './event-commands.mjs';
 import { assertChart } from '../core/chart.mjs';
 import { t } from '../i18n.mjs';
 
@@ -43,7 +43,9 @@ export function cutEventParts(type, event, { division = 4, density = 4, beat, te
 export function cutSelectedEvents(session, options = {}) {
   const edits = new Map(); let changed = 0; let generated = 0; let skipped = 0;
   const seconds = options.tempo && Number.isFinite(options.beat) ? options.tempo.seconds(options.beat, options.factor ?? session.line?.bpmfactor ?? 1) : null;
-  for (const [lineIndex, keys] of eventSelections(session)) {
+  const explicit = eventSelections(session);
+  for (const [lineIndex, keys] of boundEventSelections(session)) {
+    const selectedKeys = explicit.get(lineIndex) ?? new Set();
     const updates = new Map(), selection = new Set(), factor = session.chart.judgeLineList[lineIndex]?.bpmfactor ?? 1;
     const localOptions = { ...options, factor, beat: seconds === null ? options.beat : options.tempo.beat(seconds, factor) };
     for (const type of new Set([...keys].map(key => String(key).split(':')[0]))) {
@@ -54,10 +56,10 @@ export function cutSelectedEvents(session, options = {}) {
         if (selected && !parts) skipped++;
         if (parts) { columnChanged = true; changed++; generated += parts.length; }
         if (generated > 100000) throw new Error(t('event-tools.sdb5f35f'));
-        for (const item of parts ?? [event]) events.push({ item, selected });
+        for (const item of parts ?? [event]) events.push({ item, selected: selectedKeys.has(eventKey(type, index)) });
       });
       if (!columnChanged) {
-        for (const key of keys) if (String(key).split(':')[0] === type) selection.add(key);
+        for (const key of selectedKeys) if (String(key).split(':')[0] === type) selection.add(key);
         continue;
       }
       events.sort((left, right) => beatValue(left.item.startTime) - beatValue(right.item.startTime));

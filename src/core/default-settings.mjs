@@ -40,6 +40,7 @@ export const DEFAULT_EDITOR_PREFERENCES = Object.freeze({
   "notesOnlyNoteScale": 0.9,
   "selectionInterval": 1,
   "deleteWithExtraKeys": true,
+  "clickSelectedToSingle": true,
   "densityStrip": true,
   "historyStrip": true,
   "densityStripBrightness": 0.65,

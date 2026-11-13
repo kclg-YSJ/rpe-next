@@ -97,7 +97,7 @@ export class GlobalEventsEditor {
   }
   sync() {
     const source = this.context.timeline;
-    for (const key of ['origin', 'scale', 'division', 'judgementOffset', 'judgementColor', 'judgementWidth', 'judgementAlpha', 'barWidth', 'barAlpha', 'eventBarWidth', 'eventOpacity', 'seamlessEvents', 'drawEventCurves', 'eventValueFontSize', 'eventCurveThreshold', 'eventValueThreshold', 'scrollSpeed', 'selectionInterval', 'rpeEventDrag', 'eventEndpointDragHeld']) this.timeline[key] = source[key];
+    for (const key of ['origin', 'scale', 'division', 'judgementOffset', 'judgementColor', 'judgementWidth', 'judgementAlpha', 'barWidth', 'barAlpha', 'eventBarWidth', 'eventOpacity', 'seamlessEvents', 'drawEventCurves', 'eventValueFontSize', 'eventCurveThreshold', 'eventValueThreshold', 'scrollSpeed', 'selectionInterval', 'clickSelectedToSingle', 'rpeEventDrag', 'eventEndpointDragHeld']) this.timeline[key] = source[key];
     this.timeline.tempo = this.context.tempo;
     const columns = this.document.columns;
     if (this.labelColumns !== columns) {

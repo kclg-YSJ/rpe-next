@@ -21,7 +21,7 @@ const flags = ['snapX', 'realtime', 'hitEnabled', 'allLines', 'preservePitch', '
 export function normalizeEditorPreferences(value) {
   const result = {};
   if (!value || typeof value !== 'object') return result;
-  if (typeof value.deleteWithExtraKeys === 'boolean') result.deleteWithExtraKeys = value.deleteWithExtraKeys;
+  for (const key of ['deleteWithExtraKeys', 'clickSelectedToSingle']) if (typeof value[key] === 'boolean') result[key] = value[key];
   for (const key of ['densityStrip', 'historyStrip']) if (typeof value[key] === 'boolean') result[key] = value[key];
   if (typeof value.clearHitsOnResume === 'boolean') result.clearHitsOnResume = value.clearHitsOnResume;
   if (value.multiLineEventVisibility && typeof value.multiLineEventVisibility === 'object') result.multiLineEventVisibility = Object.fromEntries(multiLineEventTypes.filter(type => typeof value.multiLineEventVisibility[type] === 'boolean').map(type => [type, value.multiLineEventVisibility[type]]));

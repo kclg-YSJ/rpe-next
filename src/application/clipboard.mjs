@@ -6,10 +6,10 @@ import { t } from '../i18n.mjs';
 import { expandXyEntries } from './xy-binding.mjs';
 import { lineOffsetMapper, lineOrderPositions } from './multi-line-edit.mjs';
 
-export function copyObjects(session, { xy = false } = {}) {
+export function copyObjects(session) {
   if (session.largeDocument?.logicalSelection && session.focus === 'notes') return session.largeDocument.copySelected();
   const snapshot = captureSelection(session);
-  if (xy && session.xyBinding === true) snapshot.events = expandXyEntries(session.chart, session.eventLayer, snapshot.events);
+  if (session.xyBinding === true && snapshot.events.length) snapshot.events = expandXyEntries(session.chart, session.eventLayer, snapshot.events);
   const count = snapshot.notes.reduce((sum,entry)=>sum+(session.largeDocument?session.largeDocument.quantity(entry.note):1),0) + snapshot.events.length;
   if (!count) return 0;
   session.clipboard = structuredClone(snapshot.notes.map(entry => session.largeDocument ? session.largeDocument.copyNote(entry.note) : entry.note));
@@ -24,7 +24,7 @@ export function copyObjects(session, { xy = false } = {}) {
 
 export function cutObjects(session) {
   if (session.largeDocument?.logicalSelection && session.focus === 'notes') return session.largeDocument.copySelected().then(count => { if (count) { session.largeDocument.transformSelected(t('clipboard.s67ac29d'), null, { remove: true }); return session.largeDocument.flush().then(() => count); } return 0; });
-  const count = copyObjects(session, { xy: true });
+  const count = copyObjects(session);
   if (!count) return 0;
   deleteObjects(session, t('clipboard.s67ac29d'));
   return count;

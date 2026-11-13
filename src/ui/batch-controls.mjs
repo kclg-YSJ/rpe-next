@@ -24,7 +24,9 @@ export class BatchControls {
         const button = document.createElement('button'); button.type = 'button'; button.className = 'batch-ball'; button.title = title; button.setAttribute('aria-label', title);
         button.dataset.kind = kind; button.style.setProperty('--ball-color', color);
         button.addEventListener('pointerdown', event => this.begin(event, area, kind, button));
-        button.addEventListener('pointermove', event => this.move(event));
+        button.addEventListener('pointerenter', event => this.hover(event, area));
+        button.addEventListener('pointermove', event => { if (this.active) this.move(event); else this.hover(event, area); });
+        button.addEventListener('pointerleave', event => this.leave(event, area));
         button.addEventListener('pointerup', event => this.end(event));
         button.addEventListener('pointercancel', () => this.cancel());
         host.append(button);
@@ -41,6 +43,28 @@ export class BatchControls {
     }, true);
     window.addEventListener('keyup', event => { if (Number(event.key) === this.anchorMode) { this.anchorMode = 0; this.update(); } });
     window.addEventListener('blur', () => this.cancel());
+  }
+
+  hover(event, area) {
+    if (this.active || !this.enabled()) return;
+    // The controls overlay the canvas. Keep its real pointer coordinates alive
+    // so placement shortcuts work here just as they do on the canvas itself.
+    const canvas = area === 'notes' ? this.timeline.notesCanvas : this.timeline.eventsCanvas;
+    const point = this.timeline.point(event, canvas);
+    this.timeline.hoverArea = area; this.timeline.clipboardPointer = point;
+    if (area === 'notes') {
+      this.timeline.cursor = point;
+      this.timeline.cursorLineIndex = this.timeline.lineIndexAt(point.x, canvas.clientWidth, 'notes');
+    } else this.timeline.eventCursor = point;
+    this.timeline.changed();
+  }
+
+  leave(event, area) {
+    if (this.active) return;
+    const canvas = area === 'notes' ? this.timeline.notesCanvas : this.timeline.eventsCanvas;
+    const point = this.timeline.point(event, canvas);
+    if (point.x >= 0 && point.x <= canvas.clientWidth && point.y >= 0 && point.y <= canvas.clientHeight) this.hover(event, area);
+    else { if (area === 'notes') this.timeline.cursor = null; else this.timeline.eventCursor = null; this.timeline.changed(); }
   }
 
   enterValueScale() {

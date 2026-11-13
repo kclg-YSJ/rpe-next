@@ -36,14 +36,31 @@ test('多线事件连续单击替换全部选择，保持当前线并能独立�
   assert.deepEqual(selectedEventEntries(session).map(entry => entry.lineIndex), [2]);
 });
 
-test('Ctrl 跨线增减选择，点击已选成员仍可拖动整组，点击新成员替换整组', () => {
-  const { session, click } = fixture();
+test('关闭单击转单选时保留旧行为：Ctrl 跨线增减，点击已选成员保留整组', () => {
+  const { session, timeline, click } = fixture(); timeline.clickSelectedToSingle = false;
   click(0); click(1, true);
   assert.deepEqual(selectedEventEntries(session).map(entry => entry.lineIndex), [0, 1]);
   click(1); assert.equal(selectedEventEntries(session).length, 2);
   assert.equal(applyNumberShortcut(session, 'NumberMirror'), false);
   click(0, true); assert.deepEqual(selectedEventEntries(session).map(entry => entry.lineIndex), [1]);
   click(2); assert.deepEqual(selectedEventEntries(session).map(entry => entry.lineIndex), [2]);
+});
+
+test('默认单击已选事件转为非当前线单选，按 Ctrl 仍增减选择且不改事件', () => {
+  const { session, click } = fixture(), before = session.chart;
+  click(0); click(1, true); click(1);
+  assert.deepEqual(selectedEventEntries(session).map(entry => entry.lineIndex), [1]);
+  assert.equal(session.lineIndex, 0); assert.equal(session.multiSelectionIntent, null);
+  assert.equal(session.chart, before); assert.equal(session.history.undoStack.length, 0);
+  click(2, true); assert.equal(selectedEventEntries(session).length, 2);
+  click(1, true); assert.deepEqual(selectedEventEntries(session).map(entry => entry.lineIndex), [2]);
+});
+
+test('默认开启单击转单选仍允许从已选事件直接拖动跨线整组', () => {
+  const { session, timeline, click } = fixture(); click(0); click(1, true);
+  const pointer = { clientX: 150, clientY: 240, button: 0, pointerId: 1, preventDefault() {} };
+  timeline.eventInteraction.down(pointer); timeline.eventInteraction.move({ ...pointer, clientY: 140 }); timeline.eventInteraction.up({ ...pointer, clientY: 140 });
+  assert.equal(selectedEventEntries(session).length, 2); assert.equal(session.history.undoStack.length, 1);
 });
 
 test('非当前线 A/S 填充钩定透明度，取反仍遵循所属线的绑定组且可撤销', () => {

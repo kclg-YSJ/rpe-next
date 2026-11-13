@@ -27,6 +27,21 @@ function fixture(area = 'events', multi = false) {
   return { controls, button, pointer, session, timeline, hint: controls.groups.get(area).hint };
 }
 
+test('hovering controls keeps placement coordinates current on the underlying area without starting a drag', () => {
+  for (const area of ['notes', 'events']) {
+    const { controls, timeline, pointer, session } = fixture(area), before = session.chart;
+    timeline.cursor = timeline.eventCursor = null;
+    controls.hover(pointer(), area);
+    assert.deepEqual(area === 'notes' ? timeline.cursor : timeline.eventCursor, { x: pointer().clientX, y: pointer().clientY });
+    assert.equal(timeline.hoverArea, area); assert.equal(controls.active, undefined); assert.equal(session.chart, before);
+    controls.leave(pointer(240, 160), area); assert.equal((area === 'notes' ? timeline.cursor : timeline.eventCursor).x, 240);
+    controls.leave(pointer(800, 800), area); assert.equal(area === 'notes' ? timeline.cursor : timeline.eventCursor, null);
+    controls.hover(pointer(), area);
+    controls.active = {}; controls.hover(pointer(100, 100), area);
+    assert.equal((area === 'notes' ? timeline.cursor : timeline.eventCursor).x, pointer().clientX);
+  }
+});
+
 test('batch ball delta starts at zero off the grid; displayed delta and each preview use the same snapped displacement', () => {
   for (const area of ['notes', 'events']) for (const multi of [false, true]) {
     const { controls, button, pointer, session, timeline, hint } = fixture(area, multi), original = session.chart;

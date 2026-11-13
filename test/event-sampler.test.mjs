@@ -7,6 +7,8 @@ import { TempoMap } from '../src/core/tempo.mjs';
 import { SceneRuntime } from '../src/core/scene.mjs';
 import { toggleSingleEventLock } from '../src/application/event-commands.mjs';
 import { withEventLock } from '../src/application/event-value-memory.mjs';
+import { SamplingTargets } from '../src/ui/sampling-targets.mjs';
+import { samplingPreferences, saveSamplingPreferences } from '../src/platform/sampling-preferences.mjs';
 
 function fixture(chart = createChart(), autoFit = true, pairedMovementSampling = false) {
   const sampler = Object.create(EventSampler.prototype);
@@ -22,6 +24,28 @@ function fixture(chart = createChart(), autoFit = true, pairedMovementSampling =
   sampler.getContext = () => context; sampler.invalidate = () => {}; sampler.pause = () => {}; sampler.scene = new SceneRuntime();
   return { sampler, session, context, classes };
 }
+
+test('incremental movement snapping uses chart coordinates across canvas offsets, aspect ratios and zoom', () => {
+  const previous = { ...samplingPreferences() };
+  try {
+    saveSamplingPreferences({ coordinates: 'delta', objectSnap: false, gridSnap: true, stepX: 100, stepY: 100 });
+    for (const paired of [false, true]) for (const ratio of [1.5, 16 / 9, 9 / 16]) {
+      const chart = createChart(), layer = chart.judgeLineList[0].eventLayers[0];
+      layer.moveXEvents = [createEvent(13, 13, 0, 4)]; layer.moveYEvents = [createEvent(27, 27, 0, 4)];
+      const { sampler, context } = fixture(chart, false, paired); context.realtimePreview.aspectRatio = ratio;
+      sampler.snapTargets = new SamplingTargets(); sampler.controls = { configure() {} };
+      sampler.begin({ type: 'moveXEvents', index: 0, field: 'start', lineIndex: 0 });
+      const view = sampler.view(), initial = sampler.handle(sampler.draftChart), handle = view.screen(initial);
+      const pointer = { clientX: view.rectangle.left + handle.x + 4, clientY: view.rectangle.top + handle.y - 3, button: 0, pointerId: 1, preventDefault() {}, stopPropagation() {} };
+      sampler.down(pointer); assert.deepEqual(sampler.drag.origin, { x: initial.x, y: -initial.y });
+      const target = view.screen(sampler.handle(sampler.eventChart(111, paired ? 125 : undefined)));
+      sampler.move({ ...pointer, clientX: view.rectangle.left + target.x + 4, clientY: view.rectangle.top + target.y - 3 });
+      assert.equal(sampler.draftChart.judgeLineList[0].eventLayers[0].moveXEvents[0].start, 113);
+      if (paired) assert.equal(sampler.draftChart.judgeLineList[0].eventLayers[0].moveYEvents[0].start, 127);
+      sampler.finish(false);
+    }
+  } finally { saveSamplingPreferences(previous); }
+});
 
 test('移动取样按父线旋转后的轴反算，并保持预览与控制点一致', () => {
   const chart = createChart(); chart.judgeLineList.push(createLine());

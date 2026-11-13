@@ -8,14 +8,21 @@ export function setRatioOptions(select, width, height) {
   select.value = value;
 }
 
-export function applyViewControls(preferences, timeline, previews) {
-  timeline.cameraX = preferences.cameraX ?? 0;
-  timeline.notesOnly = preferences.notesOnly ?? false;
+export function syncNotesOnlyView(preferences, timeline, force = false) {
+  const enabled = Boolean(preferences.notesOnly) && !timeline.getSession().multiLineActive;
+  if (!force && timeline.notesOnly === enabled) return;
+  timeline.notesOnly = enabled;
   document.querySelector('.editor').classList.toggle('notes-only', timeline.notesOnly);
   const notesButton = document.querySelector('#notes-only');
   notesButton.textContent = '';
   notesButton.title = timeline.notesOnly ? t('view-controls.sc33b5a7') : t('view-controls.sbc2bd44');
-  for (const [id, enabled] of [['notes-only', timeline.notesOnly], ['game-ui', preferences.showGameUI ?? false]]) {
+  notesButton.classList.toggle('active', timeline.notesOnly); notesButton.setAttribute('aria-pressed', timeline.notesOnly);
+}
+
+export function applyViewControls(preferences, timeline, previews) {
+  timeline.cameraX = preferences.cameraX ?? 0;
+  syncNotesOnlyView(preferences, timeline, true);
+  for (const [id, enabled] of [['game-ui', preferences.showGameUI ?? false]]) {
     const button = document.querySelector(`#${id}`); button.classList.toggle('active', enabled); button.setAttribute('aria-pressed', enabled);
   }
   document.querySelector('#camera-x').value = timeline.cameraX;

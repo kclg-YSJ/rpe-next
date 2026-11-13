@@ -314,11 +314,11 @@ export class EventSampler {
   down(event) {
     if (!this.mode || event.button !== 0) return;
     event.preventDefault(); event.stopPropagation();
-    const view = this.view(); const handle = view.screen(this.handle(this.draftChart)); const point = { x: event.clientX - view.rectangle.left, y: event.clientY - view.rectangle.top };
+    const view = this.view(), worldHandle = this.handle(this.draftChart); const handle = view.screen(worldHandle); const point = { x: event.clientX - view.rectangle.left, y: event.clientY - view.rectangle.top };
     if (Math.hypot(point.x - handle.x, point.y - handle.y) > 28) return;
     this.snapResult=this.localSnap=this.angleSnap=null;
     const renderer=this.context.previewVisible?this.context.preview:this.context.realtimePreview;this.scene.compile(this.samplingChart(this.draftChart),this.context.tempo);const angle=this.scene.sampler(this.seconds,previewPositionScale(renderer.aspectRatio??1.5))(this.mode.lineIndex).rotation;
-    this.drag = { angle, pointer: { x: event.clientX, y: event.clientY }, origin: {x:handle.x,y:-handle.y}, offset: { x: point.x - handle.x, y: point.y - handle.y } }; this.canvas.setPointerCapture(event.pointerId);
+    this.drag = { angle, pointer: { x: event.clientX, y: event.clientY }, origin: {x:worldHandle.x,y:-worldHandle.y}, offset: { x: point.x - handle.x, y: point.y - handle.y } }; this.canvas.setPointerCapture(event.pointerId);
   }
 
   move(event) {
@@ -363,8 +363,8 @@ export class EventSampler {
     const worldView={...view,screen:p=>view.screen({x:p.x,y:-p.y})};
     const renderer=this.context.previewVisible?this.context.preview:this.context.realtimePreview;
     const state=this.scene.sampler(this.seconds,previewPositionScale(renderer.aspectRatio??1.5))(this.mode.lineIndex);
-    const settings=samplingPreferences(),basis=settings.coordinates==='local'?this.localGrid():settings.coordinates==='delta'&&this.drag?{origin:this.drag.origin,x:{x:previewPositionScale(renderer.aspectRatio??1.5).x,y:0},y:{x:0,y:previewPositionScale(renderer.aspectRatio??1.5).y}}:undefined;
-    drawSamplingGrid(context,worldView,{rotation:this.mode.type==='rotateEvents',center:state,angle:state.rotation*Math.PI/180,positionScale:previewPositionScale(renderer.aspectRatio??1.5),basis});
+    const settings=samplingPreferences(),basis=settings.coordinates==='local'?this.localGrid():undefined;
+    drawSamplingGrid(context,worldView,{rotation:this.mode.type==='rotateEvents',center:state,angle:state.rotation*Math.PI/180,positionScale:previewPositionScale(renderer.aspectRatio??1.5),basis,origin:this.drag?.origin??state,angleOrigin:this.drag?.angle??state.rotation});
     drawSnapGuides(context,worldView,this.snapResult);
     const source=eventListAt({chart:this.draftChart,eventLayer:this.session.eventLayer},this.mode.lineIndex,this.mode.type)[this.mode.index];
     this.controls?.updateValues({value:source[this.mode.field],paired:this.mode.paired?eventListAt({chart:this.draftChart,eventLayer:this.mode.layer},this.mode.lineIndex,this.mode.paired.type)[this.mode.paired.index][this.mode.field]:NaN});

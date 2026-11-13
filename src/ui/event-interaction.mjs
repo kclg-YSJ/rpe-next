@@ -177,7 +177,7 @@ export class EventInteraction {
       selectEvent(session, rectangle.lineIndex ?? session.lineIndex, rectangle.type, rectangle.index, { toggle: event.ctrlKey });
       const kind = this.timeline.rpeEventDrag !== true ? Math.abs(point.y - rectangle.y) < 6 ? 'endTime' : Math.abs(point.y - (rectangle.y + rectangle.height)) < 6 ? 'startTime' : 'move' : 'move';
       const selected = eventListAt(session, rectangle.lineIndex ?? session.lineIndex, rectangle.type)?.[rectangle.index];
-      this.drag = { kind, selecting, type: rectangle.type, lineIndex: rectangle.lineIndex, start: point, current: point, anchor: selected?.[kind === 'endTime' ? 'endTime' : 'startTime'], originSeconds: this.timeline.tempo.seconds(this.timeline.origin, this.timeline.factorForLine(rectangle.lineIndex ?? session.lineIndex)) };
+      this.drag = { kind, selecting, collapseSelection: this.timeline.clickSelectedToSingle !== false && !event.ctrlKey && !selecting, type: rectangle.type, index: rectangle.index, lineIndex: rectangle.lineIndex, start: point, current: point, anchor: selected?.[kind === 'endTime' ? 'endTime' : 'startTime'], originSeconds: this.timeline.tempo.seconds(this.timeline.origin, this.timeline.factorForLine(rectangle.lineIndex ?? session.lineIndex)) };
     } else if (!multiMode) this.drag = { kind: 'stroke', start: point, current: point, points: [point], remove: event.button === 2 };
     this.bindXyDrag(session);
     session.notify();
@@ -304,6 +304,10 @@ export class EventInteraction {
         } else transformEvents(session, drag.kind === 'move' ? t('event-interaction.s9728d19') : t('event-interaction.s8c3d905'), change);
       }
     } catch (error) { this.reportError(error); }
+    if (drag.collapseSelection && !drag.scrolled && Math.hypot(drag.current.x - drag.start.x, drag.current.y - drag.start.y) <= 4) {
+      selectEvent(session, drag.lineIndex ?? session.lineIndex, drag.type, drag.index, { replace: true });
+      session.multiSelectionIntent = null; session.notify();
+    }
     if (drag.kind === 'stroke' && drag.tracing || drag.selecting && !drag.scrolled && Math.hypot(drag.current.x - drag.start.x, drag.current.y - drag.start.y) <= 4) this.timeline.completeSelection('events', event);
     this.timeline.changed();
   }

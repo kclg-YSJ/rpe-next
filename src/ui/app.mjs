@@ -86,7 +86,7 @@ import { ManualSaveQueue } from '../application/manual-save.mjs';
 import { SPECIAL_TRACKS, MAX_BASE_LAYERS } from '../core/editor-display.mjs';
 import { lineGroupName, isDefaultLineGroup, lineDisplayLabel, normalizeLineGroups } from '../core/line-groups.mjs';
 import { isTextEntry, usesNativeTextShortcut, releaseShortcutFocus } from './keyboard.mjs';
-import { setRatioOptions, applyViewControls } from './view-controls.mjs';
+import { setRatioOptions, applyViewControls, syncNotesOnlyView } from './view-controls.mjs';
 import { generateCurveNotes } from '../core/curve-notes.mjs';
 import { createEasingPicker } from './easing-picker.mjs';
 import { numericWheel } from './numeric-wheel.mjs';
@@ -180,6 +180,7 @@ for(const type of ['keydown','keyup','wheel','pointerdown','pointerup','mousedow
   if(!event.defaultPrevented&&['keydown','keyup'].includes(type))handleValueDragKey(event);
 },{capture:true,passive:false});
 const displayFields = [
+  ['click-selected-to-single', 'clickSelectedToSingle', DEFAULT_EDITOR_PREFERENCES.clickSelectedToSingle],
   ['editor-render-fps', 'editorRenderFps', DEFAULT_EDITOR_PREFERENCES.editorRenderFps],
   ['editor-render-auto-play', 'editorRenderAutoPlay', DEFAULT_EDITOR_PREFERENCES.editorRenderAutoPlay],
   ['key-display', 'keyDisplay', DEFAULT_EDITOR_PREFERENCES.keyDisplay],
@@ -1159,6 +1160,7 @@ function updateLineInfo() {
 }
 
 function renderSession() {
+  syncNotesOnlyView(editorPreferences, timeline);
   if (speedCurve.active) speedCurve.sync();
   editorSkinState({ dirty: session.history.dirty || assetDirty, location: atHome ? 'home' : 'editor', mode: globalEvents.active ? 'global-events' : noiseEditor.active ? 'noise' : session.multiLineActive ? 'multi-' + session.multiLineMode : timeline.notesOnly ? 'notes' : 'notes-events' });
   const editor = element('.editor');
@@ -2536,6 +2538,7 @@ function applyDisplaySettings() {
   if (!timeline.rpeEventDrag) setEventEndpointDragHeld(false);
   timeline.drawEventCurves = element('#draw-event-curves').checked;
   timeline.selectionInterval = globalEvents.timeline.selectionInterval = Number(element('#selection-interval').value);
+  timeline.clickSelectedToSingle = globalEvents.timeline.clickSelectedToSingle = element('#click-selected-to-single').checked;
   selectionIntervalPanel.sync();
   session.cutDensity = Number(element('#event-cut-density').value);
   session.dragSensitivity = Number(element('#event-drag-sensitivity').value);
