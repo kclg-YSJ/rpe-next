@@ -22,7 +22,9 @@ for (const name of ['src/core', 'src/application', 'src/platform', 'src/ui', 'sr
 await writeFile(join(output, '.nojekyll'), '');
 await writeFile(join(output, 'assets/agent-source.json'), JSON.stringify(await createAgentSourceBundle(root)));
 if (!pages) {
-  for (const name of ['start.cmd', 'README.md']) await cp(join(root, name), join(output, name));
+  for (const name of ['start.cmd', 'README.md', 'README.en.md', 'GUIDE.zh-CN.md', 'screenshots']) await cp(join(root, name), join(output, name), { recursive: true });
+  await mkdir(join(output, 'collaboration-server'), { recursive: true });
+  await cp(join(root, 'collaboration-server/README.md'), join(output, 'collaboration-server/README.md'));
   await mkdir(join(output, 'tools'), { recursive: true });
   await cp(join(root, 'tools/serve.mjs'), join(output, 'tools/serve.mjs'));
   const metadata = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
