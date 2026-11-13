@@ -89,6 +89,19 @@ test('默认线、图片和多行文字共用左下原点锚点，旋转缩放�
   assert.equal(textureInViewport(picture, { anchor: [0, 0.5] }, { x: 150, y: 0, scaleX: 2, scaleY: 1, rotation: 0 }, 200, 200, 1, view), false);
 });
 
+test('Y 缩放事件按谱面尺寸绘制，默认线粗细仅辅助没有缩放事件的线', () => {
+  globalThis.devicePixelRatio = 1;
+  const preview = new Preview({}), line = createChart().judgeLineList[0], picture = { naturalWidth: 4000, naturalHeight: 5 };
+  preview.lineScale = 1.5; preview.skin = { tinted: () => picture, tintedSource: (_, source) => source };
+  const state = { scaleX: 1, scaleY: 20, alpha: 255, color: [0, 255, 0] };
+  const scaled = context();
+  preview.drawLine(scaled, { ...line, extended: { scaleYEvents: [createEvent(20)] } }, state, 1);
+  assert.deepEqual(destinations(scaled)[0], [-2000, -2.5, 4000, 5]);
+  const plain = context();
+  preview.drawLine(plain, { ...line, extended: {} }, { ...state, scaleY: 1 }, 1);
+  assert.deepEqual(destinations(plain)[0], [-2000, -3.75, 4000, 7.5]);
+});
+
 test('锚点校验拒绝无效格式，省略时仍默认中心而非改变老谱结构', () => {
   const chart = createChart(); delete chart.judgeLineList[0].anchor; assertChart(chart);
   assert.equal(Object.hasOwn(parseChart(serializeChart(chart)).judgeLineList[0], 'anchor'), false);
