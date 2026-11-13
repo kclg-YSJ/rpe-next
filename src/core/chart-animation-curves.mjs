@@ -13,8 +13,9 @@ export function* chartCurveEvents(chart) {
   yield* shader(chart.effects); yield* shader(chart.shaderEvents); yield* shader(chart.META?.effects);
 }
 export function chartHasAnimationCurves(chart) { for (const e of chartCurveEvents(chart)) if (e.customEasing) return true; return false; }
+function* editorCurveDefinitions(chart) { yield* chart.rpeNextGuideLines ?? []; yield* chartCurveEvents(chart); }
 export function internChartAnimationCurves(chart) {
   const curves = new Map();
-  for (const event of chartCurveEvents(chart)) if (event.customEasing) { assertEventEasing(event); const key = JSON.stringify(event.customEasing.curve); if (!curves.has(key)) curves.set(key, event.customEasing.curve); else event.customEasing.curve = curves.get(key); }
+  for (const event of editorCurveDefinitions(chart)) if (event.customEasing) { assertEventEasing(event); const key = JSON.stringify(event.customEasing.curve); if (!curves.has(key)) curves.set(key, event.customEasing.curve); else event.customEasing.curve = curves.get(key); }
   return chart;
 }

@@ -7,7 +7,7 @@ import { join, dirname } from 'node:path';
 import { largeChartSaveDestination, largeChartSpace } from './large-chart-paths.mjs';
 
 const FORMAT = 'rpen-large-preview-v1', uuid = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/;
-const documentCommands = ['window','editable','page','edit','travel','save','hits','soundNames','selection','selectionRead','selectionEdit','selectionCopy','selectionPaste'];
+const documentCommands = ['window','editable','page','edit','guideLineEdit','travel','save','hits','soundNames','selection','selectionRead','selectionEdit','selectionCopy','selectionPaste'];
 const cacheFiles = /^(?:\.owner\.json|notes\.sqlite(?:-journal|-wal|-shm)?|summary\.json|(?:cover|music)\.[a-z0-9]+)$/;
 async function smallJson(path) {
   const info = await lstat(path); if (!info.isFile() || info.isSymbolicLink() || info.size > 4096) throw Error('预览缓存标识文件无效');
@@ -104,7 +104,7 @@ export class LargeChartPreviewService {
     const job = this.job; if (!job || job.id !== id || !job.summary || job.closing) throw Error('预览已关闭');
     if(!documentCommands.includes(method))throw Error('不支持的超大谱操作');
     if(job.pending.size>=8)throw Error('后台操作过于频繁，请稍后重试');
-    const changesDocument = ['edit','travel','selectionPaste'].includes(method) || method==='selectionEdit'&&value?.action==='finish';
+    const changesDocument = ['edit','guideLineEdit','travel','selectionPaste'].includes(method) || method==='selectionEdit'&&value?.action==='finish';
     if(changesDocument){job.owner={...job.owner,editing:true,dirty:true};await writeFile(join(job.workspace,'.owner.json'),JSON.stringify(job.owner));}
     const result=await new Promise((accept,reject)=>{const request=++job.sequence;job.pending.set(request,{accept,reject});job.worker.postMessage({id:request,method,value});});
     if(['editable','save'].includes(method)||changesDocument){

@@ -228,6 +228,13 @@ export class LargeChartEditor {
       } catch (error) { restoreSelection(this.session, beforeSelection); throw error; }
     });
   }
+  editGuideLine(label, id, next) {
+    const state = this.captureSelection(this.session.chart, selectionState(this.session));
+    return this.run(async () => {
+      const summary = await this.call('guideLineEdit', this.summary.id, { revision: this.revision, id, next, label, selectionBefore: state });
+      this.updateSummary(summary); await this.refresh();
+    });
+  }
   travel(direction) {
     return this.run(async () => {
       const current = this.captureSelection(this.session.chart, selectionState(this.session));

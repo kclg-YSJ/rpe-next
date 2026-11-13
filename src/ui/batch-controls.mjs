@@ -274,6 +274,10 @@ export class BatchControls {
 
   previewResult(active, result) {
     active.result = result;
+    if (active.kind === 'note-move' && this.timeline.snapX && result.chart.rpeNextGuideLines?.length) {
+      const change = result.changes?.find(change => change.kind === 'notes');
+      if (change) this.timeline.guideTool?.indicateSnap(change.after.positionX, beatValue(change.after.startTime), change.lineIndex, Number(change.after.above ?? 1) === 1 ? 1 : -1);
+    }
     const view = Object.create(active.session);
     Object.defineProperty(view, 'chart', { value: result.chart });
     Object.assign(view, { lineIndex: result.lineIndex, selection: result.selection, eventSelection: result.eventSelection, multiLineSelection: result.multiLineSelection, multiEventSelection: result.multiEventSelection });

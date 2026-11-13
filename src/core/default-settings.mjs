@@ -44,6 +44,8 @@ export const DEFAULT_EDITOR_PREFERENCES = Object.freeze({
   "historyStrip": true,
   "densityStripBrightness": 0.65,
   "densityStripWindow": 1,
+  "guideLineWidth": 1.2,
+  "guideLineBrightness": 1,
   "viewportOverflow": false,
   "overflowBlur": 25,
   "overflowDarken": 0.15,

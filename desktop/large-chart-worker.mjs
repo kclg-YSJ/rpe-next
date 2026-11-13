@@ -14,6 +14,7 @@ try {
         else if(request.method==='editable')result=await store.editable();
         else if(request.method==='page')result=store.page(request.value);
         else if(request.method==='edit')result=await store.edit(request.value);
+        else if(request.method==='guideLineEdit')result=await store.editGuideLine(request.value);
         else if(request.method==='travel')result=await store.travel(request.value);
         else if(request.method==='save')result=await store.saveDatabase(typeof request.value==='string'?request.value:request.value.path,request.value?.editTime);
         else if(request.method==='hits')result=store.hits(request.value);

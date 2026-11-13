@@ -13,6 +13,7 @@ import { t } from '../i18n.mjs';
 import { normalizeLineGroups, reservedLineGroupName } from './line-groups.mjs';
 import { diagnoseChart } from './chart-diagnostics.mjs';
 import { resourceDiagnostics, compatibilityDiagnostics } from './diagnostic-resources.mjs';
+import { assertGuideLines } from './guide-lines.mjs';
 
 export const EVENT_TYPES = ['moveXEvents', 'moveYEvents', 'rotateEvents', 'alphaEvents', 'speedEvents'];
 export const EXTENDED_TYPES = ['scaleXEvents', 'scaleYEvents', 'colorEvents', 'paintEvents', 'textEvents', 'inclineEvents', 'gifEvents'];
@@ -83,6 +84,7 @@ export function assertChart(chart) {
   if (chart.blockAreaList != null) validateNoiseAreas(chart.blockAreaList);
   validateNoiseLayers(chart);
   validateGlobalEvents(chart);
+  assertGuideLines(chart);
   for (const event of chartCurveEvents(chart)) if (event.customEasing) assertEventEasing(event);
   if (chart.noiseAreaOptions !== undefined) {
     if (!chart.noiseAreaOptions || typeof chart.noiseAreaOptions !== 'object' || Array.isArray(chart.noiseAreaOptions)) throw new Error(t('chart.s9704a67'));
