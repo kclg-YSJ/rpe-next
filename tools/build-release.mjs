@@ -114,7 +114,9 @@ const executable = platform === 'darwin' ? join(bundle, 'Contents/MacOS', execut
 if (platform === 'win32') execFileSync('icacls.exe', [directory, '/grant', '*S-1-15-2-1:(OI)(CI)(RX)', '/T', '/Q'], { windowsHide: true, stdio: 'pipe' });
 const args = kind === 'server' ? ['--smoke-test'] : ['--smoke-native', '--mods-off'];
 if (platform === 'linux') args.push('--no-sandbox');
-if (platform === 'darwin') args.push('--use-angle=metal', '--ignore-gpu-blocklist');
+// Intel hosted runners have no Metal device. Exercise WebGL with SwiftShader
+// there, as on Windows/Linux; these flags only apply to package verification.
+if (platform === 'darwin' && arch === 'arm64') args.push('--use-angle=metal', '--ignore-gpu-blocklist');
 else args.push('--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader');
 console.log('Testing packaged application: ' + platform + '/' + arch + ' ' + kind);
 async function smokeApplication(path, profile, stage) {
