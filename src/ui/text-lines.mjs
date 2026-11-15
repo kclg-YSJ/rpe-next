@@ -96,7 +96,7 @@ export class TextLinesPanel {
       if (!fit.passed) { this.message.textContent = statistics + t('text-lines.sa907f2c'); this.invalidate(); return; }
       try {
         this.previewChart = textLinesChart(chart, { ...this.result, preview: true }); this.applyButton.disabled = false; this.message.textContent = statistics + t('text-lines.sbb4a8db');
-      } catch (error) { this.previewChart = null; this.message.textContent = statistics + '。' + error.message; }
+      } catch (error) { this.previewChart = null; this.message.textContent = t('text-lines.previewError', { stats: statistics, error: error.message }); }
       this.invalidate();
     };
     worker.postMessage({ mask, width, height, length, thickness, limit: indices.length, tolerance: options.tolerance / 100, requiredCoverage: options.coverage / 100 }, [mask.buffer]);

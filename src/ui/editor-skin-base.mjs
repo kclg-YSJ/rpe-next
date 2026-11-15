@@ -35,8 +35,8 @@ ${scope} #beat-display{color:var(--rpen-muted)}
 ${scope} #document-name,${scope} #selection-info,${scope} #hotkey-help,${scope} small,${scope} .view-controls-inline label span{color:var(--rpen-muted)}
 ${scope} summary,${scope} .home-heading p,${scope} .project-card time{color:var(--rpen-muted)}
 ${scope} .multi-line-width-controls output,${scope} #noise-properties h3{color:var(--rpen-text)}
-${scope} .editor.noise-mode .timeline-head::before{color:var(--rpen-text)}
-${scope} .editor.global-events-mode .timeline-head::before{color:var(--rpen-text)}
+${scope} .editor.noise-mode .timeline-mode-hint{color:var(--rpen-text)}
+${scope} .editor.global-events-mode .timeline-mode-hint{color:var(--rpen-text)}
 ${scope} .editor.noise-mode .noise-toolbar-close,${scope} .noise-input-controls > button{color:var(--rpen-info)}
 ${scope} .multi-line-head-controls button.active,${scope} .multi-line-controls button.active,${scope} .analysis-mode-buttons button.active,${scope} .layer-buttons button.active{color:var(--rpen-accent-text);background:var(--rpen-selected);border-color:var(--rpen-selected-border)}
 ${scope} .noise-sample-bar,${scope} .hotkey-toolbar{background:var(--rpen-elevated);border-color:var(--rpen-border)}

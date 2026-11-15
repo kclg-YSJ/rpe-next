@@ -183,14 +183,14 @@ export class CollaborationPanel {
   renderChat() {
     const signature = JSON.stringify(this.client.chat); if (signature === this.chatSignature) return;
     this.chatSignature = signature; this.chatLog.replaceChildren();
-    for (const item of this.client.chat) { const row = node('div'); const name = node('strong', `${item.name}：`); name.style.color = /^#[0-9a-f]{6}$/i.test(item.color) ? item.color : '#fff'; row.append(name, node('span', item.text)); this.chatLog.append(row); }
+    for (const item of this.client.chat) { const row = node('div'); const name = node('strong', `${item.name}${t('common.colon')}`); name.style.color = /^#[0-9a-f]{6}$/i.test(item.color) ? item.color : '#fff'; row.append(name, node('span', item.text)); this.chatLog.append(row); }
     this.chatLog.scrollTop = this.chatLog.scrollHeight;
     const last = this.client.chat.at(-1);
     if (!last) {
       for (const message of this.toast.children) { clearTimeout(message.fadeTimer); clearTimeout(message.removeTimer); }
       this.toast.replaceChildren(); this.toast.hidden = true; return;
     }
-    const message = node('div', `${last.name}：${last.text}`, 'collaboration-chat-message'); this.toast.append(message);
+    const message = node('div', `${last.name}${t('common.colon')}${last.text}`, 'collaboration-chat-message'); this.toast.append(message);
     while (this.toast.children.length > 5) {
       const oldest = this.toast.firstElementChild; clearTimeout(oldest.fadeTimer); clearTimeout(oldest.removeTimer); oldest.remove();
     }

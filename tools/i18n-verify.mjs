@@ -8,6 +8,17 @@ import { BUILTIN_LOCALES } from '../src/core/locales.mjs';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const reference = BUILTIN_LOCALES[0];
 const messages = reference.messages;
+// Dynamic keys (`t('diag.' + code)`) and plural variants (`key.one`) resolve
+// through a catalog prefix even though the exact key is not present.
+const prefixes = new Set();
+for (const key of Object.keys(messages)) {
+  const parts = key.split('.');
+  for (let index = 1; index < parts.length; index++) prefixes.add(parts.slice(0, index).join('.'));
+}
+const resolves = key => {
+  const normalized = key.replace(/\.+$/, '');
+  return normalized in messages || prefixes.has(normalized);
+};
 
 const files = [];
 const walk = async directory => {
@@ -26,7 +37,7 @@ for (const file of files) {
   const text = await readFile(file, 'utf8');
   const keys = [...text.matchAll(/(?<![.\w$])t\(\s*'([\w.-]+)'/g)].map(match => match[1]);
   const markup = [...text.matchAll(/data-i18n(?:-title|-aria-label|-placeholder|-alt)?="([\w.-]+)"/g)].map(match => match[1]);
-  for (const key of [...keys, ...markup]) if (!(key in messages)) {
+  for (const key of [...keys, ...markup]) if (!resolves(key)) {
     const name = relative(root, file).replaceAll('\\', '/');
     if (!missing.has(name)) missing.set(name, new Set());
     missing.get(name).add(key);

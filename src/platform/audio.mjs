@@ -96,7 +96,7 @@ export class AudioTransport {
     if (!url) return;
     const revision = this.loadRevision, media = new Audio(); media.preload = 'metadata';
     try {
-      await loadMediaSource(media, url, '超大谱音乐');
+      await loadMediaSource(media, url, t('large-chart.musicName'));
       if (revision !== this.loadRevision) { media.removeAttribute('src'); media.load(); return; }
       this.media = media; this.mediaUrl = url;
       this.mediaSource = this.ensureContext().createMediaElementSource(media); this.mediaSource.connect(this.gain);

@@ -318,7 +318,7 @@ export class BatchControls {
         if (this.getSession() !== active.session || active.session.chart !== active.snapshot.chart || this.signature(active.area, active.session) !== active.signature) throw new Error(t('batch-controls.s48a33a3'));
         const result = active.result;
         this.active = null;
-        commitSelectionEdit(active.session, result, active.kind === 'event-value-scale' ? t('event-scale.title') : t('batch-controls.sba17db7', { p0: active.button.title.split('；')[0] }));
+        commitSelectionEdit(active.session, result, active.kind === 'event-value-scale' ? t('event-scale.title') : t('batch-controls.sba17db7', { p0: active.button.title.split(/[；;]/)[0] }));
       }
     } catch (error) { this.reportError(error); }
     this.active = null; this.returnBall(active); this.timeline.changed();

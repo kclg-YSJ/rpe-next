@@ -46,7 +46,7 @@ export function deleteLine(chart, index) {
 export function duplicateLine(chart, index) {
   requireLine(chart, index);
   const line = structuredClone(chart.judgeLineList[index]);
-  line.Name = t('line-commands.s0fba311', { p0: line.Name || '判定线' });
+  line.Name = t('line-commands.s0fba311', { p0: line.Name || t('chart.defaultLineName') });
   return remapShaderLines(chart, { ...chart, judgeLineList: [...chart.judgeLineList, line] }, new Map(chart.judgeLineList.map((line, index) => [index, index])), index);
 }
 

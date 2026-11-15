@@ -4,7 +4,7 @@ import { ModRuntime,shortcutFromEvent,formatShortcut } from './mod-runtime.mjs';
 import { builtinMods,readMods,storeMod,deleteMod,importMod,exportMod } from '../platform/mods.mjs';
 import { download } from '../platform/files.mjs';
 import { installModApi } from './mod-api.mjs';
-import { localizedValue, t } from '../i18n.mjs';
+import { joinList, localizedValue, t } from '../i18n.mjs';
 import { loadBuiltinPackage } from '../platform/builtin-packages.mjs';
 import { BuiltinSkinLayout } from './builtin-skin-layout.mjs';
 
@@ -60,7 +60,7 @@ export class ModManager {
     const actions=document.createElement('div');actions.className='mod-manager-toolbar';const toggle=button(active?t('mod-manager.s0880212'):t('mod-manager.sdf29e88'),()=>this.toggle(manifest.id));toggle.className=active?'':'primary';toggle.disabled=this.busy;actions.append(toggle,button(t('mod-manager.s6630c53'),async()=>{try{await loadBuiltinPackage(record);download(exportMod(record),manifest.id+'.rpenmod');}catch(error){this.notify(error.message,'error');}}));
     if(!record.builtin)actions.append(button(t('mod-manager.s6567e7a'),()=>this.remove(manifest.id)));this.details.append(actions);
     if(this.errors.has(manifest.id))this.details.append(text('pre',this.errors.get(manifest.id),'mod-error'));
-    if(manifest.dependencies.length)this.details.append(text('p',t('mod-manager.s8b3887b')+manifest.dependencies.join('、'),'hint'));if(manifest.conflicts.length)this.details.append(text('p',t('mod-manager.s4150629')+manifest.conflicts.join('、'),'hint'));
+    if(manifest.dependencies.length)this.details.append(text('p',t('mod-manager.s8b3887b')+joinList(manifest.dependencies),'hint'));if(manifest.conflicts.length)this.details.append(text('p',t('mod-manager.s4150629')+joinList(manifest.conflicts),'hint'));
     const settings=this.settingsFor(record);
     if(Object.keys(manifest.settings).length)this.details.append(button(t('mod-manager.s6e43199'),async()=>{for(const [key,definition]of Object.entries(manifest.settings))await this.setSetting(manifest.id,key,structuredClone(definition.default));this.renderDetails();}));
     for(const [key,definition]of Object.entries(manifest.settings)){

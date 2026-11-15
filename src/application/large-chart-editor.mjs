@@ -1,5 +1,6 @@
 import { selectionState, restoreSelection } from './selection-history.mjs';
 import { lineOffsetMapper } from './multi-line-edit.mjs';
+import { t } from '../i18n.mjs';
 
 const referenceKey = '_rpenLargeRef';
 const copiesKey = '_rpenLargeCopies';
@@ -144,7 +145,7 @@ export class LargeChartEditor {
             let line = targetLine ?? mapLine(entry.line);
             const produced = remove ? null : transform(entry.note, { lineIndex: entry.line, index: index++, count: entry.count });
             const note = produced?.note ?? produced; if(produced?.note)line=produced.line??line;
-            if (!remove && (!note || typeof note !== 'object')) throw Error('批量音符修改缺少有效结果');
+            if (!remove && (!note || typeof note !== 'object')) throw Error(t('large-chart.batchMissingResult'));
             if (remove || line !== entry.line || JSON.stringify(cleanNote(note)) !== JSON.stringify(cleanNote(entry.note))) changes.push({ id: entry.note[referenceKey].id, line, note: note ? cleanNote(note) : undefined });
           }
           if (changes.length) await this.call('selectionEdit', this.summary.id, { action: 'append', stage, changes });
@@ -179,7 +180,7 @@ export class LargeChartEditor {
   pasteSelected(beat, { mirror = false, keepTime = false, targetLineIndex = this.session.lineIndex } = {}) {
     const clipboard = this.session.clipboard.find(note => note._rpenLargeClipboard)?._rpenLargeClipboard;
     if (!clipboard) return false;
-    if (clipboard.owner !== this.summary.id) throw Error('此大选区的剪贴板属于另一个工程，请在原工程中粘贴');
+    if (clipboard.owner !== this.summary.id) throw Error(t('large-chart.clipboardOtherProject'));
     const state = this.captureSelection(this.session.chart, selectionState(this.session));
     return this.run(async () => {
       const summary = await this.call('selectionPaste', this.summary.id, { revision: this.revision, clipboard: clipboard.token, beat, mirror, keepTime, targetLine: targetLineIndex,

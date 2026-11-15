@@ -110,10 +110,10 @@ export class LargeChartWorkspace {
     if (this.windowFootprint !== footprint) { this.windowFootprint = footprint; this.view.set(null); this.failedWindow = null; }
     await this.document.pending;
     await this.document.ensurePage(this.range());
-    if (!this.document.covers(this.range())) throw Error('超大谱当前编辑页尚未就绪，请结束拖拽或等待数据加载');
+    if (!this.document.covers(this.range())) throw Error(t('large-chart.notReady'));
     if (this.windowRequest) await this.windowRequest;
     if (!this.view.contains(seconds)) await this.readPreview(seconds, { recording: true });
-    if (!this.view.contains(seconds)) throw Error('超大谱预览数据尚未就绪');
+    if (!this.view.contains(seconds)) throw Error(t('large-chart.previewNotReady'));
   }
   async readPreview(seconds, { recording = false } = {}) {
     if (this.windowRequest) return this.windowRequest;

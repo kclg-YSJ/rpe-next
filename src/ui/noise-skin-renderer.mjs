@@ -294,7 +294,7 @@ export class NoiseSkinRenderer {
         context.drawImage(this.canvas,viewport.left,viewport.top,viewport.width,viewport.height);
       }
       context.restore(); return true;
-    } catch (error) { const message = t('noise-skin-renderer.s8875622')+layer.skin+'：'+error.message; if (!this.errors.has(message)) { this.errors.add(message); this.report?.(message); console.warn(message); } return false; }
+    } catch (error) { const message = t('noise-skin-renderer.s8875622')+layer.skin+t('common.colon')+error.message; if (!this.errors.has(message)) { this.errors.add(message); this.report?.(message); console.warn(message); } return false; }
     finally { this.guardSides = undefined; }
   }
   snapshot(source) { const target = this.texture(source.width,source.height,source.format); this.blit(source,target); return target; }

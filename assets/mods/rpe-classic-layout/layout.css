@@ -262,7 +262,7 @@
 :root[data-rpe-classic-active] .editor:is(.multi-notes,.multi-events,.noise-mode,.global-events-mode,.direct-placement-active) #rpe-classic-layer,
 :root[data-rpe-classic-active] .editor:is(.multi-notes,.multi-events,.noise-mode,.global-events-mode,.direct-placement-active) .rc-stage-caption { display:none; }
 :root[data-rpe-classic-active] .editor.noise-mode .timeline-head .noise-mode-head { display:none !important; }
-:root[data-rpe-classic-active] .editor.global-events-mode .timeline-head::before { content:none; }
+:root[data-rpe-classic-active] .editor.global-events-mode .timeline-mode-hint { display:none; }
 :root[data-rpe-classic-active] .editor.global-events-mode .canvases { background:#201d1e; }
 :root[data-rpe-classic-active] .editor.noise-mode .canvases { background:transparent; }
 :root[data-rpe-classic-active] .editor.noise-mode .noise-lane-scroll { left:calc(45.6px * var(--rc-s)); }

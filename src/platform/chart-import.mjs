@@ -1,5 +1,5 @@
 import { openFiles, resourceReferences } from './files.mjs';
-import { t } from '../i18n.mjs';
+import { joinList, t } from '../i18n.mjs';
 
 const accepts = { pez: '.pez,.zip', json: '.json,.pec', music: 'audio/*', cover: 'image/*', separate: '' };
 const extensions = {
@@ -68,7 +68,7 @@ export function chartImportFiles(mode, selected) {
   if (mode !== 'pez' && mode !== 'separate') throw Error(t('chart-import.chooseMode'));
   const kinds = mode === 'pez' ? ['pez'] : ['json', 'music', 'cover'];
   const missing = (mode === 'pez' ? ['pez'] : ['json']).filter(kind => !selected[kind]);
-  if (missing.length) throw Error(t('chart-import.missing', { files: missing.map(kind => t('chart-import.' + kind)).join('、') }));
+  if (missing.length) throw Error(t('chart-import.missing', { files: joinList(missing.map(kind => t('chart-import.' + kind))) }));
   for (const kind of kinds) if (selected[kind] && !isChartImportFile(kind, selected[kind])) {
     throw Error(t('chart-import.invalid', { kind: t('chart-import.' + kind), name: selected[kind].name }));
   }

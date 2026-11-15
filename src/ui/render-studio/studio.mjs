@@ -137,7 +137,7 @@ export class RenderStudio {
       if (signal.aborted || generation !== this.generation) return;
       console.error('[render]', error);
       this.setLoading(true, t('render.ui.5a7781220') + (error?.message ?? error), true);
-      this.api.notify?.('Autoplay Studio：' + (error?.message ?? error), 'error');
+      this.api.notify?.(t('render-studio.errorPrefix', { error: error?.message ?? error }), 'error');
     } finally {
       if (generation === this.generation) this.opening = false;
     }

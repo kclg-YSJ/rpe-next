@@ -105,12 +105,12 @@ export function projectClipboard(session, beat, { mirror = false, keepTime = fal
 
 export function pasteObjects(session, beat, options) {
   if (session.clipboard.some(note => note._rpenLargeClipboard)) {
-    if (!session.largeDocument) throw Error('请在原超大谱工程中粘贴此选区');
+    if (!session.largeDocument) throw Error(t('large-chart.pasteRequiresProject'));
     return session.largeDocument.pasteSelected(beat, options);
   }
   const projected = structuredClone(projectClipboard(session, beat, options));
   if (!session.largeDocument) for (const note of projected.notes) {
-    if (note._rpenLargeCopies > 1) throw Error('普通谱面暂不支持粘贴重合音符组。请在超大谱工程中粘贴，或将处理数量设为 1 后重新复制。');
+    if (note._rpenLargeCopies > 1) throw Error(t('large-chart.pasteCopiesLimited'));
     delete note._rpenLargeRef; delete note._rpenLargeCopies;
   }
   if (!projected.notes.length && !projected.events.length) return false;

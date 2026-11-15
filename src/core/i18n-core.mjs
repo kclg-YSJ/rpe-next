@@ -213,3 +213,15 @@ export function translateExternal(text, fileLocales = [FALLBACK_LOCALE]) {
   }
   return text;
 }
+
+
+// Locale-aware conjunction list used for user-visible "A, B and C" strings.
+export function joinList(values, locale = active) {
+  const items = [...values].map(value => String(value));
+  if (items.length < 2) return items[0] ?? '';
+  try {
+    return new Intl.ListFormat(locale, { type: 'conjunction' }).format(items);
+  } catch {
+    return items.join(baseLocale(locale) === 'zh' ? '、' : ', ');
+  }
+}

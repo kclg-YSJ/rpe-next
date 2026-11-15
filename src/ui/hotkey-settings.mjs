@@ -3,7 +3,7 @@ import { HOTKEY_GROUPS, HOTKEY_LABELS, shortcutScope, validateHotkeys, recordedS
 import { formatShortcut } from '../core/shortcut-spec.mjs';
 import { showDialog } from './dialog.mjs';
 import { download } from '../platform/files.mjs';
-import { t } from '../i18n.mjs';
+import { joinList, t } from '../i18n.mjs';
 
 export function showHotkeySettings(preferences, save) {
   const content = showDialog(t('hotkey-settings.sd34afee'), t('hotkey-settings.sec48b6e'));
@@ -40,7 +40,7 @@ export function showHotkeySettings(preferences, save) {
       const issues = validation.issues.filter(issue => issue.actions.includes(action));
       row.root.dataset.severity = issues.some(issue => issue.severity === 'error') ? 'error' : issues.some(issue => issue.severity === 'warning') ? 'warning' : 'ok';
       row.input.setAttribute('aria-invalid', String(row.root.dataset.severity === 'error'));
-      row.message.textContent = issues.map(issue => t('hotkey-settings.sc011402', { p0: issue.severity === 'info' ? t('hotkey-settings.sec5baa1') : issue.severity === 'warning' ? t('hotkey-settings.sab3656a') : t('hotkey-settings.sb859c7b'), p1: issue.message, p2: issue.actions.length > 1 ? `（${issue.actions.filter(value => value !== action).map(value => HOTKEY_LABELS[value]).join('、')}）` : '' })).join('；');
+      row.message.textContent = issues.map(issue => t('hotkey-settings.sc011402', { p0: issue.severity === 'info' ? t('hotkey-settings.sec5baa1') : issue.severity === 'warning' ? t('hotkey-settings.sab3656a') : t('hotkey-settings.sb859c7b'), p1: issue.message, p2: issue.actions.length > 1 ? t('common.parenthesized', { text: joinList(issue.actions.filter(value => value !== action).map(value => HOTKEY_LABELS[value])) }) : '' })).join(t('common.semicolon'));
       row.root.hidden = Boolean(query && !`${action} ${HOTKEY_LABELS[action]} ${draft[action]} ${formatShortcut(draft[action])} ${shortcutScope(action)}`.toLowerCase().includes(query)) || onlyProblems.checked && !issues.some(issue => issue.severity !== 'info');
       row.reset.disabled = draft[action] === DEFAULT_HOTKEYS[action];
     }
