@@ -73,9 +73,15 @@ export class PerformanceRun {
     };
     let needed = Math.ceil(this.intervals * .01), slowCount = 0, slowTime = 0;
     for (let i = this.histogram.length - 1; i > 0 && needed > 0; i--) { const count = Math.min(needed, this.histogram[i]); slowCount += count; slowTime += count * i / 4; needed -= count; }
+    let frameMax = null, longFrames = 0;
+    for (let i = 1; i < this.histogram.length; i++) {
+      if (!this.histogram[i]) continue;
+      if (i / 4 > 1000 / 30) longFrames += this.histogram[i];
+      if (frameMax === null || i / 4 > frameMax) frameMax = i / 4;
+    }
     const elapsed = Math.max(0, now - this.start);
     return { ...this.metadata, reason, position, elapsed, frames: this.frames, averageFps: this.frameElapsed ? this.intervals * 1000 / this.frameElapsed : 0,
-      lowFps: slowTime ? slowCount * 1000 / slowTime : null, frameP95: percentile(.95), renderAverage: this.frames ? this.renderTotal / this.frames : 0, renderMax: this.renderMax,
+      lowFps: slowTime ? slowCount * 1000 / slowTime : null, frameP95: percentile(.95), frameMax, longFrames, renderAverage: this.frames ? this.renderTotal / this.frames : 0, renderMax: this.renderMax,
       metrics: Object.fromEntries(PERFORMANCE_METRICS.map(key => [key, { average: this.metrics[key].weight ? this.metrics[key].sum / this.metrics[key].weight : null, peak: this.metrics[key].weight ? this.metrics[key].peak : null }])),
       points: [...this.points, ...(this.pending ? [{ seconds: this.pending.seconds, fps: this.pending.fps / this.pending.count }] : [])] };
   }

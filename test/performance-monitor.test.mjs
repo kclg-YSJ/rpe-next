@@ -13,9 +13,11 @@ test('帧率按实际时间与绘制次数计算，低帧和绘制耗时独立�
   const result = run.finish(1000, 'complete', 10);
   assert.ok(Math.abs(result.averageFps - 60) < 1e-8); assert.equal(result.frames, 61); assert.equal(result.renderAverage, 2);
   assert.ok(Math.abs(result.lowFps - 60) < 1); assert.equal(result.reason, 'complete');
+  assert.equal(result.longFrames, 0); assert.ok(result.frameMax >= 16.6 && result.frameMax < 17);
   assert.equal(result.metrics.gpu.average, null);
   const interrupted = run.finish(1100, 'interrupted', 4); assert.equal(interrupted.frames, 61); assert.equal(interrupted.position, 4);
-  const slow = new PerformanceRun(0); slow.frame(0, 1); slow.frame(2000, 2); assert.equal(slow.finish(2000, 'complete').lowFps, .5);
+  const slow = new PerformanceRun(0); slow.frame(0, 1); slow.frame(2000, 2); const slowResult = slow.finish(2000, 'complete');
+  assert.equal(slowResult.lowFps, .5); assert.equal(slowResult.frameMax, 2000); assert.equal(slowResult.longFrames, 1);
 });
 
 test('硬件用量按时间加权，短暂采样与长间隔不扭曲平均值，缺失指标不伪造为零', () => {

@@ -690,10 +690,13 @@ const playback = new EditorPlayback(audio, hitSounds, () => {
   invalidate();
 });
 let performanceMonitor = null, monitorLoop = null;
+let performanceStats = { lines: 0, notes: 0 };
 function togglePerformanceMonitor() {
   performanceMonitor ??= new PerformanceMonitor({
     state: () => ({ canRun: hasDocument && !atHome && !dialogOpen() && !mods?.runtime.locks.size && Boolean(audio.buffer || audio.media), project: versionRepoId,
-      name: session.chart.META.name || chartName, duration: audio.duration, rate: audio.rate, time: audio.time, playing: audio.playing, preview: preview.visible }),
+      name: session.chart.META.name || chartName, duration: audio.duration, rate: audio.rate, time: audio.time, playing: audio.playing, preview: preview.visible,
+      editing: hasDocument && !atHome, fpsLimit: editorPreferences.fpsLimit ?? preferences.settings.fpsLimit, lines: performanceStats.lines, notes: performanceStats.notes,
+      lineNotes: session.notes.length, largeChart: Boolean(session.largeDocument) }),
     startPlayback: async begin => {
       directPlacement.close();
       if (eventSampler.active) eventSampler.finish(false);
@@ -1187,6 +1190,7 @@ function renderSession() {
   const countEvents = line => [...(line.eventLayers ?? []), line.extended ?? {}].reduce((total, layer) => total + Object.entries(layer ?? {}).filter(([type, events]) => type !== 'paintEvents' && Array.isArray(events)).reduce((count, [, events]) => count + events.length, 0), 0) + shaderEvents(session.chart, session.chart.judgeLineList?.indexOf(line) ?? -1).length;
   const totalLines = session.chart.judgeLineList?.length ?? 0;
   const totalNotes = session.largeDocument?.summary.total ?? (session.chart.judgeLineList ?? []).reduce((count, line) => count + (line.notes?.length ?? 0), 0);
+  performanceStats = { lines: totalLines, notes: totalNotes };
   const totalEvents = (session.chart.judgeLineList ?? []).reduce((count, line) => count + countEvents(line), 0);
   const chartInfo = [[t('app.sd3892f9'), `Notes: ${session.notes.length}  Events: ${countEvents(session.line ?? {})}  TotalLines: ${totalLines}  TotalNotes: ${totalNotes}  TotalEvents: ${totalEvents}  Time: ${formatEditTime(editTimeSeconds)}`]];
   element('#chart-info').replaceChildren(...chartInfo.flatMap(([label, value]) => {
