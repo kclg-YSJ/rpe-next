@@ -324,7 +324,7 @@
 :root[data-rpe-classic-active] [data-rc-property] :is(.beat-nudge,.rc-property-spin) > button:hover { color:#ffd700; border-color:#ffd700; }
 :root[data-rpe-classic-active] .inspector [data-rc-property] .duration-input { width:calc(100% - 30px * var(--rc-s)); }
 :root[data-rpe-classic-active] .inspector [data-rc-property] .duration-input > select { position:absolute; left:calc(100% + 32px * var(--rc-s)); top:0; width:calc(72px * var(--rc-s)); padding:0; font-size:calc(20px * var(--rc-s)); }
-:root[data-rpe-classic-active] [data-rc-property] button:not(.rc-property-spin button):not(.beat-nudge button) {
+:root[data-rpe-classic-active] [data-rc-property] button:not(:where(.rc-property-spin button,.beat-nudge button)) {
   min-height:calc(38px * var(--rc-s)); padding:calc(5px * var(--rc-s)) calc(10px * var(--rc-s)); border:1px solid #666; border-radius:0;
   background:#262626; color:#fff; box-shadow:none; font:calc(22px * var(--rc-s))/1.2 var(--rpen-font-family);
 }
@@ -336,8 +336,8 @@
 :root[data-rpe-classic-active] [data-rc-property] .event-input-controls:has(.rc-property-number) .sample-button { left:calc(100% + 32px * var(--rc-s)); }
 :root[data-rpe-classic-active] [data-rc-property] form > details { margin:calc(12px * var(--rc-s)) calc(20px * var(--rc-s)); border:1px solid #555; background:#282828; }
 :root[data-rpe-classic-active] .inspector [data-rc-property] summary { cursor:pointer; color:#fff; padding:calc(12px * var(--rc-s)); font:calc(23px * var(--rc-s))/1.2 var(--rpen-font-family); }
-:root[data-rpe-classic-active] [data-rc-property] .easing-gallery { grid-template-columns:repeat(5,minmax(0,1fr)); gap:calc(5px * var(--rc-s)); padding:calc(8px * var(--rc-s)); }
-:root[data-rpe-classic-active] [data-rc-property] .easing-gallery button { min-width:0; padding:calc(4px * var(--rc-s)) !important; font-size:calc(16px * var(--rc-s)) !important; }
+:root[data-rpe-classic-active] [data-rc-property] .easing-gallery:not(:where(.easing-gallery-grouped)) { grid-template-columns:repeat(5,minmax(0,1fr)); gap:calc(5px * var(--rc-s)); padding:calc(8px * var(--rc-s)); }
+:root[data-rpe-classic-active] [data-rc-property] .easing-gallery:not(:where(.easing-gallery-grouped)) button { min-width:0; padding:calc(4px * var(--rc-s)) !important; font-size:calc(16px * var(--rc-s)) !important; }
 :root[data-rpe-classic-active] [data-rc-property] .custom-easing-gallery { padding:calc(8px * var(--rc-s)); }
 :root[data-rpe-classic-active] [data-rc-property] .custom-easing-gallery button { min-width:0; font-size:calc(17px * var(--rc-s)) !important; }
 :root[data-rpe-classic-active] [data-rc-property] .event-sample-panel { margin:calc(8px * var(--rc-s)) calc(20px * var(--rc-s)); padding:calc(10px * var(--rc-s)); max-width:none; border:1px solid #aa9251; border-radius:0; background:#262626; }
@@ -347,6 +347,9 @@
 :root[data-rpe-classic-active] [data-rc-property] .wide-field { display:block; width:calc(100% - 40px * var(--rc-s)); margin:calc(8px * var(--rc-s)) calc(20px * var(--rc-s)) !important; }
 :root[data-rpe-classic-active] [data-rc-property] .bezier-editor { width:260px; max-width:none; height:100px; margin:calc(10px * var(--rc-s)) auto; background:#262626; }
 :root[data-rpe-classic-active] [data-rc-property] .easing-preview:not(.bezier-editor) { display:block; width:calc(100% - 40px * var(--rc-s)); height:calc(130px * var(--rc-s)); margin:calc(10px * var(--rc-s)) auto; background:#262626; border:1px solid #666; }
+:root[data-rpe-classic-active] [data-rc-property] .event-easing-panel .easing-preview { width:calc(100% - 42px); height:auto; aspect-ratio:13 / 5; margin:10px 20px; }
+:root[data-rpe-classic-active] [data-rc-property] .event-easing-panel > .field { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,2.2fr); gap:10px; align-items:center; margin:10px 20px; }
+:root[data-rpe-classic-active] [data-rc-property] .event-easing-boundaries .event-input-controls:has(.rc-property-number) { margin-right:calc(28px * var(--rc-s)); }
 :root[data-rpe-classic-active] [data-rc-property] form > .action-grid { position:sticky; bottom:calc(-10px * var(--rc-s)); display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:calc(6px * var(--rc-s)); padding:calc(10px * var(--rc-s)) calc(20px * var(--rc-s)); margin:0; background:#303030; border-top:1px solid #555; }
 :root[data-rpe-classic-active] [data-rc-property] .note-sound-library { margin-bottom:calc(16px * var(--rc-s)); }
 :root[data-rpe-classic-active] [data-rc-property] .note-sound-list { padding:calc(8px * var(--rc-s)); }

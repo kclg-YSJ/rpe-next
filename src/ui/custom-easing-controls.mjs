@@ -22,7 +22,7 @@ globalThis.window?.addEventListener('keydown', event => {
 }, true);
 globalThis.window?.addEventListener('keyup', event => { if (active && (active.root.contains(event.target) || keyboardOwner && event.target === document.body)) event.stopImmediatePropagation(); }, true);
 globalThis.document?.addEventListener('rpen-curve-library-changed', () => {
-  for (const group of document.querySelectorAll('.custom-easing-group[open]')) group.refreshEasingTemplates?.();
+  for (const group of document.querySelectorAll('.custom-easing-group[open], .custom-easing-group[data-inline]')) group.refreshEasingTemplates?.();
 });
 export function openAnimationCurveEditor({ event, apply, read, report, preview, cancelPreview, timing, signature, capture, restore, previewChart }) {
   active?.close();
@@ -85,8 +85,9 @@ export function curveThumbnail(curve, title) {
   path.setAttribute('d', d); path.setAttribute('fill', 'none'); path.setAttribute('stroke', 'currentColor'); path.setAttribute('stroke-width', '2'); svg.append(path); svg.setAttribute('aria-label', title); return svg;
 }
 export function createCustomEasingControls(event, change, options = {}) {
-  const group = node('details', null, 'custom-easing-group'); group.open = Boolean(event.customEasing);
-  group.append(node('summary', t('animation-curve.templates')));
+  const group = node(options.inline ? 'div' : 'details', null, 'custom-easing-group'); group.open = Boolean(event.customEasing);
+  if (options.inline) group.dataset.inline = '';
+  else group.append(node('summary', t('animation-curve.templates')));
   const choices = node('div', null, 'custom-easing-gallery'); group.append(choices);
   const edit = node('button', t(event.customEasing ? 'animation-curve.edit' : 'animation-curve.create'), 'wide-button'); edit.type = 'button';
   const report = options.report ?? (error => { const status = node('p', error.message, 'error'); group.append(status); });
@@ -106,6 +107,6 @@ export function createCustomEasingControls(event, change, options = {}) {
   };
   group.refreshEasingTemplates = render;
   group.addEventListener('toggle', () => { if (group.open) render(); });
-  if (group.open) render();
+  if (options.inline || group.open) render();
   return group;
 }
