@@ -70,7 +70,7 @@ export class ResourceNoteSkin {
     if((showHead||this.info.holdKeepHead&&layout.length>0)&&layout.headPixels) context.drawImage(picture,0,size.height-layout.headPixels,size.width,layout.headPixels,-width/2,layout.headY,width,layout.headHeight);
     context.restore();return true;
   }
-  drawHit(context,{age,x,y,size,rotation=0,color,seed=0,good=false}) {
+  drawHit(context,{age,x,y,size,rotation=0,color,seed=0,good=false,countParticle}) {
     const frame=noteSkinFrame(this.info,age);if(!frame)return true;
     const sheet=this.images.get('hit_fx.png');const sheetSize=dimensions(sheet);const frameWidth=sheetSize.width/this.info.hitFx[0];const frameHeight=sheetSize.height/this.info.hitFx[1];
     const base=noteSkinColor(this.info[good?'colorGood':'colorPerfect']);const rgb=this.info.hitFxTinted?tint(color??base.rgb).map(value=>Math.round(Math.max(0,Math.min(255,value)))):[255,255,255];
@@ -101,7 +101,7 @@ export class ResourceNoteSkin {
     context.drawImage(picture,-width/2,-height/2,width,height);context.restore();
     if(!this.info.hideParticles) {
       context.save();context.fillStyle=`rgb(${rgb.join(',')})`;
-      for(const particle of hitParticles(progress*2/3,seed,size/1.4*this.info.hitFxScale)) {context.globalAlpha=alpha*(this.info.hitFxTinted?base.alpha:1);context.fillRect(x+particle.x-particle.radius,y+particle.y-particle.radius,particle.radius*2,particle.radius*2);}
+      for(const particle of hitParticles(progress*2/3,seed,size/1.4*this.info.hitFxScale)) {countParticle?.();context.globalAlpha=alpha*(this.info.hitFxTinted?base.alpha:1);context.fillRect(x+particle.x-particle.radius,y+particle.y-particle.radius,particle.radius*2,particle.radius*2);}
       context.restore();
     }
     return true;

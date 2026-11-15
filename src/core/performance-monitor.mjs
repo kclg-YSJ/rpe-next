@@ -27,6 +27,20 @@ export class PerformanceRun {
     this.frameElapsed = 0; this.lastFrame = null; this.histogram = new Uint32Array(40001); this.intervals = 0;
     this.metrics = Object.fromEntries(PERFORMANCE_METRICS.map(key => [key, { sum: 0, weight: 0, peak: 0 }]));
     this.points = []; this.level = 0; this.pending = null; this.lastHardware = null;
+    this.sceneSamples = 0;
+    this.sceneSums = { tap: 0, hold: 0, flick: 0, drag: 0, other: 0, visible: 0, hits: 0, particles: 0 };
+    this.scenePeaks = { tap: 0, hold: 0, flick: 0, drag: 0, other: 0, visible: 0, hits: 0, particles: 0 };
+  }
+  scene(stats) {
+    if (!stats) return;
+    this.sceneSamples++;
+    const notes = stats.notes ?? {};
+    const values = { tap: notes.tap, hold: notes.hold, flick: notes.flick, drag: notes.drag, other: notes.other, visible: stats.visible, hits: stats.hits, particles: stats.particles };
+    for (const [key, value] of Object.entries(values)) {
+      if (!Number.isFinite(value)) continue;
+      this.sceneSums[key] += value;
+      this.scenePeaks[key] = Math.max(this.scenePeaks[key], value);
+    }
   }
   frame(now, renderMs) {
     this.frames++; this.renderTotal += renderMs; this.renderMax = Math.max(this.renderMax, renderMs);
@@ -73,10 +87,19 @@ export class PerformanceRun {
     };
     let needed = Math.ceil(this.intervals * .01), slowCount = 0, slowTime = 0;
     for (let i = this.histogram.length - 1; i > 0 && needed > 0; i--) { const count = Math.min(needed, this.histogram[i]); slowCount += count; slowTime += count * i / 4; needed -= count; }
+    let frameMax = null, longFrames = 0;
+    for (let i = 1; i < this.histogram.length; i++) {
+      if (!this.histogram[i]) continue;
+      if (i / 4 > 1000 / 30) longFrames += this.histogram[i];
+      if (frameMax === null || i / 4 > frameMax) frameMax = i / 4;
+    }
     const elapsed = Math.max(0, now - this.start);
     return { ...this.metadata, reason, position, elapsed, frames: this.frames, averageFps: this.frameElapsed ? this.intervals * 1000 / this.frameElapsed : 0,
-      lowFps: slowTime ? slowCount * 1000 / slowTime : null, frameP95: percentile(.95), renderAverage: this.frames ? this.renderTotal / this.frames : 0, renderMax: this.renderMax,
+      lowFps: slowTime ? slowCount * 1000 / slowTime : null, frameP95: percentile(.95), frameMax, longFrames, renderAverage: this.frames ? this.renderTotal / this.frames : 0, renderMax: this.renderMax,
       metrics: Object.fromEntries(PERFORMANCE_METRICS.map(key => [key, { average: this.metrics[key].weight ? this.metrics[key].sum / this.metrics[key].weight : null, peak: this.metrics[key].weight ? this.metrics[key].peak : null }])),
+      scene: { samples: this.sceneSamples,
+        average: Object.fromEntries(Object.entries(this.sceneSums).map(([key, value]) => [key, this.sceneSamples ? value / this.sceneSamples : null])),
+        peak: { ...this.scenePeaks } },
       points: [...this.points, ...(this.pending ? [{ seconds: this.pending.seconds, fps: this.pending.fps / this.pending.count }] : [])] };
   }
 }
