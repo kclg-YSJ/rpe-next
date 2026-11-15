@@ -5,10 +5,10 @@ import { EditorSession } from '../src/application/session.mjs';
 import { Timeline } from '../src/ui/timeline.mjs';
 import { BatchControls } from '../src/ui/batch-controls.mjs';
 import { TempoMap } from '../src/core/tempo.mjs';
-import { createEvent } from '../src/core/chart.mjs';
+import { createEvent, createLine } from '../src/core/chart.mjs';
 import { transformEvents } from '../src/application/event-commands.mjs';
 import { withEventLock } from '../src/application/event-value-memory.mjs';
-import { registerModHook } from '../src/core/mod-hooks.mjs';
+import { registerModHook, emitModHook } from '../src/core/mod-hooks.mjs';
 import { TimelineActivity } from '../src/core/timeline-activity.mjs';
 
 // Match the host's @rpen import root while importing the real bundled modules.
@@ -20,6 +20,7 @@ async function moduleUrl(name,imports={}){
 const {installGeometry}=await import(await moduleUrl('geometry.mjs'));
 const {installModeGeometry}=await import(await moduleUrl('mode-geometry.mjs',{'./geometry.mjs':await moduleUrl('geometry.mjs')}));
 const {installEasingDraft}=await import(await moduleUrl('easing-draft.mjs'));
+const {installPropertyEasing}=await import(await moduleUrl('property-easing.mjs',{'./ownership.mjs':await moduleUrl('ownership.mjs'),'./easing-draft.mjs':await moduleUrl('easing-draft.mjs')}));
 const {installDensity}=await import(await moduleUrl('density.mjs'));
 function apiFor(editor){const cleanups=[];return{editor,patch(target,key,wrap){const descriptor=Object.getOwnPropertyDescriptor(target,key);target[key]=wrap(target[key]);cleanups.push(()=>{if(descriptor)Object.defineProperty(target,key,descriptor);else delete target[key];});},hook(name,callback,priority){cleanups.push(registerModHook(name,callback,priority));},dispose(fn){cleanups.push(fn);},close(){for(const fn of cleanups.reverse())fn();}};}
 
@@ -46,6 +47,15 @@ test('经典布局所有控制球的时间换算与实际网格一致，停用�
   api.close();assert.equal(controls.snappedPointerBeat,original);
 });
 
+test('经典布局音符放置反算与可见网格一致，覆盖缩放、BPM 倍率和跨线放置',()=>{
+  const session=new EditorSession(),canvas={clientHeight:900,clientWidth:675};session.chart.judgeLineList.push(createLine());session.chart.judgeLineList[1].bpmfactor=2;
+  const timeline=Object.assign(Object.create(Timeline.prototype),{notesCanvas:canvas,eventsCanvas:canvas,getSession:()=>session,eventInteraction:{},tempo:new TempoMap(session.chart.BPMList),scale:180,division:4,origin:5});
+  const api=apiFor({timeline}),state={active:true,scale:.75};installGeometry(api,state);
+  try{for(const scale of [.5,.75,1,1.5])for(const line of [0,1])for(const beat of [0,2.25,6.5]){
+    state.scale=scale;const y=timeline.verticalForLine(beat,line);assert.equal(timeline.noteBeatAt(y,line),beat);
+  }}finally{api.close();}
+});
+
 test('经典缓动草稿提交保留尾值记忆，一次撤销；取消不改数据或端点记忆',()=>{
   const session=new EditorSession();session.line.eventLayers[0].moveXEvents=[createEvent(10,20,2,3)];session.eventSelection=new Set(['moveXEvents:0']);
   const editor={session,timeline:{draw(){},drawEvents(){},getSession:()=>session},invalidate(){}},api=apiFor(editor),draft=installEasingDraft(api);
@@ -58,5 +68,18 @@ test('经典缓动草稿提交保留尾值记忆，一次撤销；取消不改�
     const saved=session.chart;draft.update(()=>transformEvents(session,'easing',event=>({...event,easingType:9})));draft.finish(false);
     assert.equal(session.chart,saved);event=session.line.eventLayers[0].moveXEvents[0];assert.equal(withEventLock(session,event,true).start,99);
     session.travel('undo');assert.equal(session.line.eventLayers[0].moveXEvents[0].easingType,1);assert.equal(withEventLock(session,session.line.eventLayers[0].moveXEvents[0],true).start,99);
+  }finally{api.close();}
+});
+
+test('经典缓动下拉框关闭后让可配置的播放快捷键通过，展开时保留原生选择键盘',()=>{
+  const editor={session:new EditorSession(),timeline:{draw(){},drawEvents(){},getSession(){}},preferences:{hotkeys:{Pause:'SPACE'}},invalidate(){}},api=apiFor(editor);
+  let open=false,blurred=0,stopped=0;
+  const family={matches:()=>open,closest:selector=>['.rc-easing-family','input,select,button'].includes(selector)?family:null,blur:()=>{blurred++;},style:{setProperty(){}},getBoundingClientRect:()=>({left:0,bottom:10,width:100})};
+  const send=(key,type='keydown',ctrlKey=false)=>{const event={target:family,key,type,ctrlKey,stopImmediatePropagation(){stopped++;}};emitModHook('input:before',{event});};
+  try{
+    installPropertyEasing(api);send(' ');send(' ','keyup');assert.equal(blurred,2);assert.equal(stopped,0);
+    open=true;send(' ');send('ArrowDown');assert.equal(stopped,2);assert.equal(blurred,2);
+    open=false;send('ArrowDown');assert.equal(stopped,3);
+    editor.preferences.hotkeys.Pause='LEFTCTRL&P';send('p','keydown',true);assert.equal(blurred,3);assert.equal(stopped,3);
   }finally{api.close();}
 });

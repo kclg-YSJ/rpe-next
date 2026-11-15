@@ -16,11 +16,12 @@ Object.assign(ranges, { placementOpacity: [0, 1] });
 Object.assign(ranges, { noteSpacing: [0.05, 10], notesOnlyNoteScale: [0.1, 3] });
 Object.assign(ranges, { eventValueScaleStep: [.001, 10] });
 Object.assign(ranges, { densityStripBrightness: [0, 1], densityStripWindow: DENSITY_WINDOW_LIMITS });
+Object.assign(ranges, { guideLineWidth: [.25, 4], guideLineBrightness: [0, 1] });
 const flags = ['snapX', 'realtime', 'hitEnabled', 'allLines', 'preservePitch', 'autoSave', 'autoplayView', 'highlight', 'drawEventCurves', 'seamlessEvents', 'seamlessNoiseAreas', 'notesOnly', 'showGameUI', 'viewportOverflow', 'lineNumbers', 'lineArrows', 'lineTint', 'mergeLineNumbers', 'pickPreviewLines', 'pickPreviewNoiseAreas', 'tipsEnabled', 'successNotifications', 'clipboardHistory', 'lineSwitcher', 'analysisEnabled', 'noteSourceHover', 'sampleAutoFit', 'pairedMovementSampling', 'wheelStopAtAudioStart', 'rpeEventDrag', 'xyBinding', 'movementVector'];
 export function normalizeEditorPreferences(value) {
   const result = {};
   if (!value || typeof value !== 'object') return result;
-  if (typeof value.deleteWithExtraKeys === 'boolean') result.deleteWithExtraKeys = value.deleteWithExtraKeys;
+  for (const key of ['deleteWithExtraKeys', 'clickSelectedToSingle']) if (typeof value[key] === 'boolean') result[key] = value[key];
   for (const key of ['densityStrip', 'historyStrip']) if (typeof value[key] === 'boolean') result[key] = value[key];
   if (typeof value.clearHitsOnResume === 'boolean') result.clearHitsOnResume = value.clearHitsOnResume;
   if (value.multiLineEventVisibility && typeof value.multiLineEventVisibility === 'object') result.multiLineEventVisibility = Object.fromEntries(multiLineEventTypes.filter(type => typeof value.multiLineEventVisibility[type] === 'boolean').map(type => [type, value.multiLineEventVisibility[type]]));

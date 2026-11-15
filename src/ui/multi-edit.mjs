@@ -87,6 +87,7 @@ export class MultiEditPanel {
     const field = control(form, t('multi-edit.s575aeda'), kind === 'notes' ? 'x' : 'both', kind === 'notes' ? NOTE_BATCH_FIELDS : EVENT_BATCH_FIELDS);
     const operation = control(form, t('multi-edit.s1645ef4'), 'By', BATCH_OPERATIONS);
     const readDistribution = distributionFields(form);
+    const standardEasing = form.querySelector('details');
     if (kind === 'events') {
       const tools = document.createElement('div'); tools.className = 'action-grid'; form.append(tools);
       for (const [action, title] of [['cut', t('multi-edit.sa18ddc2')], ['stick', t('multi-edit.s086e390')]]) {
@@ -135,6 +136,10 @@ export class MultiEditPanel {
       division: this.timeline.division, channels: Object.fromEntries([...channels].map(([key, read]) => [key, read()])) });
     const updateMode = () => {
       form.hidden = mode.value !== 'form'; scriptBox.hidden = mode.value !== 'script'; clone.hidden = mode.value !== 'clone'; common.hidden = mode.value === 'clone';
+      if (kind === 'events') {
+        const anchor = mode.value === 'form' ? standardEasing : mode.value === 'script' ? scriptBox : clone;
+        if (anchor.nextElementSibling !== parametersBox) anchor.after(parametersBox);
+      }
     };
     this.load = value => {
       mode.value = value.mode; field.value = value.field; operation.value = value.operation; if (applicationMode) applicationMode.value = value.eventApplicationMode ?? 'per-line'; filter.value = kind === 'notes' ? value.noteType : value.eventType;

@@ -6,7 +6,7 @@ import { createReadStream } from 'node:fs';
 const directory = process.argv[2], sourceCommit = process.argv[3];
 const { version } = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
 if (!directory || !/^[a-f0-9]{40}$/.test(sourceCommit ?? '')) throw Error('Usage: node tools/verify-release-assets.mjs DIRECTORY SOURCE_COMMIT');
-const expected = new Set(['editor-win32-x64', 'editor-win32-arm64', 'editor-darwin-x64', 'editor-darwin-arm64', 'editor-linux-x64', 'editor-linux-arm64', 'server-win32-x64']);
+const expected = new Set(['editor-win32-x64', 'editor-win32-arm64', 'editor-darwin-arm64', 'editor-linux-x64', 'editor-linux-arm64', 'server-win32-x64']);
 const names = await readdir(directory), checksums = [], summary = [];
 for (const name of names.filter(name => name.endsWith('.json'))) {
   const info = JSON.parse(await readFile(join(directory, name), 'utf8')), target = [info.kind, info.platform, info.arch].join('-');

@@ -37,6 +37,18 @@ export function selectedEventEntries(session) {
   })).filter(entry => entry.event);
 }
 
+// Only edit commands request companions; disabled binding retains the original
+// selection map without inspecting the opposite movement tracks.
+export function boundEventSelections(session) {
+  if (session.xyBinding !== true) return eventSelections(session);
+  const selections = new Map();
+  for (const entry of expandXyEntries(session.chart, session.eventLayer, selectedEventEntries(session))) {
+    if (!selections.has(entry.lineIndex)) selections.set(entry.lineIndex, new Set());
+    selections.get(entry.lineIndex).add(eventKey(entry.type, entry.index));
+  }
+  return selections;
+}
+
 export function selectEvent(session, lineIndex, type, index, { toggle = false, replace = false } = {}) {
   const key = eventKey(type, index);
   const selections = eventSelections(session);
@@ -233,7 +245,12 @@ export function deleteEvents(session) {
   session.commit(t('event-commands.sf10087a'), chart, beforeSelection);
 }
 
-export function copyEvents(session) { session.eventClipboard = structuredClone(selectedEvents(session).map(({ type, event }) => ({ type, event }))); }
+export function copyEvents(session) {
+  const selected = selectedEventEntries(session);
+  const entries = session.xyBinding === true ? expandXyEntries(session.chart, session.eventLayer, selected) : selected;
+  session.eventClipboard = structuredClone(entries.map(({ type, event }) => ({ type, event })));
+  session.eventClipboardLines = entries.map(entry => entry.lineIndex);
+}
 
 export function pasteEvents(session, beat, keepTime = false, mirror = false) {
   if (!session.eventClipboard.length) return;
@@ -279,16 +296,18 @@ function splitEventOriginal(event, beat, tempo, factor = 1) {
 
 export function splitSelectedEvents(session, beat, tempo) {
   const edits = new Map(), seconds = tempo.seconds(beat, session.line?.bpmfactor ?? 1);
-  for (const [lineIndex, keys] of eventSelections(session)) {
-    const updates = new Map(), selection = new Set(keys), factor = session.chart.judgeLineList[lineIndex]?.bpmfactor ?? 1;
+  const explicit = eventSelections(session);
+  for (const [lineIndex, keys] of boundEventSelections(session)) {
+    const selectedKeys = explicit.get(lineIndex) ?? new Set();
+    const updates = new Map(), selection = new Set(selectedKeys), factor = session.chart.judgeLineList[lineIndex]?.bpmfactor ?? 1;
     const at = tempo.beat(seconds, factor);
     for (const type of new Set([...keys].map(key => String(key).split(':')[0]))) {
       let changed = false;
       const events = eventListAt(session, lineIndex, type).flatMap((event, index) => {
-        const selected = keys.has(eventKey(type, index));
-        if (!selected || beatValue(event.startTime) >= at || beatValue(event.endTime) <= at) return [{ event, selected }];
+        const key = eventKey(type, index), selected = selectedKeys.has(key);
+        if (!keys.has(key) || beatValue(event.startTime) >= at || beatValue(event.endTime) <= at) return [{ event, selected }];
         changed = true;
-        return splitEventOriginal(event, at, tempo, factor).map(event => ({ event, selected: true }));
+        return splitEventOriginal(event, at, tempo, factor).map(event => ({ event, selected }));
       });
       if (!changed) continue;
       events.sort((a, b) => beatValue(a.event.startTime) - beatValue(b.event.startTime) || beatValue(a.event.endTime) - beatValue(b.event.endTime));

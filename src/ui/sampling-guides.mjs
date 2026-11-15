@@ -1,6 +1,6 @@
 import { samplingPreferences } from '../platform/sampling-preferences.mjs';
 import { displayNumber } from './spatial-display.mjs';
-export function drawSamplingGrid(context, view, { rotation = false, center = { x: 0, y: 0 }, angle = 0, positionScale = { x: 1, y: 1 }, basis } = {}) {
+export function drawSamplingGrid(context, view, { rotation = false, center = { x: 0, y: 0 }, angle = 0, positionScale = { x: 1, y: 1 }, basis, origin = { x: 0, y: 0 }, angleOrigin = 0 } = {}) {
   const settings = samplingPreferences(); if (!settings.grid) return;
   const { width, height } = context.canvas.getBoundingClientRect();
   context.save(); context.strokeStyle = `rgba(160,181,205,${settings.strength})`; context.fillStyle = '#a5b7c9'; context.lineWidth = 1; context.font = '11px sans-serif';
@@ -8,10 +8,10 @@ export function drawSamplingGrid(context, view, { rotation = false, center = { x
     const p = view.screen(center), radius = Math.max(50, Math.min(width,height)*.35);
     context.beginPath(); context.arc(p.x,p.y,radius,0,Math.PI*2); context.stroke();
     const step = Math.max(settings.angleStep, 2);
-    for (let deg=0; deg<360; deg+=step) { const a=deg*Math.PI/180; context.beginPath(); context.moveTo(p.x,p.y); context.lineTo(p.x+Math.cos(a)*radius,p.y+Math.sin(a)*radius); context.stroke(); if (deg%45<1e-6) context.fillText(`${deg}°`,p.x+Math.cos(a)*(radius+12),p.y+Math.sin(a)*(radius+12)); }
+    for (let deg=0; deg<360; deg+=step) { const a=(deg+(settings.coordinates==='delta'?angleOrigin:0))*Math.PI/180; context.beginPath(); context.moveTo(p.x,p.y); context.lineTo(p.x+Math.cos(a)*radius,p.y+Math.sin(a)*radius); context.stroke(); if (deg%45<1e-6) context.fillText(`${deg}°`,p.x+Math.cos(a)*(radius+12),p.y+Math.sin(a)*(radius+12)); }
     context.strokeStyle='#e5c77b'; context.beginPath(); context.moveTo(p.x,p.y); context.lineTo(p.x+Math.cos(angle)*radius,p.y+Math.sin(angle)*radius); context.stroke();
   } else {
-    basis ??= { origin:{x:0,y:0}, x:{x:positionScale.x,y:0}, y:{x:0,y:positionScale.y} };
+    basis ??= { origin:settings.coordinates==='delta'?origin:{x:0,y:0}, x:{x:positionScale.x,y:0}, y:{x:0,y:positionScale.y} };
     const o=view.screen(basis.origin),px=view.screen({x:basis.origin.x+basis.x.x,y:basis.origin.y+basis.x.y}),py=view.screen({x:basis.origin.x+basis.y.x,y:basis.origin.y+basis.y.y});
     const vx={x:px.x-o.x,y:px.y-o.y},vy={x:py.x-o.x,y:py.y-o.y},det=vx.x*vy.y-vx.y*vy.x;
     if(Math.abs(det)>1e-10){const corners=[[0,0],[width,0],[0,height],[width,height]].map(([x,y])=>{

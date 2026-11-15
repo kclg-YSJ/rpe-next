@@ -15,6 +15,7 @@ test('fresh browser and desktop preferences use the calibrated shared defaults',
   assert.equal(DEFAULT_EDITOR_PREFERENCES.eventOpacity, 0.45); assert.equal(DEFAULT_EDITOR_PREFERENCES.eventBarWidth, 0.67);
   assert.equal(DEFAULT_EDITOR_PREFERENCES.tipsEnabled, false);
   assert.equal(DEFAULT_EDITOR_PREFERENCES.pairedMovementSampling, true);
+  assert.equal(DEFAULT_EDITOR_PREFERENCES.guideLineWidth, 1.2);
   assert.deepEqual(normalizeEditorPreferences(DEFAULT_EDITOR_PREFERENCES), DEFAULT_EDITOR_PREFERENCES);
   assert.equal(normalizeEditorPreferences({ noteSize: 520 }).noteSize, 500);
   assert.equal(normalizeEditorPreferences({ noteSize: 5 }).noteSize, 10);

@@ -13,7 +13,7 @@ export class LargeChartWorkspace {
     Object.assign(this, { session, timeline, previews, audio, playback, invalidate, reportError });
     this.document = new LargeChartEditor(session, summary, largeChartCommand, {
       changed: () => { this.update(); invalidate(); }, error: error => this.handleError(error),
-      gestureActive: () => Boolean(timeline.drag || timeline.eventInteraction.drag || session.liveNoteEdit || session.liveEventEdit || timeline.pending),
+      gestureActive: () => Boolean(timeline.drag || timeline.guideTool?.drag || timeline.guideTool?.adding || timeline.eventInteraction.drag || session.liveNoteEdit || session.liveEventEdit || timeline.pending),
     });
     this.view = new LargeChartView(this.document); this.loadingPage = true;
     this.hitSounds = new LargeChartHitSounds(this.document, playback.sounds, largeChartCommand);

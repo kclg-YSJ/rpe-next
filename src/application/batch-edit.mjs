@@ -9,6 +9,7 @@ import { t } from '../i18n.mjs';
 import { lineOffsetMapper } from './multi-line-edit.mjs';
 import { assembleSelectionEdits } from './selection-edits.mjs';
 import { EVENT_VALUE_MEMORY_LIMIT, hasEventValueMemory, rememberEventValueChange } from './event-value-memory.mjs';
+import { snapGuidePosition, nudgeGuidePosition } from '../core/guide-lines.mjs';
 
 export const BATCH_ACTIONS = [
   ['MirrorY', t('batch-edit.s8e30bb2')], ['MirrorMid', t('batch-edit.s89eacaf')],
@@ -76,7 +77,7 @@ export function shiftedTime(item, delta, part = 'both') {
     endTime: part === 'start' ? item.endTime : fromNumber(part === 'end' ? Math.max(start, end + delta) : end + delta) };
 }
 
-export function nudgeSelection(session, direction, division, gridCount) {
+export function nudgeSelection(session, direction, division, gridCount, snapX = true) {
   const snapshot = captureSelection(session);
   if (!snapshot.notes.length && !snapshot.events.length) return false;
   const horizontal = direction === 'ArrowLeft' || direction === 'ArrowRight';
@@ -84,7 +85,12 @@ export function nudgeSelection(session, direction, division, gridCount) {
   const deltaX = horizontal ? verticalGrid(gridCount).spacing / 2 * (direction === 'ArrowLeft' ? -1 : 1) : 0;
   const deltaBeat = horizontal ? 0 : (direction === 'ArrowDown' ? -1 : 1) / division;
   return commitSelectionEdit(session, editCapturedSelection(snapshot, {
-    note: item => ({ ...shiftedTime(item, deltaBeat), positionX: item.positionX + deltaX }),
+    note: item => {
+      const next = shiftedTime(item, deltaBeat), guides = snapshot.chart.rpeNextGuideLines;
+      return { ...next, positionX: snapX && guides?.length ? horizontal
+        ? nudgeGuidePosition(item.positionX, deltaX, beatValue(next.startTime), guides)
+        : snapGuidePosition(item.positionX, beatValue(next.startTime), guides, gridCount) : item.positionX + deltaX };
+    },
     event: item => shiftedTime(item, deltaBeat),
   }), t('batch-edit.sba1b1a0'));
 }
@@ -100,7 +106,7 @@ export function applyBatchAction(session, action, gridCount) {
   return commitSelectionEdit(session, editCapturedSelection(snapshot, { note: item => {
     if (action === 'MirrorY') return { ...item, positionX: -item.positionX };
     if (action === 'MirrorMid') return { ...item, positionX: middleSum - item.positionX };
-    if (action === 'AttachX') return { ...item, positionX: snapPosition(item.positionX, gridCount) };
+    if (action === 'AttachX') return { ...item, positionX: snapshot.chart.rpeNextGuideLines?.length ? snapGuidePosition(item.positionX, beatValue(item.startTime), snapshot.chart.rpeNextGuideLines, gridCount) : snapPosition(item.positionX, gridCount) };
     if (['SideSwitch', 'SideUp', 'SideDown'].includes(action)) {
       const above = action === 'SideUp' || (action === 'SideSwitch' && !noteIsAbove(item));
       return { ...item, above: above ? 1 : item.type === 2 ? 0 : 2 };
@@ -131,6 +137,11 @@ export function selectionScaleAnchor(snapshot, anchorMode = 0) {
 export function controlSelection(snapshot, kind, { deltaBeat = 0, deltaBeatByLine = null, deltaX = 0, dragX = 0, anchorMode = 0, snapX = false, gridCount = 11 } = {}) {
   const beatDelta = entry => deltaBeatByLine?.get(entry.lineIndex) ?? deltaBeat;
   if (kind === 'note-move') {
+    if (snapX && snapshot.chart.rpeNextGuideLines?.length) {
+      const anchor = snapshot.notes[0], moved = anchor && shiftedTime(anchor.note, beatDelta(anchor));
+      if (anchor) deltaX = snapGuidePosition(anchor.note.positionX + deltaX, beatValue(moved.startTime), snapshot.chart.rpeNextGuideLines, gridCount) - anchor.note.positionX;
+      return editCapturedSelection(snapshot, { note: (item, entry) => ({ ...shiftedTime(item, beatDelta(entry)), positionX: item.positionX + deltaX }) });
+    }
     const spacing = verticalGrid(gridCount).spacing;
     if (snapX && Number.isFinite(spacing) && spacing > 0) deltaX = Math.round(deltaX / spacing) * spacing;
     return editCapturedSelection(snapshot, { note: (item, entry) => ({ ...shiftedTime(item, beatDelta(entry)), positionX: item.positionX + deltaX }) });

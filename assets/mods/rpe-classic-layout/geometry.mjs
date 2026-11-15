@@ -2,6 +2,7 @@ import { drawEditorJudgement } from '@rpen/ui/editor-judgement.mjs';
 import { originalEditorContext } from '@rpen/ui/editor-skin-canvas.mjs';
 import { DEFAULT_EDITOR_PREFERENCES } from '@rpen/core/default-settings.mjs';
 import { Timeline } from '@rpen/ui/timeline.mjs';
+import { paintTimelineGrid } from '@rpen/ui/timeline-grid.mjs';
 
 export const SKIN_ID = 'rpe-classic';
 export const DESIGN = Object.freeze({ width: 1920, height: 1080, top: 144, footer: 36, editor: 1350, inspector: 570, timeline: 900 });
@@ -96,34 +97,21 @@ export function installGeometry(api, state, timeline = api.editor.timeline, {glo
   });
   api.patch(timeline, 'grid', previous => function(context, width, height, playBeat) {
     if (!applies()) return previous.call(this, context, width, height, playBeat);
-    const first = Math.floor(this.beatAt(height) * this.division), last = Math.ceil(this.beatAt(0) * this.division);
-    if (![first, last].every(Number.isFinite) || last < first) return;
-    const s = state.scale, stride = Math.max(1, Math.ceil((last - first) / Math.max(1, height / (4 * s))));
+    const s = state.scale;
     context.save();
     context.beginPath(); context.rect(0, 0, width, Math.max(0, this.baseline(height))); context.clip();
-    context.font = `${30 * s}px RPE, sans-serif`; context.lineWidth = Math.max(.5*s, 4*(this.barWidth??3)/3*s);
+    context.font = `${30 * s}px RPE, sans-serif`; const lineWidth = Math.max(.5*s, 4*(this.barWidth??3)/3*s);
     context.textAlign = 'right';
-    for (let tick = first; tick <= last; tick += stride) {
-      const beat = tick / this.division, major = tick % this.division === 0, y = this.vertical(beat, height);
-      context.strokeStyle = `rgba(${major ? '255,0,0' : '0,255,0'},${Math.min(1, (this.barAlpha ?? 0.6) * (major ? 0.9 : 0.5))})`;
-      context.beginPath(); context.moveTo(0, y); context.lineTo(width, y); context.stroke();
-      if (major) { context.fillStyle = '#ffffff'; context.fillText(String(beat), width - 7 * s, y - 7 * s); }
-    }
+    const minor=`rgba(0,255,0,${Math.min(1,(this.barAlpha??.6)*.5)})`,major=`rgba(255,0,0,${Math.min(1,(this.barAlpha??.6)*.9)})`;
+    paintTimelineGrid(context,this.gridTicks(height,undefined,{spacing:4*s,labelSpacing:32*s,pixelsPerSecond:timeline.scale*s}),{right:width,vertical:beat=>this.vertical(beat,height),colors:[minor,minor,major],spacing:4*s,widths:[lineWidth,lineWidth,lineWidth],labelColor:'#ffffff',labelX:width-7*s,labelOffset:-7*s});
     context.restore();
   });
   api.patch(timeline,'gridForLine',previous=>function(context,left,width,height,playBeat,lineIndex,showBeatLabels=true){
     if(!applies())return previous.call(this,context,left,width,height,playBeat,lineIndex,showBeatLabels);
-    const s=state.scale,factor=this.factorForLine(lineIndex),origin=this.tempo.seconds(this.origin,factor),scale=timeline.scale*s;
-    const at=y=>this.tempo.beat(origin+(this.baseline(height)-y)/scale,factor);
-    const first=Math.floor(at(height)*this.division),last=Math.ceil(at(0)*this.division);
-    if(![first,last].every(Number.isFinite)||last<first)return;
-    const stride=Math.max(1,Math.ceil((last-first)/Math.max(1,height/(4*s))));
+    const s=state.scale;
     context.save();context.beginPath();context.rect(left,0,width,Math.max(0,this.baseline(height)));context.clip();
-    context.font=`${30*s}px RPE, sans-serif`;context.lineWidth=Math.max(.5*s,4*(this.barWidth??3)/3*s);context.textAlign='right';
-    for(let tick=first;tick<=last;tick+=stride){const major=tick%this.division===0,beat=tick/this.division,y=this.verticalForLine(beat,lineIndex,height);
-      context.strokeStyle=`rgba(${major?'255,0,0':'0,255,0'},${Math.min(1,(this.barAlpha??.6)*(major?.9:.5))})`;
-      context.beginPath();context.moveTo(left,y);context.lineTo(left+width,y);context.stroke();
-      if(major&&showBeatLabels){context.fillStyle='#ffffff';context.fillText(String(beat),left+width-7*s,y-7*s);}
-    }context.restore();
+    context.font=`${30*s}px RPE, sans-serif`;const lineWidth=Math.max(.5*s,4*(this.barWidth??3)/3*s);context.textAlign='right';
+    const minor=`rgba(0,255,0,${Math.min(1,(this.barAlpha??.6)*.5)})`,major=`rgba(255,0,0,${Math.min(1,(this.barAlpha??.6)*.9)})`;
+    paintTimelineGrid(context,this.gridTicks(height,lineIndex,{spacing:4*s,labelSpacing:32*s,pixelsPerSecond:timeline.scale*s}),{left,right:left+width,vertical:beat=>this.verticalForLine(beat,lineIndex,height),colors:[minor,minor,major],spacing:4*s,widths:[lineWidth,lineWidth,lineWidth],labels:showBeatLabels,labelColor:'#ffffff',labelX:left+width-7*s,labelOffset:-7*s});context.restore();
   });
 }

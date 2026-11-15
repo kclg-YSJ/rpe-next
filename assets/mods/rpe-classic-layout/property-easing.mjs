@@ -2,6 +2,8 @@ import { EASING_NAMES } from '@rpen/ui/easing-picker.mjs';
 import { renderEventInspector } from '@rpen/ui/event-inspector.mjs';
 import { selectedEventEntries } from '@rpen/application/event-commands.mjs';
 import { currentLocale } from '@rpen/core/i18n-core.mjs';
+import { shortcutMatches, shortcutReleased } from '@rpen/core/preferences.mjs';
+import { releaseShortcutFocus } from '@rpen/ui/keyboard.mjs';
 import { NodeOwnership } from './ownership.mjs';
 import { installEasingDraft } from './easing-draft.mjs';
 
@@ -20,7 +22,10 @@ export function installPropertyEasing(api) {
   api.hook('input:before',({event})=>{
     const family=event.target.closest?.('.rc-easing-family');
     if(family&&['keydown','keyup'].includes(event.type)){
-      if(!family.matches(':open'))positionFamily(family);
+      const open=family.matches(':open'),pause=editor.preferences.hotkeys.Pause;
+      const playback=event.type==='keydown'?shortcutMatches(event,pause):shortcutReleased(event,pause);
+      if(!open&&playback){releaseShortcutFocus(family);return;}
+      if(!open)positionFamily(family);
       event.stopImmediatePropagation();
     }
   });

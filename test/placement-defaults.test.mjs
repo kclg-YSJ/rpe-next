@@ -82,9 +82,10 @@ test('普通和多线光标放置、Hold 两端放置及直接放置沿用音符
   session.noteDefaults = normalizeNoteDefaults(noteSettings); const timeline = new Timeline(canvas, canvas, () => session, () => {}, () => {});
   timeline.cursor = { x: timeline.noteHorizontal(135), y: timeline.vertical(2) }; timeline.addAtCursor(1);
   assert.equal(session.notes[0].size, 1.5); assert.equal(session.notes[0].above, 2); assert.equal(session.notes[0].positionX, 135);
-  session.addLine(); session.setMultiLineEnabled(true, 'notes'); session.addMultiLine(0); timeline.cursorLineIndex = 0; timeline.addAtCursor(3);
+  session.addLine(); session.setMultiLineEnabled(true, 'notes'); session.addMultiLine(0); session.multiLineMerge = false;
+  timeline.cursor = { x: timeline.noteHorizontal(135, 0), y: timeline.verticalForLine(2, 0) }; timeline.addAtCursor(3);
   assert.equal(session.chart.judgeLineList[0].notes.at(-1).type, 3); assert.equal(session.chart.judgeLineList[0].notes.at(-1).hitsound, 'sounds/tap.ogg');
-  timeline.cursorLineIndex = 1; timeline.addAtCursor(2); timeline.cursor.y = timeline.vertical(4); timeline.addAtCursor(2);
+  timeline.cursor = { x: timeline.noteHorizontal(135, 1), y: timeline.verticalForLine(2, 1) }; timeline.addAtCursor(2); timeline.cursor.y = timeline.verticalForLine(4, 1); timeline.addAtCursor(2);
   assert.equal(session.chart.judgeLineList[1].notes[0].above, 0); assert.equal(session.chart.judgeLineList[1].notes[0].alpha, 180);
   session.setMultiLineEnabled(false); timeline.cursorLineIndex = 1;
   timeline.noteView = { flow: true, sideAt: y => y < 300 ? 1 : -1, timeAt: y => y / 100, originX: 300, pixelsPerUnit: .5 };

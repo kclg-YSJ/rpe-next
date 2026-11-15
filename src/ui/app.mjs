@@ -4,6 +4,7 @@ import '../platform/locale-bootstrap.mjs';
 import { configureShaderWorkspace, closeShaderWorkspace, createShaderProblemReporter } from './shader-tool.mjs';
 import { chartShaderFiles } from '../core/shader-assets.mjs';
 import { EditorSession } from '../application/session.mjs';
+import { GuideLineTool } from './guide-line-tool.mjs';
 import { FrameLimiter, validFpsLimit } from '../core/frame-timing.mjs';
 import { PerformanceMonitor } from './performance-monitor.mjs';
 import { assertChart, createChart, EVENT_TYPES, previewLimitations } from '../core/chart.mjs';
@@ -85,7 +86,7 @@ import { ManualSaveQueue } from '../application/manual-save.mjs';
 import { SPECIAL_TRACKS, MAX_BASE_LAYERS } from '../core/editor-display.mjs';
 import { lineGroupName, isDefaultLineGroup, lineDisplayLabel, normalizeLineGroups } from '../core/line-groups.mjs';
 import { isTextEntry, usesNativeTextShortcut, releaseShortcutFocus } from './keyboard.mjs';
-import { setRatioOptions, applyViewControls } from './view-controls.mjs';
+import { setRatioOptions, applyViewControls, syncNotesOnlyView } from './view-controls.mjs';
 import { generateCurveNotes } from '../core/curve-notes.mjs';
 import { createEasingPicker } from './easing-picker.mjs';
 import { numericWheel } from './numeric-wheel.mjs';
@@ -179,6 +180,7 @@ for(const type of ['keydown','keyup','wheel','pointerdown','pointerup','mousedow
   if(!event.defaultPrevented&&['keydown','keyup'].includes(type))handleValueDragKey(event);
 },{capture:true,passive:false});
 const displayFields = [
+  ['click-selected-to-single', 'clickSelectedToSingle', DEFAULT_EDITOR_PREFERENCES.clickSelectedToSingle],
   ['editor-render-fps', 'editorRenderFps', DEFAULT_EDITOR_PREFERENCES.editorRenderFps],
   ['editor-render-auto-play', 'editorRenderAutoPlay', DEFAULT_EDITOR_PREFERENCES.editorRenderAutoPlay],
   ['key-display', 'keyDisplay', DEFAULT_EDITOR_PREFERENCES.keyDisplay],
@@ -187,6 +189,8 @@ const displayFields = [
   ['delete-with-extra-keys', 'deleteWithExtraKeys', DEFAULT_EDITOR_PREFERENCES.deleteWithExtraKeys],
   ['density-strip-enabled', 'densityStrip', DEFAULT_EDITOR_PREFERENCES.densityStrip], ['history-strip-enabled', 'historyStrip', DEFAULT_EDITOR_PREFERENCES.historyStrip],
   ['density-strip-brightness', 'densityStripBrightness', DEFAULT_EDITOR_PREFERENCES.densityStripBrightness], ['density-strip-window', 'densityStripWindow', DEFAULT_EDITOR_PREFERENCES.densityStripWindow],
+  ['guide-line-width', 'guideLineWidth', DEFAULT_EDITOR_PREFERENCES.guideLineWidth],
+  ['guide-line-brightness', 'guideLineBrightness', DEFAULT_EDITOR_PREFERENCES.guideLineBrightness],
   ['include-backup-charts', 'includeBackupCharts', false],
   ['text-selection-drag', 'textSelectionDrag', false],
   ['event-cut-density', 'cutDensity', 4],
@@ -306,6 +310,10 @@ realtimePreview.showHitEffects = false;
 const skin = new RpeSkin(invalidate);
 const images = new ProjectImages(invalidate, message => status(message));
 const timeline = new Timeline(element('#notes'), element('#events'), () => session, editEvent, invalidate, error => reportError(error), openTimelineContextMenu);
+const guideTool = timeline.guideTool = new GuideLineTool(timeline, () => session, element('#guide-line-properties'), {
+  activate: activatePane, invalidate, reportError: error => reportError(error),
+  enabled: () => !noiseEditor.active && !globalEvents.active && (!preview.visible || directPlacement.active),
+});
 let shaderLabelAssets, shaderLabelRevision, shaderLabelChartName, shaderLabelPaths = new Map();
 function shaderDisplayName(event) {
   if (shaderLabelAssets !== assets || shaderLabelRevision !== diagnosticAssetRevision || shaderLabelChartName !== chartName) { shaderLabelAssets = assets; shaderLabelRevision = diagnosticAssetRevision; shaderLabelChartName = chartName; shaderLabelPaths.clear(); }
@@ -871,7 +879,7 @@ function setHome(visible) {
   if (visible) performanceMonitor?.finish('interrupted');
   if (visible) diagnosticHighlight.clear();
   if (visible) { placementDefaultsPanel.hide(); session.noteDefaults = normalizeNoteDefaults(); diagnostics.reset(); lastDiagnosticSignature = null; }
-  if (visible) quickCurve.cancel();
+  if (visible) { quickCurve.cancel(); guideTool.clear(); guideTool.clearClipboard(); }
   if (visible) { linePicker.hide(); directPlacement.close(); }
   if (visible) closeAnimationCurveEditor();
   agentPanel?.reset();
@@ -921,6 +929,10 @@ function openTimelineContextMenu(event, canvas = null, markerIndex = null) {
   placementDefaultsPanel.hide();
   const point = canvas ? timeline.point(event, canvas) : null;
   pendingTimelineMenu = { time: point ? timeline.timeAt(point.y) : null, markerIndex };
+  const guideItem = element('#timeline-add-guide-line');
+  guideItem.hidden = markerIndex !== null || canvas !== timeline.notesCanvas || noiseEditor.active || globalEvents.active;
+  const guideStart = !guideItem.hidden && point ? guideTool.point(point) : null;
+  guideItem.onclick = () => { closeTimelineContextMenu(); if (guideStart) { batchControls.cancel(); guideTool.begin(guideStart); } };
   element('#timeline-add-marker').hidden = !canvas;
   element('#timeline-delete-marker').hidden = markerIndex === null;
   element('#timeline-selection-interval').hidden = markerIndex !== null;
@@ -989,6 +1001,7 @@ function persistEditor() {
 function activatePane(name) {
   if (session.largeDocument && ['version-control', 'collaboration', 'assets', 'ai', 'diagnose'].includes(name)) { notify(t('large-chart.toolUnavailable'), 'warning'); return; }
   if (diagnosticNavigation && name !== 'diagnose') return;
+  if (name !== 'guide-line' && guideTool.active) guideTool.clear();
   if (activePaneName === 'assets' && name !== 'assets') assetLibrary.disposeUrls();
   if (name !== 'notes') disposeNoteProperties();
   if (name === 'global-event-properties' && (!globalEvents.active || globalEvents.selection.size !== 1)) name = 'global-events';
@@ -1147,6 +1160,7 @@ function updateLineInfo() {
 }
 
 function renderSession() {
+  syncNotesOnlyView(editorPreferences, timeline);
   if (speedCurve.active) speedCurve.sync();
   editorSkinState({ dirty: session.history.dirty || assetDirty, location: atHome ? 'home' : 'editor', mode: globalEvents.active ? 'global-events' : noiseEditor.active ? 'noise' : session.multiLineActive ? 'multi-' + session.multiLineMode : timeline.notesOnly ? 'notes' : 'notes-events' });
   const editor = element('.editor');
@@ -1193,6 +1207,7 @@ function renderSession() {
   syncProjectFolderButton();
   if (!session.liveBeatEdit) element('#offset').value = session.chart.META.offset ?? 0;
   const { notes: selectedNoteCount, events: selectedEventCount } = selectionCounts(session);
+  if (guideTool.selected && (selectedNoteCount || selectedEventCount)) guideTool.clear();
   element('#selection-info').textContent = session.focus === 'events' ? t('app.sa922b31', { p0: selectedEventCount }) : t('app.s4112683', { p0: selectedNoteCount });
   element('#undo').disabled = session.largeDocument?.busy || !session.history.undoStack.length;
   element('#redo').disabled = session.largeDocument?.busy || !session.history.redoStack.length;
@@ -1259,6 +1274,7 @@ function renderSession() {
     else if (multiEdit.committing) multiEdit.sync();
     else if (activePaneName === 'collaboration') collaboration.renderState();
     else if (activePaneName === 'ai' || activePaneName === 'spatial') {}
+    else if (guideTool.selected) { guideTool.sync(); }
     else if (textLinesPanel.active) textLinesPanel.sync();
     else if (noiseFitPanel.active) noiseFitPanel.sync();
     else if (noiseTrackingPanel.active) noiseTrackingPanel.sync();
@@ -1280,6 +1296,7 @@ function renderSession() {
     else if (!['multi-line', 'lines', 'assets', 'collaboration', 'version-control'].includes(activePaneName)) activatePane('chart');
   }
   const limits = previewLimitations(session.chart);
+  if (guideTool.active) guideTool.sync();
   element('#compatibility').textContent = t('app.s22feffd') + (limits.length ? t('app.s7f51215', { p0: joinList(limits) }) : '');
   invalidate();
   globalEvents.syncChrome();
@@ -1290,6 +1307,8 @@ session.addEventListener('change', renderSession);
 
 function replaceChart(chart, name, nextAssets = new Map(), nextFolders = [], options = {}) {
   checkpointEditTime();
+  guideTool.clear();
+  guideTool.clearClipboard();
   speedCurve.close();
   if (largeChartWorkspace) {
     const previous = largeChartWorkspace; largeChartWorkspace = null;
@@ -1792,15 +1811,17 @@ element('#toolbar-mode').onclick = () => {
 async function copySelection() {
   if (globalEvents.active) { globalEvents.copy(); return; }
   if (noiseEditor.active) { noiseEditor.copy(); return; }
+  if (guideTool.selected) { guideTool.copy(); return; }
   const count = await copyObjects(session);
-  if (count) { clipboardHistory.remember(session); status(t('app.s44cef9c', { p0: count })); }
+  if (count) { guideTool.clearClipboard(); clipboardHistory.remember(session); status(t('app.s44cef9c', { p0: count })); }
   invalidate();
 }
-function deleteSelection() { if (globalEvents.active) { globalEvents.safely(() => globalEvents.remove()); return; } if (noiseEditor.active) { noiseEditor.remove(); return; } deleteObjects(session); }
-async function cutSelection() { if (globalEvents.active) { globalEvents.safely(() => globalEvents.copy(true)); return; } if (noiseEditor.active) { noiseEditor.copy(true); return; } if (await cutObjects(session)) clipboardHistory.remember(session); invalidate(); }
+function deleteSelection() { if (globalEvents.active) { globalEvents.safely(() => globalEvents.remove()); return; } if (noiseEditor.active) { noiseEditor.remove(); return; } if (guideTool.selected) { guideTool.remove(); return; } deleteObjects(session); }
+async function cutSelection() { if (globalEvents.active) { globalEvents.safely(() => globalEvents.copy(true)); return; } if (noiseEditor.active) { noiseEditor.copy(true); return; } if (guideTool.selected) { guideTool.copy(true); return; } if (await cutObjects(session)) { guideTool.clearClipboard(); clipboardHistory.remember(session); } invalidate(); }
 function pasteSelection(mirror = false, keepTime = false) {
   if (globalEvents.active) { globalEvents.safely(() => globalEvents.paste(keepTime)); return; }
   if (noiseEditor.active) { noiseEditor.action(keepTime ? 'KeepTimePaste' : 'Paste'); return; }
+  if (guideTool.clipboard && guideTool.enabled()) { guideTool.paste(mirror, keepTime); return; }
   timeline.clipboardMode = { mirror, keepTime };
   pasteObjects(session, clipboardBeat(timeline), { ...timeline.clipboardMode, targetLineIndex: clipboardTargetLine() });
 }
@@ -1848,12 +1869,12 @@ function renderHistoryPanel() {
 }
 listen('#history-panel', () => { activatePane('history'); renderHistoryPanel(); });
 listen('#version-control-tool', () => activatePane('version-control'));
-listen('#clear-clipboard', () => { if (globalEvents.active) { globalEvents.document.editor.eventClipboard = []; globalEvents.document.editor.clipboardVisible = false; invalidate(); return; } noiseEditor.clipboard = null; clipboardHistory.clearCurrent(session); timeline.clipboardMode = {}; invalidate(); });
+listen('#clear-clipboard', () => { if (globalEvents.active) { globalEvents.document.editor.eventClipboard = []; globalEvents.document.editor.clipboardVisible = false; invalidate(); return; } noiseEditor.clipboard = null; guideTool.clearClipboard(); clipboardHistory.clearCurrent(session); timeline.clipboardMode = {}; invalidate(); });
 const clipboardButton = document.createElement('button'); clipboardButton.id = 'clipboard-history'; clipboardButton.textContent = t('app.sb377bb5'); clipboardButton.title = t('app.s4c6bff4');
 element('[data-panel="chart"] .action-grid').append(clipboardButton);
 function renderClipboardPanel() {
   renderClipboardHistory(element('#clipboard-results'), clipboardHistory, {
-    use: id => { clipboardHistory.use(session, id); invalidate(); },
+    use: id => { guideTool.clearClipboard(); clipboardHistory.use(session, id); invalidate(); },
   });
 }
 function toggleClipboardPanel() {
@@ -2058,6 +2079,7 @@ function setEventEndpointDragHeld(held) {
 }
 window.addEventListener('blur', () => {
   setEventEndpointDragHeld(false);
+  if (guideTool.drag) { guideTool.drag = null; guideTool.cancelDraft(); guideTool.sync(); }
   if (timeline.eventInteraction.drag?.endpoint) timeline.cancelPlacement();
   if (timeline.drag?.endpoint) timeline.cancelPlacement();
   if (globalEvents.timeline.eventInteraction.drag?.endpoint) globalEvents.timeline.cancelPlacement();
@@ -2070,9 +2092,13 @@ window.addEventListener('keydown', async event => {
   if (batchControls.active) { event.preventDefault(); return; }
   const area = spatialTool.enabled && spatialTool.panel.interactive || globalEvents.active ? 'events' : timeline.hoverArea ?? session.focus;
   const hasMultiSelection = session.multiLineActive && ([...(session.multiLineSelection?.values() ?? [])].some(values => values.size) || [...(session.multiEventSelection?.values() ?? [])].some(values => values.size));
-  const hasSelection = spatialTool.enabled && spatialTool.panel?.source ? true : globalEvents.active ? globalEvents.selection.size > 0 : noiseEditor.active ? noiseEditor.selection.size > 0 : Boolean(session.selection.size || session.eventSelection.size || hasMultiSelection);
+  const hasSelection = guideTool.selected || (spatialTool.enabled && spatialTool.panel?.source ? true : globalEvents.active ? globalEvents.selection.size > 0 : noiseEditor.active ? noiseEditor.selection.size > 0 : Boolean(session.selection.size || session.eventSelection.size || hasMultiSelection));
   const action = shortcutAction(event, preferences, area, { hasSelection: hasSelection && (!preview.visible || directPlacement.active), deleteWithExtraKeys: editorPreferences.deleteWithExtraKeys ?? DEFAULT_EDITOR_PREFERENCES.deleteWithExtraKeys });
   if (action === 'EditorRecording') { event.preventDefault(); event.stopImmediatePropagation(); if (!event.repeat) void editorRecording.toggle(); return; }
+  if (guideTool.active || guideTool.clipboard) {
+    try { if (guideTool.action(action)) { event.preventDefault(); event.stopImmediatePropagation(); return; } }
+    catch (error) { event.preventDefault(); reportError(error); return; }
+  }
   if (action === 'Esc' && (linePicker.active || directPlacement.active)) {
     if (linePicker.active) linePicker.hide(); else directPlacement.close();
     event.preventDefault(); event.stopImmediatePropagation(); return;
@@ -2104,7 +2130,7 @@ window.addEventListener('keydown', async event => {
     if (event.repeat && ['NumberMirror', 'NumberFill', 'Pause', 'AddHold', 'AddEvent', 'AddTap', 'StartView', 'EndView', 'JumpView', 'ReplayView', 'StartView_HOLD', 'JumpView_HOLD', 'ToggleMultiLine', 'SwitchMultiLineMode', 'SwitchLock', 'StickNext', 'TimeAttach'].includes(action)) { event.preventDefault(); return; }
     if (action === 'DirectPlacement') { if (!event.repeat) toggleDirectPlacement(); }
     else if (action === 'TimeAttach') seekBeat(Math.round(currentBeat() * timeline.division) / timeline.division);
-    else if ((!preview.visible || directPlacement.active) && action?.startsWith('Page')) nudgeSelection(session, { PageLeft: 'ArrowLeft', PageRight: 'ArrowRight', PageUp: 'ArrowUp', PageDown: 'ArrowDown' }[action], timeline.division, timeline.gridCount);
+    else if ((!preview.visible || directPlacement.active) && action?.startsWith('Page')) nudgeSelection(session, { PageLeft: 'ArrowLeft', PageRight: 'ArrowRight', PageUp: 'ArrowUp', PageDown: 'ArrowDown' }[action], timeline.division, timeline.gridCount, timeline.snapX);
     else if (timeline.eventInteraction.pending && /^[0-9]$/.test(event.key) && !event.ctrlKey && !event.altKey) timeline.eventInteraction.place(undefined, undefined, Number(event.key) || 10);
     else if (action === 'Save') { event.preventDefault(); await save(); }
     else if (action === 'Undo') travel('undo');
@@ -2236,7 +2262,16 @@ function frame(timestamp, recording = false) {
   if (!recording && audio.playing && !mods?.runtime.locks.size && loop && currentBeat() >= loop.end) seekBeat(loop.start, false);
   if (!recording && audio.playing && audio.time >= audio.duration) { audio.pause(); if (performanceMonitor?.run) performanceMonitor.finish('complete'); invalidate(); }
   if (!recording && !session.largeDocument) hitSounds.tick(session.chart, tempo, session.lineIndex);
-  if (recording || !atHome && (audio.playing || dirtyFrame || spatialTool.animating || eventSampler.looping || animationCurvePlaybackActive() || trajectoryPanel.active || noteTrackingPanel.active && noteTrackingPanel.animating || noiseTrackingPanel.active && noiseTrackingPanel.animating || noiseFitPanel.active && noiseFitPanel.options.animate && noiseFitPanel.options.show && noiseFitPanel.previewChart && !noiseFitPanel.fullPreview) && frameLimiter.shouldRender(timestamp, editorPreferences.fpsLimit ?? preferences.settings.fpsLimit)) {
+  const needsSceneFrame = recording || !atHome && (audio.playing || dirtyFrame || spatialTool.animating || eventSampler.looping || animationCurvePlaybackActive() || trajectoryPanel.active || noteTrackingPanel.active && noteTrackingPanel.animating || noiseTrackingPanel.active && noiseTrackingPanel.animating || noiseFitPanel.active && noiseFitPanel.options.animate && noiseFitPanel.options.show && noiseFitPanel.previewChart && !noiseFitPanel.fullPreview);
+  const guideAnimationOnly = !needsSceneFrame && !atHome && guideTool.animating;
+  const paintFrame = (needsSceneFrame || guideAnimationOnly) && (recording || frameLimiter.shouldRender(timestamp, editorPreferences.fpsLimit ?? preferences.settings.fpsLimit));
+  if (paintFrame && guideAnimationOnly) {
+    // Marching dashes and a short snap pulse need only the editor canvas;
+    // do not resample shaders, preview scenes or audio analysis for this.
+    if (directPlacement.active) directPlacement.draw();
+    else { timeline.draw(currentBeat()); multiEdit.drawTimeline(); selectionOverlay.draw(); }
+  }
+  if (paintFrame && needsSceneFrame) {
     frameSampleCount++;
     const start = performance.now();
     const beat = currentBeat();
@@ -2491,6 +2526,8 @@ function applyDisplaySettings() {
   element('.editor-toolbar').classList.add(`mode-${toolbarMode}`);
   element('#toolbar-mode').title = t('app.sdb02ef4', { p0: toolbarMode === 'icons' ? t('app.s1f24c1e') : toolbarMode === 'wide' ? t('app.s6e6e581') : t('app.sc837edc') });
   timeline.barWidth = Number(element('#bar-width').value); timeline.barAlpha = Number(element('#bar-alpha').value); timeline.judgementOffset = Number(element('#judgement-offset').value);
+  timeline.guideLineWidth = Number(element('#guide-line-width').value);
+  timeline.guideLineBrightness = Number(element('#guide-line-brightness').value);
   timeline.judgementColor = element('#judgement-color').value;
   timeline.judgementWidth = Number(element('#judgement-width').value); timeline.judgementAlpha = Number(element('#judgement-alpha').value);
   timeline.eventValueFontSize = Number(element('#event-value-size').value); timeline.eventValueThreshold = Number(element('#event-value-threshold').value); timeline.eventCurveThreshold = Number(element('#event-curve-threshold').value); timeline.eventOpacity = Number(element('#event-opacity').value); timeline.eventBarWidth = Number(element('#event-bar-width').value);
@@ -2501,6 +2538,7 @@ function applyDisplaySettings() {
   if (!timeline.rpeEventDrag) setEventEndpointDragHeld(false);
   timeline.drawEventCurves = element('#draw-event-curves').checked;
   timeline.selectionInterval = globalEvents.timeline.selectionInterval = Number(element('#selection-interval').value);
+  timeline.clickSelectedToSingle = globalEvents.timeline.clickSelectedToSingle = element('#click-selected-to-single').checked;
   selectionIntervalPanel.sync();
   session.cutDensity = Number(element('#event-cut-density').value);
   session.dragSensitivity = Number(element('#event-drag-sensitivity').value);

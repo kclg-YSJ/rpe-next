@@ -17,6 +17,8 @@ import { duplicateLine, reorderLine, deleteLine } from '../src/application/line-
 import { beatValue } from '../src/core/beat.mjs';
 import { insertEventAt, selectEvent, deleteEvents } from '../src/application/event-commands.mjs';
 import { createLine } from '../src/core/chart.mjs';
+import { commitGuideLine } from '../src/application/guide-line-commands.mjs';
+import { projectGuideLine } from '../src/core/guide-lines.mjs';
 
 async function fixture(run) {
   const root = await mkdtemp(join(tmpdir(), 'rpen-large-edit-')), workspace = join(root, 'work');
@@ -36,6 +38,7 @@ async function fixture(run) {
       let result;
       if (method === 'page') result = document.page(value);
       else if (method === 'edit') result = await document.edit(value);
+      else if (method === 'guideLineEdit') result = await document.editGuideLine(value);
       else if (method === 'travel') result = await document.travel(value);
       else if (method === 'save') result = await document.saveDatabase(join(root, 'saved.rpenlarge'), value.editTime);
       else if (method === 'selection') result = await document.selections.select(value);
@@ -50,6 +53,51 @@ async function fixture(run) {
     await run({ root, document, editor, session, errors, call });
   } finally { document.close(); await rm(root, { recursive: true, force: true }); }
 }
+
+test('guide edits follow all disk notes and repetitions outside the loaded page in a single persisted transaction', () => fixture(async ({ session, editor, document, root, errors }) => {
+  const x = document.page({ lines: [1], start: 9999, end: 10001 }).notes[0].note.positionX;
+  await document.edit({ revision: document.revision, changes: [{ line: 0, note: createNote(2, 600, x, 602), count: 10000000 }] });
+  editor.updateSummary(structuredClone(document.describe())); await editor.refresh();
+  const guide = { id: 'guide', startTime: [0, 0, 1], endTime: [10002, 0, 1], start: x, end: x, keepSnapped: true, easingType: 1 };
+  commitGuideLine(session, guide.id, guide); await editor.flush();
+  assert.ok(session.notes.every(note => beatValue(note.startTime) < 100), 'the distant notes must remain unloaded');
+  const undo = document.describe().undo.length;
+  commitGuideLine(session, guide.id, { ...guide, start: 400, end: 400 }); await editor.flush();
+  assert.equal(document.describe().undo.length, undo + 1); assert.equal(document.total, 10000004);
+  const repeated = document.page({ lines: [0], start: 600, end: 603 }).notes[0];
+  assert.equal(repeated.note.positionX, 400); assert.equal(repeated.note._rpenLargeRef.count, 10000000);
+  assert.equal(document.page({ lines: [1], start: 9999, end: 10001 }).notes[0].note.positionX, 400);
+  session.travel('undo'); await editor.flush(); assert.equal(document.page({ lines: [1], start: 9999, end: 10001 }).notes[0].note.positionX, x);
+  assert.equal(session.chart.rpeNextGuideLines[0].start, x);
+  session.travel('redo'); await editor.flush(); assert.equal(session.chart.rpeNextGuideLines[0].start, 400);
+  const revision = document.revision;
+  await assert.rejects(document.editGuideLine({ revision, id: guide.id, next: { ...guide, endTime: [0, 0, 1] }, label: 'invalid', selectionBefore: {} }));
+  assert.equal(document.revision, revision);
+  await assert.rejects(document.editGuideLine({ revision, id: guide.id, next: { ...guide, start: 1e8, end: 1e8 }, label: 'over budget', selectionBefore: {} }));
+  assert.equal(document.revision, revision); assert.equal(document.chart.rpeNextGuideLines[0].start, 400);
+  assert.equal(document.page({ lines: [1], start: 9999, end: 10001 }).notes[0].note.positionX, 400);
+  await editor.save(); const reopened = new LargeChartDocument(join(root, 'guide-reopen')); await mkdir(join(root, 'guide-reopen'));
+  try { await reopened.restoreDatabase(join(root, 'saved.rpenlarge')); assert.equal(reopened.chart.rpeNextGuideLines[0].start, 400); assert.equal(reopened.page({ lines: [1], start: 9999, end: 10001 }).notes[0].note.positionX, 400); }
+  finally { reopened.close(); }
+  const cache = join(root, 'guide-service'); await mkdir(cache);
+  const service = new LargeChartPreviewService(join(cache, 'config.json'));
+  try {
+    await service.configure(cache); const summary = await service.open(join(root, 'saved.rpenlarge'));
+    const edited = await service.command(summary.id, 'guideLineEdit', { revision: summary.revision, id: guide.id, next: { ...guide, start: 500, end: 500 }, label: 'worker guide', selectionBefore: {} });
+    assert.equal(edited.chart.rpeNextGuideLines[0].start, 500); assert.equal(edited.total, 10000004);
+    const page = await service.command(summary.id, 'page', { lines: [1], start: 9999, end: 10001 }); assert.equal(page.notes[0].note.positionX, 500);
+    await service.command(summary.id, 'travel', { direction: 'undo', revision: edited.revision });
+    assert.equal((await service.command(summary.id, 'page', { lines: [1], start: 9999, end: 10001 })).notes[0].note.positionX, 400);
+  } finally { await service.close({ discard: true }); }
+  const copied = projectGuideLine(session.chart.rpeNextGuideLines[0], 20000, { id: 'mirrored-copy', mirror: true });
+  commitGuideLine(session, copied.id, copied); await editor.flush();
+  assert.equal(session.chart.rpeNextGuideLines.length, 2); assert.equal(session.chart.rpeNextGuideLines[1].start, -400);
+  assert.equal(beatValue(session.chart.rpeNextGuideLines[1].startTime), 20000);
+  assert.equal(document.page({ lines: [1], start: 9999, end: 10001 }).notes[0].note.positionX, 400, 'copy does not follow source notes');
+  commitGuideLine(session, copied.id, null); await editor.flush(); assert.equal(session.chart.rpeNextGuideLines.length, 1);
+  session.travel('undo'); await editor.flush(); assert.equal(session.chart.rpeNextGuideLines.length, 2);
+  assert.equal(document.total, 10000004); assert.deepEqual(errors, []);
+}));
 
 test('XY event transactions persist both axes together in large-chart storage and history', () => fixture(async ({ session, editor, document, errors }) => {
   session.selectLine(1); session.focus = 'events'; session.xyBinding = true;

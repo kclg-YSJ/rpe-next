@@ -57,6 +57,17 @@ export interface CustomEventEasing {
   domain?: [number, number]; sourceStart?: number | number[] | string | boolean; sourceEnd?: number | number[] | string | boolean;
   [key: string]: unknown;
 }
+/** Chart-wide editor aids stored in chart.rpeNextGuideLines; never player events. */
+export interface EditorGuideLine {
+  id: string; startTime: Beat; endTime: Beat; start: number; end: number;
+  /** Defaults to true. Changes move notes exactly on the previous curve. */
+  keepSnapped?: boolean;
+  /** Progress is normalized by beats, rather than audio seconds. */
+  easingType?: number; easingLeft?: number; easingRight?: number;
+  bezier?: number | boolean; bezierPoints?: [number, number, number, number];
+  customEasing?: CustomEventEasing;
+  [key: string]: unknown;
+}
 export interface GlobalEvent {
   startTime: Beat; endTime: Beat; start: any; end: any;
   easingType?: number; easingLeft?: number; easingRight?: number;

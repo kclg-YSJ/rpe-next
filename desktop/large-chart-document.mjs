@@ -10,6 +10,7 @@ import { TempoMap } from '../src/core/tempo.mjs';
 import { LineRuntime } from '../src/core/scene.mjs';
 import { DiskNoteSelection } from './large-chart-selection.mjs';
 import { chartHasAnimationCurves, ANIMATION_CURVE_VERSION } from '../src/core/chart-animation-curves.mjs';
+import { GUIDE_LINES_KEY, followGuideNote, replaceGuideLine } from '../src/core/guide-lines.mjs';
 
 const REF = '_rpenLargeRef', LINE = '_rpenLargeLine';
 const columns = ['id','k','l','t','b','z','x','a','f','v','w','n','o','s','e','p','q','h','tick','j','u','d','alpha'];
@@ -219,6 +220,31 @@ export class LargeChartDocument extends LargeChartStore {
       }
     }
     return { start, end, entries: [...groups.values()].sort((a,b)=>a.time-b.time) };
+  }
+  async editGuideLine({ revision, id, next, label, selectionBefore }) {
+    this.checkRevision(revision);
+    const before = this.chart[GUIDE_LINES_KEY]?.find(guide => guide.id === id);
+    const header = largeChartHeader(replaceGuideLine(this.chart, id, next));
+    if (JSON.stringify(this.chart[GUIDE_LINES_KEY]) === JSON.stringify(header[GUIDE_LINES_KEY])) return this.describe();
+    return this.transactionEdit(label, async () => {
+      this.chart = header;
+      if (before && next && before.keepSnapped !== false) {
+        const first = beatValue(before.startTime), last = beatValue(before.endTime);
+        const query = this.db.prepare(`SELECT n.* FROM edit_visibility g JOIN notes n ON n.id=g.id
+          WHERE g.b0<=? AND g.b1>=? AND n.b>=? AND n.b<=? AND n.id>? AND n.n>0 ORDER BY n.id LIMIT 1024`);
+        let cursor = 0;
+        for (;;) {
+          const rows = query.all(last, first, first, last, cursor); if (!rows.length) break;
+          for (const row of rows) {
+            const note = largeRowNote(row, false), changed = followGuideNote(note, before, next);
+            if (changed !== note) { this.remember(row.id); this.write(this.noteRow(changed, row.l, { id: row.id, count: row.n, order: row.o })); }
+            cursor = row.id;
+          }
+          this.flushTimes(); await this.diskBudget(); this.progress({ phase: 'edit', notes: cursor });
+        }
+      }
+      this.db.prepare('INSERT INTO edit_selections VALUES(?,?,?)').run(this.operation, JSON.stringify(selectionBefore), JSON.stringify(selectionBefore));
+    }, revision);
   }
   async edit({revision,label='编辑音符',changes=[],header,lineCopies=[],selectionBefore,selectionAfter}) {
     if(!Array.isArray(changes)||changes.length>40000)throw Error('单次修改超过编辑预算');

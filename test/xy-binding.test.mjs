@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import { createChart, createLine, createEvent } from '../src/core/chart.mjs';
 import { beatValue } from '../src/core/beat.mjs';
 import { EditorSession } from '../src/application/session.mjs';
-import { insertEventAt, placedEvent, selectEvent, deleteEvents, transformEvents } from '../src/application/event-commands.mjs';
+import { insertEventAt, placedEvent, selectEvent, deleteEvents, transformEvents, splitSelectedEvents, selectedEventEntries, copyEvents, boundEventSelections } from '../src/application/event-commands.mjs';
+import { cutSelectedEvents } from '../src/application/event-tools.mjs';
+import { TempoMap } from '../src/core/tempo.mjs';
 import { copyObjects, cutObjects, deleteObjects, pasteObjects } from '../src/application/clipboard.mjs';
 import { captureSelection, controlSelection } from '../src/application/batch-edit.mjs';
 import { expandXyEntries, retainXySelection } from '../src/application/xy-binding.mjs';
@@ -71,13 +73,63 @@ for (const remove of [deleteEvents, deleteObjects]) test(`${remove.name} deletes
   assert.equal(session.multiEventSelection.get(1).size, 1); assert.equal(session.multiEventSelection.get(0).size, 2);
 });
 
-test('copy keeps explicit selection, while cut copies everything it deletes and pastes both axes', () => {
+test('copy and cut include bound companions without changing the explicit selection', () => {
   const { session, tracks, select } = fixture(); select();
-  assert.equal(copyObjects(session), 1); assert.equal(session.eventClipboard.length, 1);
+  assert.equal(copyObjects(session), 2); assert.equal(session.eventClipboard.length, 2);
+  assert.deepEqual([...session.eventSelection], [`${x}:0`]);
   assert.equal(cutObjects(session), 2); assert.equal(session.eventClipboard.length, 2);
   assert.equal(tracks()[x].length, 0); assert.equal(tracks()[y].length, 1);
   pasteObjects(session, 12); assert.deepEqual(times(tracks()[x][0]), [12, 15]); assert.deepEqual(times(tracks()[y].at(-1)), [12, 15]);
   session.travel('undo'); session.travel('undo'); assert.equal(tracks()[x].length, 1); assert.equal(tracks()[y].length, 2);
+});
+
+for (const multi of [false, true]) for (const type of [x, y]) test(`bound copy matches exact intervals, owner and layer (${multi ? 'multi' : 'single'}, ${type})`, () => {
+  const { session, tracks, select } = fixture({ multi, layer: 1 });
+  const other = type === x ? y : x;
+  tracks(1)[type] = [createEvent(1, 2, 1, 2), createEvent(3, 4, 3, 5)];
+  tracks(1)[other] = [createEvent(20, 30, 1, 3), createEvent(40, 50, 1, 2), createEvent(60, 70, 1, 2)];
+  if (!multi) session.selectLine(1);
+  select(type, 0, 1);
+  if (multi) session.multiEventSelection.get(1).add(`${type}:1`); else session.eventSelection.add(`${type}:1`);
+  const before = session.selectionState();
+  assert.equal(copyObjects(session), 4);
+  assert.deepEqual(session.eventClipboard.map(entry => [entry.type, ...times(entry.event)]), [[type, 1, 2], [type, 3, 5], [other, 1, 2], [other, 1, 2]]);
+  assert.deepEqual(session.eventClipboardLines, [1, 1, 1, 1]);
+  assert.deepEqual(session.selectionState(), before);
+  copyEvents(session); assert.equal(session.eventClipboard.length, 4);
+  session.xyBinding = false; copyObjects(session); assert.equal(session.eventClipboard.length, 2);
+});
+
+for (const multi of [false, true]) for (const split of [false, true]) test(`bound ${split ? 'point split' : 'subdivision'} edits exact companions once (${multi ? 'multi' : 'single'})`, () => {
+  const { session, tracks, select } = fixture({ multi, layer: 1 });
+  if (!multi) session.selectLine(1);
+  select(x, 0, 1);
+  if (multi) session.multiEventSelection.set(0, new Set([`${x}:0`, `${y}:1`]));
+  const before = session.chart, selected = session.selectionState(), tempo = new TempoMap(before.BPMList);
+  if (split) splitSelectedEvents(session, 2, tempo);
+  else assert.equal(cutSelectedEvents(session, { division: 1, density: 1, tempo }).changed, multi ? 4 : 2);
+  const expected = split ? [[1, 2], [2, 4]] : [[1, 2], [2, 3], [3, 4]];
+  for (const owner of multi ? [0, 1] : [1]) {
+    assert.deepEqual(tracks(owner)[x].map(times), expected);
+    assert.deepEqual(tracks(owner)[y].filter(event => beatValue(event.startTime) < 8).map(times), expected);
+    assert.equal(tracks(owner)[y].find(event => beatValue(event.startTime) === 8), before.judgeLineList[owner].eventLayers[1][y][0]);
+    assert.equal(session.chart.judgeLineList[owner].eventLayers[0], before.judgeLineList[owner].eventLayers[0]);
+  }
+  const selectedAfter = selectedEventEntries(session);
+  assert.equal(selectedAfter.filter(entry => entry.lineIndex === 1 && entry.type === y).length, 0, 'implicit companions do not become explicit selection');
+  assert.equal(session.history.undoStack.length, 1); session.travel('undo'); assert.equal(session.chart, before); assert.deepEqual(session.selectionState(), selected);
+  session.travel('redo'); assert.deepEqual(tracks(1)[x].map(times), expected);
+});
+
+test('disabled copy and cutting never inspect the other movement track', () => {
+  const { session, tracks, select } = fixture({ enabled: false }); select();
+  const other = tracks()[y];
+  other.entries = () => { assert.fail('disabled binding scanned companions'); };
+  copyObjects(session); assert.equal(session.eventClipboard.length, 1);
+  assert.deepEqual([...boundEventSelections(session).values()].map(keys => [...keys]), [[`${x}:0`]]);
+  delete other.entries; // Existing chart validation still visits every track.
+  splitSelectedEvents(session, 2, new TempoMap(session.chart.BPMList)); assert.equal(tracks()[y], other);
+  session.travel('undo'); select(); cutSelectedEvents(session, { division: 1, density: 1 }); assert.equal(tracks()[y], other);
 });
 
 function interactionFixture(options = {}) {
