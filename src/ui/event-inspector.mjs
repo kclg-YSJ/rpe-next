@@ -1,13 +1,11 @@
 import { formatBeat, parseBeat } from '../core/beat.mjs';
-import { easing, bezier } from '../core/easing.mjs';
 import { selectedEvents, transformEvents, deleteEvents, eventList, eventListAt, eventKey } from '../application/event-commands.mjs';
 import { captureSelection, editCapturedSelection, commitSelectionEdit } from '../application/batch-edit.mjs';
 import { t } from '../i18n.mjs';
 
-import { createCustomEasingControls } from './custom-easing-controls.mjs';
+import { createEventEasingEditor } from './event-easing-editor.mjs';
 import { previewSelectedCurve } from '../application/animation-curve-preview.mjs';
-import { withStandardEasing, eventEasing, withCustomEasing } from '../core/event-easing.mjs';
-import { EASING_NAMES, createEasingPicker } from './easing-picker.mjs';
+import { withCustomEasing } from '../core/event-easing.mjs';
 import { numericWheel } from './numeric-wheel.mjs';
 import { attachDraggableValue } from './draggable-value.mjs';
 import { beatInputControl } from './beat-input.mjs';
@@ -15,13 +13,12 @@ import { EVENT_WHEEL_STEPS } from '../core/note-editing.mjs';
 import { renderShaderInspector } from './shader-inspector.mjs';
 import { canCutEvent } from '../application/event-tools.mjs';
 import { runEventTool } from './event-tools.mjs';
-import { editorSkinContext } from './editor-skin-canvas.mjs';
 import { evaluateEventNumber } from '../core/numeric-expression.mjs';
 import { numericExpressionSource, setNumericExpressionResolver } from './numeric-expression-input.mjs';
 import { createMovementVectorPanel } from './movement-vector-panel.mjs';
 import { EVENT_VALUE_MEMORY_LIMIT, rememberEventValueChange, withEventLock } from '../application/event-value-memory.mjs';
 export { EASING_NAMES } from './easing-picker.mjs';
-const galleryState = { open: false };
+const easingEditors = new WeakMap();
 // Value change per pixel of label drag (the drag sensitivity setting scales it);
 // the wheel step stays coarser on purpose.
 const DRAG_UNITS = { moveXEvents: 1, moveYEvents: 1, rotateEvents: 0.5, alphaEvents: 1, speedEvents: 0.05, scaleXEvents: 0.01, scaleYEvents: 0.01 };
@@ -48,7 +45,7 @@ function applyEventTransform(session, label, transform, valueField) {
 
 export function renderEventInspector(session, tempo, currentBeat, reportError, notify = () => {}, sampler = null) {
   if (session.liveEventEdit) return;
-  const container = document.querySelector('#event-properties'); container.replaceChildren();
+  const container = document.querySelector('#event-properties'); easingEditors.get(container)?.dispose(); easingEditors.delete(container); container.replaceChildren();
   const entries = inspectorEntries(session); const event = entries[0]?.event; const eventType = entries[0]?.type;
   document.querySelector('#event-selection-count').textContent = t('event-inspector.s50000b6', { p0: entries.length });
   if (!event) { const hint = document.createElement('p'); hint.className = 'hint'; hint.textContent = t('event-inspector.s04d3c47') + (session.rpeEventDrag !== true ? t('event-inspector.sa14758e') : t('event-inspector.s57ae1bc')) + t('event-inspector.s9adc988'); container.append(hint); return; }
@@ -58,7 +55,12 @@ export function renderEventInspector(session, tempo, currentBeat, reportError, n
   const valueTitle = eventType === 'alphaEvents' ? [t('event-inspector.s7ff4e31'), t('event-inspector.s85fe18b')] : eventType === 'speedEvents' ? [t('event-inspector.s681e916'), t('event-inspector.s0e1d31f')] : eventType === 'colorEvents' ? [t('event-inspector.s37eb2f2'), t('event-inspector.s3bf81a3')] : eventType === 'textEvents' ? [t('event-inspector.s7aaf80e'), t('event-inspector.s70ef707')] : [t('event-inspector.s532cd47'), t('event-inspector.s00005a6')];
   const fields = [['startTime', t('event-inspector.s087c451'), 'beat'], ['endTime', t('event-inspector.sc4d3fa4'), 'beat'], ['start', valueTitle[0], valueKind(eventType, event.start)], ['end', valueTitle[1], valueKind(eventType, event.end)], ['easingLeft', t('event-inspector.s2fbff0e'), 'number'], ['easingRight', t('event-inspector.sb38574e'), 'number'], ['linkgroup', t('event-inspector.s50136f9'), 'number']];
   const boundaryFields = [];
-  let movementPanel;
+  let movementPanel, easingEditor;
+  const syncEasing = patch => {
+    const entry = entries[0];
+    const current = eventListAt({ chart: sampler?.draftChart ?? session.chart, eventLayer: session.eventLayer }, entry.lineIndex ?? session.lineIndex, entry.type)?.[entry.index];
+    if (current) easingEditor?.sync({ ...current, ...patch });
+  };
   const constrainNumber = (key, value) => {
     if (eventType === 'alphaEvents' && (key === 'start' || key === 'end')) return Math.trunc(Math.min(255, value));
     if (key === 'easingLeft' || key === 'easingRight') return Math.max(0, Math.min(1, value));
@@ -71,6 +73,7 @@ export function renderEventInspector(session, tempo, currentBeat, reportError, n
       return { ...current, [key]: next, ...(current.inst && (key === 'start' || key === 'end') ? { start: next, end: structuredClone(next) } : {}) };
     }, key);
     movementPanel?.sync();
+    syncEasing();
   };
   const applyField = (input, key, title, kind, quiet = false) => {
     const update = () => {
@@ -115,9 +118,9 @@ export function renderEventInspector(session, tempo, currentBeat, reportError, n
       integer: integerField,
       hint: t('event-inspector.s6fb0abb', { p0: title }),
       read: () => { const text = String(input.value).trim(); const parsed = Number(text); return text && Number.isFinite(parsed) ? parsed : Number(event[key]) || 0; },
-      preview: value => { const result = sampler ? sampler.updateValueDraft(target, value) : true; movementPanel?.sync(sampler?.draftChart ?? session.chart); return result; },
-      commit: value => safely(() => { if (sampler) { if (sampler.valueDraft) sampler.finishValue(true, t('event-inspector.s615e6b4', { p0: title })); } else writeValue(key, title, value); }),
-      cancel: () => { if (sampler?.valueDraft) sampler.finishValue(false); },
+      preview: value => { const result = sampler ? sampler.updateValueDraft(target, value) : true; movementPanel?.sync(sampler?.draftChart ?? session.chart); if (result !== false) syncEasing({ [key]: value }); return result; },
+      commit: value => safely(() => { if (sampler) { if (sampler.valueDraft) sampler.finishValue(true, t('event-inspector.s615e6b4', { p0: title })); } else writeValue(key, title, value); syncEasing(); }),
+      cancel: () => { if (sampler?.valueDraft) sampler.finishValue(false); syncEasing(); },
     });
   };
   const samplePanel = (key, title, kind, value) => {
@@ -226,75 +229,31 @@ export function renderEventInspector(session, tempo, currentBeat, reportError, n
     session.eventSelection = selection; session.notify();
   });
   if (link > 0) container.append(group);
-  const label = document.createElement('label'); label.className = 'field'; label.append(t('event-inspector.s727b7cd'));
-  const select = document.createElement('select'); select.setAttribute('aria-label', t('event-inspector.sa310d73'));
-  EASING_NAMES.forEach((name, index) => { const option = document.createElement('option'); option.value = index + 1; option.textContent = `${index + 1} · ${name}`; select.append(option); });
-  select.value = event.easingType ?? 1;
-  select.onchange = () => safely(() => applyEventTransform(session, t('event-inspector.s4f19fa7'), current => withStandardEasing(current, Number(select.value))));
-  label.append(select); label.hidden = Boolean(event.customEasing); container.append(label);
-  container.append(createEasingPicker(event.customEasing ? 0 : event.easingType ?? 1, value => safely(() => applyEventTransform(session, t('event-inspector.s4f19fa7'), current => withStandardEasing(current, value))), galleryState).element);
-  container.append(createCustomEasingControls(event, change => safely(() => applyEventTransform(session, t('animation-curve.edit'), change)), { report: reportError, previewChart: curve => previewSelectedCurve(session, inspectorEntries(session), curve), capture: () => inspectorEntries(session).map(e => e.event), signature: () => JSON.stringify([session.lineIndex, session.eventLayer, inspectorEntries(session).map(e => [e.lineIndex ?? session.lineIndex,e.type,e.index,e.event])]), timing: { BPMList: session.chart.BPMList, factor: session.chart.judgeLineList[entries[0].lineIndex ?? session.lineIndex]?.bpmfactor ?? 1 }, preview: entries.length === 1 && sampler ? curve => { const e = entries[0]; const original = inspectorEntries(session)[0]?.event; if (!original) return; sampler.updateValueDraft({ type: e.type, index: e.index, lineIndex: e.lineIndex ?? session.lineIndex, field: 'customEasing' }, original.customEasing ? { ...original.customEasing, curve } : withCustomEasing(original, curve).customEasing); } : undefined, cancelPreview: () => { if (sampler?.valueDraft) sampler.finishValue(false); }, read: entries.length === 1 ? () => { const current = inspectorEntries(session); return current.length === 1 && current[0].type === eventType && current[0].index === entries[0].index && (current[0].lineIndex ?? session.lineIndex) === (entries[0].lineIndex ?? session.lineIndex) ? current[0].event : null; } : undefined }));
-  const curve = document.createElement('canvas'); curve.width = 260; curve.height = 100; curve.className = 'easing-preview'; curve.setAttribute('aria-label', t('event-inspector.sa33a2cb'));
-  const context = editorSkinContext(curve.getContext('2d'), 'easing'); context.strokeStyle = '#ffd76a'; context.lineWidth = 2; context.beginPath();
-  for (let index = 0; index <= 100; index++) {
-    const progress = index / 100;
-    const value = eventEasing(event, progress);
-    const horizontal = 10 + progress * 240; const vertical = 80 - value * 60;
-    if (index === 0) context.moveTo(horizontal, vertical); else context.lineTo(horizontal, vertical);
-  } context.stroke(); container.append(curve);
-  context.save(); context.strokeStyle = '#8da4c7'; context.setLineDash([3, 3]);
-  for (const boundary of [event.easingLeft ?? 0, event.easingRight ?? 1]) { const x = 10 + Math.max(0, Math.min(1, boundary)) * 240; context.beginPath(); context.moveTo(x, 10); context.lineTo(x, 88); context.stroke(); }
-  context.restore();
-  if (!event.customEasing) container.append(...boundaryFields);
-  const bezierLabel = document.createElement('label'); bezierLabel.className = 'field'; bezierLabel.append('Bezier');
-  const enabled = document.createElement('input'); enabled.type = 'checkbox'; enabled.checked = Boolean(event.bezier); enabled.setAttribute('aria-label', t('event-inspector.sde81b79'));
-  enabled.onchange = () => safely(() => applyEventTransform(session, t('event-inspector.s4b025f7'), current => ({ ...current, bezier: Number(enabled.checked), bezierPoints: Array.isArray(current.bezierPoints) && current.bezierPoints.length === 4 && current.bezierPoints.slice(2).some(Number) ? current.bezierPoints : [0, 0, 1, 1] })));
-  bezierLabel.append(enabled); if (!event.customEasing) container.append(bezierLabel);
-  if (event.bezier && !event.customEasing) {
-    const bezierPoints = Array.isArray(event.bezierPoints) && event.bezierPoints.length === 4 && event.bezierPoints.slice(2).some(Number) ? event.bezierPoints : [0, 0, 1, 1];
-    const points = document.createElement('input'); points.setAttribute('aria-label', t('event-inspector.sb1f6d6a')); points.value = bezierPoints.join(', '); points.className = 'wide-field';
-    points.onchange = () => safely(() => applyEventTransform(session, t('event-inspector.sa5b4516'), current => ({ ...current, bezierPoints: points.value.split(',').map(Number) })));
-    container.append(points);
-    const dragCanvas = document.createElement('canvas'); dragCanvas.width = 260; dragCanvas.height = 100; dragCanvas.className = 'easing-preview bezier-editor';
-    let draftPoints = [...bezierPoints]; let dragPoint = null; let dragChanged = false;
-    const drawBezier = () => { const draw = editorSkinContext(dragCanvas.getContext('2d'), 'bezier'); draw.clearRect(0, 0, 260, 100); draw.strokeStyle = '#65748a'; draw.setLineDash([3, 3]); draw.beginPath(); draw.moveTo(10, 80); draw.lineTo(10 + draftPoints[0] * 240, 80 - draftPoints[1] * 60); draw.moveTo(250, 20); draw.lineTo(10 + draftPoints[2] * 240, 80 - draftPoints[3] * 60); draw.stroke(); draw.setLineDash([]); draw.strokeStyle = '#ffd76a'; draw.lineWidth = 2; draw.beginPath(); for (let index = 0; index <= 100; index++) { const progress = index / 100; const value = bezier(progress, draftPoints); const x = 10 + progress * 240; const y = 80 - value * 60; index ? draw.lineTo(x, y) : draw.moveTo(x, y); } draw.stroke(); draw.fillStyle = '#fff2a8'; for (const point of [[draftPoints[0], draftPoints[1]], [draftPoints[2], draftPoints[3]]]) { draw.beginPath(); draw.arc(10 + point[0] * 240, 80 - point[1] * 60, 5, 0, Math.PI * 2); draw.fill(); } };
-    drawBezier();
-    const commitBezier = () => { if (!dragChanged) return; const committed = [...draftPoints]; safely(() => applyEventTransform(session, t('event-inspector.s5ae7fbe'), current => ({ ...current, bezierPoints: committed }))); dragChanged = false; };
-    const canvasPoint = pointer => {
-      const rect = dragCanvas.getBoundingClientRect();
-      return {
-        x: Math.max(0, Math.min(1, (pointer.clientX - rect.left - 10) / 240)),
-        y: Math.max(0, Math.min(1, 1 - ((pointer.clientY - rect.top - 20) / 60))),
-      };
-    };
-    dragCanvas.onpointerdown = pointer => {
-      pointer.preventDefault();
-      const point = canvasPoint(pointer);
-      const candidates = [0, 2].map(index => ({ index, distance: Math.hypot(point.x - draftPoints[index], point.y - draftPoints[index + 1]) }));
-      const nearest = candidates.reduce((best, candidate) => candidate.distance < best.distance ? candidate : best);
-      if (nearest.distance > 0.14) return;
-      dragPoint = nearest.index;
-      dragChanged = false;
-      dragCanvas.setPointerCapture(pointer.pointerId);
-    };
-    dragCanvas.onpointermove = pointer => {
-      if (dragPoint == null) return;
-      pointer.preventDefault();
-      const point = canvasPoint(pointer);
-      draftPoints[dragPoint] = point.x; draftPoints[dragPoint + 1] = point.y;
-      points.value = draftPoints.map(value => value.toFixed(3)).join(', ');
-      dragChanged = true;
-      drawBezier();
-    };
-    const finishDrag = pointer => {
-      if (dragPoint == null) return;
-      if (pointer?.pointerId !== undefined && dragCanvas.hasPointerCapture(pointer.pointerId)) dragCanvas.releasePointerCapture(pointer.pointerId);
-      commitBezier(); dragPoint = null;
-    };
-    dragCanvas.onpointerup = finishDrag;
-    dragCanvas.onpointercancel = finishDrag;
-    container.append(dragCanvas);
-  }
+  easingEditor = createEventEasingEditor(event, (label, transform) => applyEventTransform(session, label, transform), {
+    boundaryFields, report: reportError,
+    rerender: () => renderEventInspector(session, tempo, currentBeat, reportError, notify, sampler),
+    setLive: value => { session.liveEventEdit = value; },
+    custom: {
+      report: reportError,
+      previewChart: curve => previewSelectedCurve(session, inspectorEntries(session), curve),
+      capture: () => inspectorEntries(session).map(entry => entry.event),
+      signature: () => JSON.stringify([session.lineIndex, session.eventLayer, inspectorEntries(session).map(entry => [entry.lineIndex ?? session.lineIndex, entry.type, entry.index, entry.event])]),
+      timing: { BPMList: session.chart.BPMList, factor: session.chart.judgeLineList[entries[0].lineIndex ?? session.lineIndex]?.bpmfactor ?? 1 },
+      preview: entries.length === 1 && sampler ? curve => {
+        const entry = entries[0], original = inspectorEntries(session)[0]?.event;
+        if (!original) return;
+        const customEasing = original.customEasing ? { ...original.customEasing, curve } : withCustomEasing(original, curve).customEasing;
+        if (sampler.updateValueDraft({ type: entry.type, index: entry.index, lineIndex: entry.lineIndex ?? session.lineIndex, field: 'customEasing' }, customEasing) !== false) syncEasing();
+      } : undefined,
+      cancelPreview: () => { if (sampler?.valueDraft) sampler.finishValue(false); syncEasing(); },
+      read: entries.length === 1 ? () => {
+        const current = inspectorEntries(session);
+        return current.length === 1 && current[0].type === eventType && current[0].index === entries[0].index
+          && (current[0].lineIndex ?? session.lineIndex) === (entries[0].lineIndex ?? session.lineIndex) ? current[0].event : null;
+      } : undefined,
+    },
+  });
+  container.append(easingEditor.element); easingEditor.draw(); easingEditors.set(container, easingEditor);
   const actions = document.createElement('div'); actions.className = 'action-grid';
   for (const [action, title] of [['stick', t('event-inspector.sa21d009')], ['cut', t('event-inspector.se2c05eb')]]) {
     const button = document.createElement('button'); button.type = 'button'; button.textContent = title;

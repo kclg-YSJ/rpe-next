@@ -1929,6 +1929,7 @@ export default {
     'event-inspector.sde81b79': "启用 Bezier",
     'event-inspector.s4b025f7': "切换 Bezier",
     'event-inspector.sb1f6d6a': "Bezier 控制点",
+    'event-inspector.invalidBezier': "请输入四个有效的 Bezier 控制点数值，两个 X 坐标必须在 0 到 1 之间。",
     'event-inspector.sa5b4516': "修改 Bezier",
     'event-inspector.s5ae7fbe': "拖动 Bezier 控制点",
     'event-inspector.sa21d009': "粘合前一事件",

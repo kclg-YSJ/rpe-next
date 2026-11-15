@@ -7,6 +7,8 @@ import { createEvent } from '../src/core/chart.mjs';
 import { cancelValueDrag } from '../src/ui/draggable-value.mjs';
 import { TempoMap } from '../src/core/tempo.mjs';
 import { toggleSingleEventLock } from '../src/application/event-commands.mjs';
+import { createEasingCanvas } from '../src/ui/easing-canvas.mjs';
+import { eventEasing } from '../src/core/event-easing.mjs';
 
 class FakeTarget {
   constructor() { this.listeners = new Map(); }
@@ -39,14 +41,23 @@ class FakeNode extends FakeTarget {
   insertBefore(node, reference) { const index = this.children.indexOf(reference); node.parentNode = this; if (index < 0) this.children.push(node); else this.children.splice(index, 0, node); }
   replaceChildren(...nodes) { this.children = []; this.append(...nodes); }
   remove() { const index = this.parentNode ? this.parentNode.children.indexOf(this) : -1; if (index >= 0) this.parentNode.children.splice(index, 1); this.isConnected = false; this.parentNode = null; }
-  focus() { this.focused = true; }
+  focus() { this.focused = true; activeDocument.activeElement = this; }
+  click() { this.onclick?.(); }
+  showPopover() { this.open = true; }
+  hidePopover() { this.open = false; }
+  matches(selector) { return selector === ':popover-open' && this.open; }
+  setPointerCapture(id) { this.pointerId = id; }
+  hasPointerCapture(id) { return this.pointerId === id; }
+  releasePointerCapture() { this.pointerId = null; }
   closest() { return null; }
   getBoundingClientRect() { return { left: 0, top: 0, right: 300, bottom: 100, width: 300, height: 100 }; }
   requestPointerLock() { activeDocument.pointerLockElement = this; activeDocument.dispatch('pointerlockchange'); return Promise.resolve(); }
   getContext() {
+    if (this.context) return this.context;
     const canvas = this;
-    return new Proxy({ canvas }, {
-      get: (target, key) => key === 'canvas' ? canvas : key in target ? target[key] : () => {},
+    this.drawCalls = [];
+    return this.context = new Proxy({ canvas }, {
+      get: (target, key) => key === 'canvas' ? canvas : key in target ? target[key] : (...args) => this.drawCalls.push([key, ...args]),
       set: (target, key, value) => { target[key] = value; return true; },
     });
   }
@@ -106,14 +117,140 @@ const drag = (window, label, fromX, toX) => {
 // Moves after the first one only carry raw deltas because the pointer is locked.
 const nudge = (window, movementX) => window.dispatch('pointermove', { pointerId: 1, pointerType: 'mouse', buttons: 1, clientX: 0, clientY: 40, movementX });
 
-test('缓动左右边界位于曲线预览下方、Bezier上方，并保留实时编辑', () => {
+const find = (container, predicate) => { let found; walk(container, node => { if (predicate(node)) found ??= node; }); return found; };
+const modeTab = (container, mode) => find(container, node => node.dataset.easingMode === mode);
+const preview = container => find(container, node => node.className.split(' ').includes('easing-preview'));
+const boundaries = canvas => canvas.drawCalls.filter(([method]) => method === 'moveTo').slice(-2).map(([, x]) => x);
+
+test('三个缓动模式互斥，标准图形选择位于弹窗中，左右边界并排位于预览下方', () => {
   const { container, restore } = setup();
   try {
-    const curve = container.children.find(node => node.className === 'easing-preview');
-    const bezier = container.children.find(node => node.children?.some(child => child.getAttribute?.('aria-label') === '启用 Bezier'));
-    assert.ok(container.children.indexOf(curve) < container.children.indexOf(field(container, 'easingLeft')));
-    assert.ok(container.children.indexOf(field(container, 'easingLeft')) < container.children.indexOf(field(container, 'easingRight')));
-    assert.ok(container.children.indexOf(field(container, 'easingRight')) < container.children.indexOf(bezier));
+    const curve = preview(container), left = field(container, 'easingLeft'), right = field(container, 'easingRight');
+    assert.equal(left.parentNode, right.parentNode);
+    assert.ok(curve.parentNode.children.indexOf(curve) < curve.parentNode.children.indexOf(left.parentNode));
+    for (const mode of ['standard', 'custom', 'bezier']) {
+      assert.equal(modeTab(container, mode).getAttribute('aria-selected'), String(mode === 'standard'));
+      assert.equal(modeTab(container, mode).classList.contains('active'), mode === 'standard');
+    }
+    assert.ok(!find(find(container, node => node.className === 'event-easing-editor'), node => node.tagName === 'DETAILS'));
+    const popup = find(container, node => node.className === 'event-easing-popup');
+    assert.equal(popup.getAttribute('aria-label'), '事件缓动');
+    const choices = popup.children[0].children.filter(node => node.tagName === 'BUTTON');
+    assert.equal(choices.length, 29);
+    assert.deepEqual(choices.slice(0, 7).map(node => Number(node.dataset.easing)), [1, 3, 2, 6, 5, 4, 7]);
+    assert.equal(choices.find(node => Number(node.dataset.easing) === 15).style.gridRow, '7');
+    assert.equal(choices.find(node => Number(node.dataset.easing) === 22).style.gridColumn, '3');
+    assert.equal(find(container, node => node.getAttribute('aria-label') === '启用 Bezier'), undefined);
+  } finally { restore(); }
+});
+
+test('切换模式修改每个所选事件的实际缓动，保留各自数值和控制点并支持撤销', () => {
+  const { container, session, errors, restore } = setup(2);
+  try {
+    const events = () => session.line.eventLayers[0].moveXEvents.slice(1);
+    events()[0].easingType = 5; events()[1].easingType = 8;
+    const values = events().map(event => [event.start, event.end]), samples = events().map(event => eventEasing(event, .5));
+    const before = session.history.undoStack.length;
+    modeTab(container, 'custom').click();
+    assert.ok(events().every(event => event.customEasing && !event.bezier));
+    assert.deepEqual(events().map(event => eventEasing(event, .5)), samples);
+    assert.deepEqual(events().map(event => [event.start, event.end]), values);
+    assert.equal(session.history.undoStack.length, before + 1);
+    assert.equal(field(container, 'easingLeft'), undefined);
+    assert.equal(find(container, node => node.className === 'custom-easing-group').tagName, 'DIV');
+    modeTab(container, 'bezier').click();
+    assert.ok(events().every(event => event.bezier === 1 && !event.customEasing));
+    assert.equal(modeTab(container, 'bezier').getAttribute('aria-selected'), 'true');
+    modeTab(container, 'standard').click();
+    const popup = find(container, node => node.className === 'event-easing-popup');
+    find(popup, node => Number(node.dataset.easing) === 5).click();
+    assert.ok(events().every(event => !event.bezier && !event.customEasing && event.easingType === 5));
+    session.travel('undo'); session.travel('undo');
+    assert.ok(events().every(event => event.bezier));
+    assert.deepEqual(errors, []);
+  } finally { restore(); }
+});
+
+test('缓动边界拖动与输入实时重绘左右标记，取消恢复初始画面', () => {
+  const { container, window, session, restore } = setup();
+  try {
+    const canvas = preview(container), initial = session.history.undoStack.length;
+    assert.deepEqual(boundaries(canvas), [10, 250]);
+    drag(window, field(container, 'easingLeft'), 100, 140);
+    assert.deepEqual(boundaries(canvas), [106, 250]);
+    window.dispatch('keydown', { key: 'Escape' });
+    assert.deepEqual(boundaries(canvas), [10, 250]);
+    assert.equal(session.history.undoStack.length, initial);
+    drag(window, field(container, 'easingRight'), 100, 80);
+    assert.deepEqual(boundaries(canvas), [10, 202]);
+    window.dispatch('pointercancel');
+    assert.deepEqual(boundaries(canvas), [10, 250]);
+    const input = field(container, 'easingLeft').children.at(-1).children[0];
+    input.value = '.25'; input.oninput({});
+    assert.deepEqual(boundaries(canvas), [70, 250]);
+  } finally { restore(); }
+});
+
+test('混合模式多选可以统一到当前标签的模式，非法 Bezier 输入不写入谱面', () => {
+  const { container, session, errors, restore } = setup(2);
+  try {
+    session.line.eventLayers[0].moveXEvents[2].bezier = 1;
+    modeTab(container, 'standard').click();
+    assert.ok(session.line.eventLayers[0].moveXEvents.slice(1).every(event => !event.bezier));
+    modeTab(container, 'bezier').click();
+    const input = find(container, node => node.tagName === 'INPUT' && node.getAttribute('aria-label') === 'Bezier 控制点');
+    const before = session.history.undoStack.length;
+    for (const value of ['0,,1,1', '0,NaN,1,1', '0,1,2,1', '0,1,1']) { input.value = value; input.onchange(); }
+    assert.equal(errors.length, 4); assert.equal(session.history.undoStack.length, before);
+    input.value = '0,0,0,0'; input.onchange();
+    assert.deepEqual(session.line.eventLayers[0].moveXEvents[1].bezierPoints, [0, 0, 0, 0]);
+  } finally { restore(); }
+});
+
+test('缓动画布随尺寸和像素密度更新，绘制与指针使用同一等比坐标变换', () => {
+  const previous = { ratio: globalThis.devicePixelRatio, observer: globalThis.ResizeObserver };
+  let resize, disconnected = false;
+  globalThis.ResizeObserver = class { constructor(callback) { resize = callback; } observe() {} disconnect() { disconnected = true; } };
+  globalThis.devicePixelRatio = 2;
+  const canvas = new FakeNode('canvas'); canvas.clientWidth = 520; canvas.clientHeight = 200; canvas.clientLeft = canvas.clientTop = 1;
+  canvas.getBoundingClientRect = () => ({ left: 30, top: 40, width: canvas.clientWidth + 2, height: canvas.clientHeight + 2 });
+  const view = createEasingCanvas(canvas, 'easing', draw => draw.arc(100, 50, 5, 0, Math.PI * 2));
+  try {
+    assert.deepEqual([canvas.width, canvas.height], [1040, 400]);
+    assert.deepEqual(canvas.drawCalls.filter(([method]) => method === 'setTransform').at(-1), ['setTransform', 4, 0, 0, 4, 0, 0]);
+    assert.deepEqual(view.point({ clientX: 231, clientY: 141 }), { x: 100, y: 50 });
+    canvas.clientWidth = 390; canvas.clientHeight = 150; globalThis.devicePixelRatio = 1.5; resize();
+    assert.deepEqual([canvas.width, canvas.height], [585, 225]);
+    assert.deepEqual(view.point({ clientX: 181, clientY: 116 }), { x: 100, y: 50 });
+    assert.deepEqual(canvas.drawCalls.filter(([method]) => method === 'setTransform').at(-1), ['setTransform', 2.25, 0, 0, 2.25, 0, 0]);
+  } finally { view.dispose(); globalThis.devicePixelRatio = previous.ratio; globalThis.ResizeObserver = previous.observer; }
+  assert.equal(disconnected, true);
+});
+
+test('Bezier 使用单一可交互画布，缩放后可准确拖动、提交一次并取消', () => {
+  const { container, session, restore, errors } = setup();
+  try {
+    modeTab(container, 'bezier').click();
+    const handles = find(container, node => node.className.includes('bezier-editor'));
+    assert.equal(handles, preview(container));
+    assert.equal(handles.parentNode.children.filter(node => node.tagName === 'CANVAS').length, 1);
+    handles.clientWidth = 520; handles.clientHeight = 200;
+    handles.getBoundingClientRect = () => ({ left: 20, top: 30, width: 520, height: 200 });
+    const pointer = (clientX, clientY) => ({ clientX, clientY, pointerId: 1, preventDefault() {} });
+    const before = session.history.undoStack.length, canvas = preview(container), calls = canvas.drawCalls.length;
+    handles.onpointerdown(pointer(40, 190)); handles.onpointermove(pointer(160, 100));
+    assert.equal(session.liveEventEdit, true);
+    assert.ok(canvas.drawCalls.length > calls);
+    handles.onpointerup(pointer(160, 100));
+    assert.deepEqual(session.line.eventLayers[0].moveXEvents[1].bezierPoints, [.25, .75, 1, 1]);
+    assert.equal(session.history.undoStack.length, before + 1);
+    const next = find(container, node => node.className.includes('bezier-editor'));
+    next.onpointerdown(pointer(90, 35)); next.onpointermove(pointer(120, 50)); next.onpointercancel(pointer(120, 50));
+    assert.deepEqual(session.line.eventLayers[0].moveXEvents[1].bezierPoints, [.25, .75, 1, 1]);
+    assert.equal(session.history.undoStack.length, before + 1);
+    assert.equal(session.liveEventEdit, false);
+    session.travel('undo'); assert.deepEqual(session.line.eventLayers[0].moveXEvents[1].bezierPoints, [0, 0, 1, 1]);
+    assert.deepEqual(errors, []);
   } finally { restore(); }
 });
 

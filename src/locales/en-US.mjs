@@ -2503,6 +2503,7 @@ export default {
     'event-inspector.sde81b79': "Enable Bezier",
     'event-inspector.s4b025f7': "Toggle Bezier",
     'event-inspector.sb1f6d6a': "Bezier control points",
+    'event-inspector.invalidBezier': "Enter four finite Bezier control point values. Both X coordinates must be between 0 and 1.",
     'event-inspector.sa5b4516': "Modify Bezier",
     'event-inspector.s5ae7fbe': "Drag Bezier control points",
     'event-inspector.sa21d009': "Join previous event",
