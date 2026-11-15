@@ -20,6 +20,7 @@ import { CountedNoteBatch } from './counted-note-batch.mjs';
 import { previewNoteHit } from '../core/preview-note-hit.mjs';
 
 const clamp = value => Math.max(0, Math.min(1, value));
+const noteTypeKey = type => type === 1 ? 'tap' : type === 2 ? 'hold' : type === 3 ? 'flick' : type === 4 ? 'drag' : 'other';
 
 export class Preview {
   constructor(canvas) {
@@ -29,6 +30,7 @@ export class Preview {
     this.noisePreview = new NoisePreview();
     this.allLines = true; this.visible = false; this.noteSize = 175; this.lineScale = 1.5; this.backgroundAlpha = 0.35; this.backgroundBlur = 10.5; this.effectsSince = Infinity; this.applyShaders = true; this.opacity = 1; this.showHitEffects = true;
     this.noteHitAreas = [];
+    this.collectFrameStats = false; this.frameStats = null;
     this.noteDraft = new NotePreview(); this.simultaneousCounts = new Map();
     this.hitGeometry = new HitGeometryCache();
     this.hitBatch = new HitEffectBatch();
@@ -360,9 +362,22 @@ export class Preview {
 
   // Independent world pass, allowing optional modules to project it before screen effects and UI.
   drawScene(context, chart, tempo, seconds, selectedLine, { width, height, viewport, scale, divisor, states, center, cullNotes = false, positionScale = previewPositionScale(this.aspectRatio ?? 1.5), renderViewport = viewport }) {
+    const stats = this.collectFrameStats ? { notes: { tap: 0, hold: 0, flick: 0, drag: 0, other: 0 }, visible: 0, hits: 0, particles: 0, drawn: new Set(), hitKeys: new Set() } : null;
+    this.frameStats = stats;
     const elements=this.spatialForeground?this.spatialElements:null,showNotes=elements?.planeNotes!==false,showLines=elements?.planeLines!==false;
     const originX = width / 2 - (center?.x ?? 0) * scale, originY = height / 2 + (center?.y ?? 0) * scale;
     const order = this.allLines ? this.scene.order : [selectedLine];
+    if (stats) {
+      const ratio = width / (this.canvas?.clientWidth || width || 1);
+      stats.lines = [];
+      for (const index of order) {
+        const state = states[index];
+        if (!state || !(state.alpha > 0)) continue;
+        const x = originX + state.x * scale, y = originY - state.y * scale;
+        if (x < renderViewport.left || x > renderViewport.left + renderViewport.width || y < renderViewport.top || y > renderViewport.top + renderViewport.height) continue;
+        stats.lines.push({ index, name: chart.judgeLineList[index]?.Name ?? '', x: x / ratio, y: y / ratio, rotation: state.rotation, selected: index === selectedLine });
+      }
+    }
     this.guides = lineGuides(this.forceLineOpacity ? states.map(state => ({ ...state, alpha: 255 })) : states, chart.judgeLineList, order, width, height, scale);
     if (center) for (const guide of this.guides) { guide.x -= center.x * scale; guide.y += center.y * scale; }
     const visibleDivisor = Math.max(divisor, renderViewport.width / scale / 1350);
@@ -423,6 +438,14 @@ export class Preview {
           if (Math.max(screenX, tailX) + padding < viewport.left || Math.min(screenX, tailX) - padding > viewport.left + viewport.width ||
               Math.max(screenY, tailY) + padding < viewport.top || Math.min(screenY, tailY) - padding > viewport.top + viewport.height) continue;
         }
+        if (stats) {
+          const key = `${index}:${entry.index}`;
+          if (!stats.drawn.has(key)) {
+            stats.drawn.add(key);
+            stats.notes[noteTypeKey(note.type)]++;
+            stats.visible++;
+          }
+        }
         const skew = position.skew ? Math.tan(position.skew * Math.PI / 180) : 0;
         const hitArea={ lineIndex: index, noteIndex: entry.index, type:note.type, x1: screenX, y1: screenY, x2: tailX, y2: tailY, radius: Math.max(12, noteWidth * 0.65),
           pickWidth: noteWidth, pickHeightWidth: heightWidth, pickCosine: cosine, pickSine: sine, pickSkew: skew, pickHighlight: highlight, pickShowHead: position.showHead, pickSide: noteIsAbove(note) ? 1 : -1 };
@@ -468,6 +491,7 @@ export class Preview {
       if (!batched) { this.noteHitAreas.length = firstHit; drawPass(context, pass); }
     }
     if (this.showHitEffects && elements?.planeHits !== false) this.drawHits(context, seconds, order, originX, originY, scale, positionScale, renderViewport, width, height);
+    if (stats) { delete stats.drawn; delete stats.hitKeys; }
   }
 
   drawHits(context, seconds, order, originX, originY, scale, positionScale, renderViewport, width, height, allowBatch = true, style = null) {
@@ -493,21 +517,31 @@ export class Preview {
           const size = this.noteSize * 1.4 * scale;
           const radius = style ? style.radius(size) : this.skin?.hitRadius?.(size) ?? (this.skin?.drawHit ? Infinity : size * 2);
           if (horizontal + radius < renderViewport.left || horizontal - radius > renderViewport.left + renderViewport.width || vertical + radius < renderViewport.top || vertical - radius > renderViewport.top + renderViewport.height) continue;
+          const stats = this.frameStats, key = `${index}:${entry.index}:${time}`;
+          let particleCount = 0;
+          const countHit = () => {
+            if (!stats || stats.hitKeys.has(key)) return;
+            stats.hitKeys.add(key); stats.hits++; stats.particles += particleCount;
+          };
+          const countParticle = () => { if (stats && !stats.hitKeys.has(key)) particleCount++; };
           if (style) {
             style.draw(target, { age: seconds-time, x: horizontal, y: vertical, size, rotation: angle, color:entry.note.tintHitEffects, seed:index*65537+seed });
             target.globalAlpha = 1;
+            countHit();
             continue;
           }
-          if (this.skin?.drawHit?.(target, { age: seconds-time, x: horizontal, y: vertical, size, rotation: angle, color:entry.note.tintHitEffects, seed:index*65537+seed })) continue;
+          if (this.skin?.drawHit?.(target, { age: seconds-time, x: horizontal, y: vertical, size, rotation: angle, color:entry.note.tintHitEffects, seed:index*65537+seed, countParticle })) { countHit(); continue; }
           const frame = hitFrame(seconds - time);
           const picture = frame === null ? null : this.skin?.tinted(`img-${frame}`, entry.note.tintHitEffects ?? [255, 236, 160]);
           if (picture) target.drawImage(picture, horizontal - size / 2, vertical - size / 2, size, size);
           target.fillStyle = `rgb(${(entry.note.tintHitEffects ?? [255, 236, 160]).join(',')})`;
           for (const particle of hitParticles(seconds - time, index * 65537 + seed, this.noteSize * scale)) {
+            particleCount++;
             target.globalAlpha = particle.alpha;
             target.fillRect(horizontal + particle.x - particle.radius, vertical + particle.y - particle.radius, particle.radius * 2, particle.radius * 2);
           }
           target.globalAlpha = 1;
+          countHit();
         }
       }
       this.hitGeometry.end();

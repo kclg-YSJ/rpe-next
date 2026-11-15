@@ -91,6 +91,7 @@ import { generateCurveNotes } from '../core/curve-notes.mjs';
 import { createEasingPicker } from './easing-picker.mjs';
 import { numericWheel } from './numeric-wheel.mjs';
 import { SceneRuntime } from '../core/scene.mjs';
+import { collectActiveLineEventCounts } from '../core/performance-events.mjs';
 import { TimelineActivity } from '../core/timeline-activity.mjs';
 import { assetUrl } from '../core/asset-url.mjs';
 import { AudioAnalysis } from './audio-analysis.mjs';
@@ -689,28 +690,24 @@ const playback = new EditorPlayback(audio, hitSounds, () => {
   preview.effectsSince = realtimePreview.effectsSince = chartSeconds() - .001;
   invalidate();
 });
-let performanceMonitor = null, monitorLoop = null;
+let performanceMonitor = null;
 let performanceStats = { lines: 0, notes: 0 };
 function togglePerformanceMonitor() {
   performanceMonitor ??= new PerformanceMonitor({
-    state: () => ({ canRun: hasDocument && !atHome && !dialogOpen() && !mods?.runtime.locks.size && Boolean(audio.buffer || audio.media), project: versionRepoId,
-      name: session.chart.META.name || chartName, duration: audio.duration, rate: audio.rate, time: audio.time, playing: audio.playing, preview: preview.visible,
-      editing: hasDocument && !atHome, fpsLimit: editorPreferences.fpsLimit ?? preferences.settings.fpsLimit, lines: performanceStats.lines, notes: performanceStats.notes,
-      lineNotes: session.notes.length, largeChart: Boolean(session.largeDocument) }),
-    startPlayback: async begin => {
-      directPlacement.close();
-      if (eventSampler.active) eventSampler.finish(false);
-      if (noiseEditor.sampleMode) noiseEditor.endSample(false);
-      if (noteTrackingPanel.sampling) noteTrackingPanel.endSample();
-      if (noiseTrackingPanel.sampling) noiseTrackingPanel.endSample();
-      monitorLoop = loop; loop = null; element('#loop-enabled').checked = false;
-      playback.pause(); togglePreview(true, true, false, { autoplay: false }); playback.seek(0);
-      await hitSounds.prepare();
-      if (!begin()) return;
-      await togglePlayback();
+    onChange: enabled => {
+      const button = element('#performance-toggle');
+      button.classList.toggle('active', enabled);
+      button.setAttribute('aria-pressed', String(enabled));
     },
-    stopPlayback: () => { playback.pause(); loop = monitorLoop; monitorLoop = null; element('#loop-enabled').checked = Boolean(loop); invalidate(); },
-    notify: message => notify(message, 'info', 3500),
+    state: () => {
+      const rendered = preview.frameStats ? preview : realtimePreview;
+      const lineIndices = (rendered.frameStats?.lines ?? []).map(line => line.index);
+      const activeEvents = rendered.scene ? collectActiveLineEventCounts(rendered.scene, chartSeconds(), lineIndices) : { total: 0, counts: {} };
+      return { playing: audio.playing, editing: hasDocument && !atHome,
+        fpsLimit: editorPreferences.fpsLimit ?? preferences.settings.fpsLimit, lines: performanceStats.lines, notes: performanceStats.notes,
+        lineNotes: session.notes.length, largeChart: Boolean(session.largeDocument),
+        activeEventTotal: activeEvents.total, activeEventCounts: activeEvents.counts };
+    },
   });
   performanceMonitor.toggle();
 }
@@ -879,7 +876,6 @@ function setHome(visible) {
   checkpointEditTime();
   if (visible) closeShaderWorkspace();
   if (visible) speedCurve.close();
-  if (visible) performanceMonitor?.finish('interrupted');
   if (visible) diagnosticHighlight.clear();
   if (visible) { placementDefaultsPanel.hide(); session.noteDefaults = normalizeNoteDefaults(); diagnostics.reset(); lastDiagnosticSignature = null; }
   if (visible) { quickCurve.cancel(); guideTool.clear(); guideTool.clearClipboard(); }
@@ -1068,7 +1064,6 @@ for (const form of document.querySelectorAll('#properties, #event-properties')) 
 for (const button of document.querySelectorAll('[data-icon]')) button.style.setProperty('--icon', `url('${assetUrl(`rpe/Texture/icon/${button.dataset.icon}.png`)}')`);
 function togglePreview(force, stay = false, replay = false, { autoplay = true } = {}) {
   const visible = force ?? !preview.visible;
-  if (!visible) performanceMonitor?.finish('interrupted');
   linePicker.hide();
   if (!visible) directPlacement.close();
   if (visible) { lineSwitcher.hide(); clearNoteSourceToast(); }
@@ -1318,7 +1313,6 @@ function replaceChart(chart, name, nextAssets = new Map(), nextFolders = [], opt
     const previous = largeChartWorkspace; largeChartWorkspace = null;
     previous.dispose(); closingLargeChart = previous.close().catch(reportError);
   }
-  performanceMonitor?.finish('interrupted');
   diagnosticHighlight.clear();
   diagnostics.reset(); lastDiagnosticSignature = null;
   placementDefaultsPanel.hide();
@@ -2264,7 +2258,7 @@ function frame(timestamp, recording = false) {
     autoSave.tick(timestamp, editorPreferences.autoSave ?? preferences.settings.autoSave, interval, session.history.dirty && session.chart !== lastDraftDocument || mediaDirty);
   }
   if (!recording && audio.playing && !mods?.runtime.locks.size && loop && currentBeat() >= loop.end) seekBeat(loop.start, false);
-  if (!recording && audio.playing && audio.time >= audio.duration) { audio.pause(); if (performanceMonitor?.run) performanceMonitor.finish('complete'); invalidate(); }
+  if (!recording && audio.playing && audio.time >= audio.duration) { audio.pause(); invalidate(); }
   if (!recording && !session.largeDocument) hitSounds.tick(session.chart, tempo, session.lineIndex);
   const needsSceneFrame = recording || !atHome && (audio.playing || dirtyFrame || spatialTool.animating || eventSampler.looping || animationCurvePlaybackActive() || trajectoryPanel.active || noteTrackingPanel.active && noteTrackingPanel.animating || noiseTrackingPanel.active && noiseTrackingPanel.animating || noiseFitPanel.active && noiseFitPanel.options.animate && noiseFitPanel.options.show && noiseFitPanel.previewChart && !noiseFitPanel.fullPreview);
   const guideAnimationOnly = !needsSceneFrame && !atHome && guideTool.animating;
@@ -2308,9 +2302,9 @@ function frame(timestamp, recording = false) {
     const trackingView = noteTrackingPanel.tick(timestamp, chartSeconds(), audio.playing) ?? noiseTrackingPanel.tick(timestamp, chartSeconds(), audio.playing);
     const quickCurveView = quickCurve.view();
     const modView=emitModHook('preview:before',{chart:animationCurveView?.chart ?? trackingView?.chart ?? noiseView?.chart ?? eventSampleView?.chart ?? noiseFitView?.chart ?? textView?.chart ?? trajectoryView?.chart ?? (multiEdit.active && multiEdit.previewHovered && multiEdit.previewEnabled.checked && multiEdit.result ? multiEdit.result.chart : viewSession.chart),seconds:animationCurveView?.seconds ?? trackingView?.seconds ?? noiseView?.seconds ?? eventSampleView?.seconds ?? noiseFitView?.seconds ?? textView?.seconds ?? trajectoryView?.seconds ?? chartSeconds(),lineIndex:animationCurveView?.lineIndex ?? viewSession.lineIndex});
-    const viewChart = performanceMonitor?.run ? session.chart : speedCurveView?.chart ?? quickCurveView ?? modView.chart;
+    const viewChart = speedCurveView?.chart ?? quickCurveView ?? modView.chart;
     preview.noteOverrides = realtimePreview.noteOverrides = viewChart === session.chart ? noteOverrides : null;
-    const viewSeconds = performanceMonitor?.run ? chartSeconds() : modView.seconds;
+    const viewSeconds = modView.seconds;
     const previewAllLines = preview.allLines; const previewEffects = preview.showHitEffects;
     const previewNumbers = preview.lineNumbers; const previewArrows = preview.lineArrows;
     const forcedLineOpacity = preview.forceLineOpacity;
@@ -2318,6 +2312,8 @@ function frame(timestamp, recording = false) {
     if (trackingView) { preview.allLines = true; preview.showHitEffects = false; }
     if (textView || noiseFitView) { preview.allLines = true; preview.showHitEffects = false; preview.lineNumbers = false; preview.lineArrows = false; }
     if(spatialTool.enabled)spatialTool.before(preview);
+    preview.collectFrameStats = realtimePreview.collectFrameStats = Boolean(performanceMonitor?.enabled);
+    preview.frameStats = realtimePreview.frameStats = null;
     preview.draw(spatialTool.panel?.draft ?? viewChart, tempo, viewSeconds, modView.lineIndex);
     if(preview.visible)mods?.runtime.draw(preview,{target:'preview',chart:viewChart,tempo,seconds:viewSeconds,timestamp});
     if(spatialTool.enabled)spatialTool.draw(preview,viewChart,tempo,viewSeconds);
@@ -2371,7 +2367,7 @@ function frame(timestamp, recording = false) {
       lastPaint = timestamp;
     }
     dirtyFrame = false;
-    if (performanceMonitor?.enabled) { const end = performance.now(); performanceMonitor.frame(end, end - start); }
+    if (performanceMonitor?.enabled) { const end = performance.now(); performanceMonitor.frame(end, end - start, preview.frameStats ?? realtimePreview.frameStats ?? null); }
   }
   if (!recording) requestAnimationFrame(frame);
 }
@@ -2475,6 +2471,7 @@ listen('#library', () => {
   });
 });
 listen('#preferences', () => settingsDialog.showModal());
+listen('#performance-toggle', togglePerformanceMonitor);
 listen('#advanced-preferences', () => {
   settingsDialog.close();
   pasteGesture.cancel();
