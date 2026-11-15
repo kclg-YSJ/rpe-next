@@ -136,7 +136,8 @@ export class NoiseLayerPanel {
       const available = noiseLayers(editor.context.session.chart);
       if (available.length < 2) { editor.notify(t('noise-layer-panel.saa4b600'), 'warning'); return; }
       const target = available.find(entry => entry.id !== layer.id); const count = editor.areas().filter(area => noiseLayerId(area) === layer.id).length;
-      if (!confirm(t('noise-layer-panel.sba8260e') + layer.name + '”？' + (count ? t('noise-layer-panel.s8152364') + count + t('noise-layer-panel.s5863b63') + target.name + '”。' : ''))) return;
+      const confirmText = count ? t('noise-layer-panel.deleteConfirmMove', { name: layer.name, count, target: target.name }) : t('noise-layer-panel.deleteConfirm', { name: layer.name });
+      if (!confirm(confirmText)) return;
       editor.flush();
       editor.commit(t('noise-layer-panel.s9e9f1e8'), withNoiseLayers(editor.context.session.chart, available.filter(entry => entry.id !== layer.id), editor.areas().map(area => noiseLayerId(area) === layer.id ? { ...area, layerId: target.id } : area)));
       editor.render(); editor.invalidate();

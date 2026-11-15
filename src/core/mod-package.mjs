@@ -54,10 +54,10 @@ export function parseModPackage(source) {
     modPath(name);if (!(data instanceof Uint8Array) || data.length > MOD_LIMITS.fileBytes) fail(t('mod-package.s8558ea2') + name);
     bytes+=data.length;if(bytes>MOD_LIMITS.bytes)fail(t('mod-package.s2e0acb0'));entries.set(name,data);
   }
-  const manifests=[...entries.keys()].filter(name=>name==='mod.json'||name.endsWith('/mod.json'));if(manifests.length!==1)fail('需要唯一的 mod.json');
+  const manifests=[...entries.keys()].filter(name=>name==='mod.json'||name.endsWith('/mod.json'));if(manifests.length!==1)fail(t('mod-package.missingManifest'));
   const prefix=manifests[0].slice(0,-8);if([...entries.keys()].some(name=>!name.startsWith(prefix)))fail(t('mod-package.s6a5f873'));
   const files=new Map([...entries].map(([name,data])=>[name.slice(prefix.length),data]));let manifest;
-  try {manifest=modManifest(JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(files.get('mod.json'))));}catch(error){fail('mod.json：'+error.message);}
+  try {manifest=modManifest(JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(files.get('mod.json'))));}catch(error){fail(t('mod-package.invalidManifest', { error: error.message }));}
   if (!files.has(manifest.entry)) fail(t('mod-package.sb37276a') + manifest.entry);
   for (const [name,data] of files) if (/\.(m?js)$/.test(name)) {
     if(data.length>MOD_LIMITS.codeBytes)fail(t('mod-package.sae1f583'));

@@ -34,13 +34,13 @@ export class DiagnosticsPanel {
     for (const [severity, title] of [['error', t('app.sb859c7b')], ['warning', t('app.s5521e36')], ['info', t('app.sab3656a')]]) {
       const issues = c.issues.filter(issue => issue.severity === severity); if (severity === 'info' && !this.lastLow) continue;
       const group = this.details(severity, `diagnose-group ${severity}`);
-      const summary = document.createElement('summary'); summary.textContent = `${title}（${issues.length}）`; group.append(summary);
+      const summary = document.createElement('summary'); summary.textContent = `${title}${t('common.parenthesized', { text: issues.length })}`; group.append(summary);
       const limit = this.limits[severity] ?? 80, subgroups = new Map(), types = new Map(), totals = new Map();
       for (const issue of issues) { const key = this.kind(issue) + ':' + (issue.code ?? issue.message); totals.set(key, (totals.get(key) ?? 0) + 1); }
       for (const issue of issues.slice(0, limit)) {
         const kind = this.kind(issue), typeKey = kind + ':' + (issue.code ?? issue.message);
         if (!subgroups.has(kind)) { const details = this.details(`${severity}:${kind}`, 'diagnose-subgroup'); const heading = document.createElement('summary'); heading.textContent = this.kindLabel(kind); details.append(heading); subgroups.set(kind, details); group.append(details); }
-        if (!types.has(typeKey)) { const details = this.details(`${severity}:${typeKey}`, 'diagnose-type'); details.dataset.diagnosticType = issue.code ?? ''; const heading = document.createElement('summary'); heading.textContent = `${diagnosticSubtype(issue)}（${totals.get(typeKey)}）`; details.append(heading); types.set(typeKey, details); subgroups.get(kind).append(details); }
+        if (!types.has(typeKey)) { const details = this.details(`${severity}:${typeKey}`, 'diagnose-type'); details.dataset.diagnosticType = issue.code ?? ''; const heading = document.createElement('summary'); heading.textContent = `${diagnosticSubtype(issue)}${t('common.parenthesized', { text: totals.get(typeKey) })}`; details.append(heading); types.set(typeKey, details); subgroups.get(kind).append(details); }
         const row = document.createElement('div'); row.className = `diagnose-item ${severity}`; row.dataset.diagnosticCode = issue.code ?? '';
         const locate = document.createElement('button'); locate.type = 'button'; locate.className = 'diagnose-locate';
         const subject = issue.asset ?? (issue.globalType ? issue.globalType + (issue.globalColumn ? '/' + issue.globalColumn : '') : issue.noiseArea !== undefined ? `${t('app.s3a2d2c2')}${issue.noiseArea}` : `#${issue.line ?? 0}`);

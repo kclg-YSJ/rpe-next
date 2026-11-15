@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { BUILTIN_LOCALES, setLocale, currentLocale, normalizeLocale, numberText, dateText, registerCatalog, localizedValue, subscribe, t } from '../src/i18n.mjs';
+import { BUILTIN_LOCALES, setLocale, currentLocale, normalizeLocale, numberText, dateText, joinList, registerCatalog, localizedValue, subscribe, t } from '../src/i18n.mjs';
+import { createLine } from '../src/core/chart.mjs';
 import { groupDisplayName, isUngrouped } from '../src/core/labels.mjs';
 import { isDefaultLineName, lineNameLabel } from '../src/core/line-groups.mjs';
 
@@ -28,6 +29,22 @@ test('切换语言后数字、日期和列表格式缓存刷新，订阅者只�
     assert.equal(t('i18n.list', { items: ['A', 'B'] }), new Intl.ListFormat(locale, { style: 'long', type: 'conjunction' }).format(['A', 'B']));
   }
   setLocale('en-US'); assert.deepEqual(updates, ['en-US', 'de-DE', 'en-US']);
+});
+
+test('列表连接、括号和默认判定线名称跟随界面语言', context => {
+  context.after(() => setLocale('zh-CN'));
+  setLocale('en-US');
+  assert.equal(joinList(['A', 'B', 'C']), 'A, B, and C');
+  assert.equal(t('common.parenthesized', { text: '3' }), ' (3)');
+  assert.equal(t('editor.noteCount', { count: 1 }), '1 note');
+  assert.equal(t('editor.noteCount', { count: 2 }), '2 notes');
+  assert.equal(createLine().Name, 'Judge line');
+  setLocale('zh-CN');
+  assert.equal(joinList(['A', 'B', 'C']), 'A、B和C');
+  assert.equal(t('common.parenthesized', { text: '3' }), '（3）');
+  assert.equal(t('editor.noteCount', { count: 1 }), '1 音符');
+  assert.equal(t('editor.noteCount', { count: 2 }), '2 音符');
+  assert.equal(createLine().Name, '判定线');
 });
 
 test('缺少翻译的计数消息使用回退语言的复数规则，多语言值保持原始数据', context => {

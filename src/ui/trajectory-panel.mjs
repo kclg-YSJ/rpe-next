@@ -9,7 +9,7 @@ import { prepareCanvas } from './timeline.mjs';
 import { editorSkinContext } from './editor-skin-canvas.mjs';
 import { trajectorySplitSettings } from '../core/trajectory-simplify.mjs';
 import { parseCurvePreset, saveCurvePreset, deleteCurvePreset, copyCurvePreset } from '../core/trajectory-presets.mjs';
-import { t } from '../i18n.mjs';
+import { BUILTIN_LOCALES, t } from '../i18n.mjs';
 
 const STORAGE_KEY = 'rpe-next-trajectory-presets-v1';
 const COMMON_FIELDS = [
@@ -138,11 +138,13 @@ export class TrajectoryPanel {
   renderPresets() {
     const expanded = new Set([...this.gallery.querySelectorAll('details[open]')].map(group => group.dataset.category));
     this.gallery.replaceChildren();
-    for (const category of [t('trajectory-panel.s3bfba45'), t('trajectory-panel.sf505d38'), t('trajectory-panel.s1a26edf'), t('trajectory-panel.sc493338')]) {
+    for (const [id, key] of [['basic', 'trajectory-panel.s3bfba45'], ['advanced', 'trajectory-panel.sf505d38'], ['other', 'trajectory-panel.s1a26edf'], ['custom', 'trajectory-panel.sc493338']]) {
+      const category = t(key);
+      const labels = new Set([category, ...BUILTIN_LOCALES.map(catalog => catalog.messages[key])]);
       const group = document.createElement('details'); const title = document.createElement('summary'); title.textContent = category; group.append(title);
-      group.dataset.category = category; group.open = expanded.has(category);
+      group.dataset.category = id; group.open = expanded.has(id);
       const grid = document.createElement('div'); grid.className = 'trajectory-preset-grid'; group.append(grid);
-      for (const preset of [...CURVE_PRESETS, ...this.custom].filter(entry => entry.category === category)) {
+      for (const preset of [...CURVE_PRESETS, ...this.custom].filter(entry => labels.has(entry.category))) {
         const card = action(preset.name, () => this.expandPreset(preset, card, grid)); card.setAttribute('aria-expanded', 'false');
         const canvas = document.createElement('canvas'); canvas.width = 150; canvas.height = 90; canvas.setAttribute('aria-hidden', 'true');
         try { drawPath(canvas, sampleCurveTrajectory(presetOptions(preset), 129)); } catch {}
@@ -215,7 +217,7 @@ export class TrajectoryPanel {
       localPreferences.setItem(STORAGE_KEY, JSON.stringify(custom)); this.custom = custom;
       this.customEditingName = preset.name; source.value = JSON.stringify(preset, null, 2);
       this.presetDraft = null; this.renderPresets(); this.refresh(); this.validateCustom();
-      this.gallery.querySelector('[data-category="自定义"]').open = true;
+      this.gallery.querySelector('[data-category="custom"]').open = true;
       this.customMessage.textContent = t('trajectory-panel.s131f057', { p0: preset.name }); this.notify(t('trajectory-panel.sd504761'), 'success');
     };
     this.customSave = action(t('trajectory-panel.s99c5368'), guarded(() => save(parseCurvePreset(source.value), this.customEditingName ?? null)));

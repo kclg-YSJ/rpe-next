@@ -900,7 +900,7 @@ html.value-dragging, html.value-dragging * { cursor: none !important; user-selec
   .editor-toolbar:not(.mode-wide) .tools button { min-width: 37px; width: 37px; padding: 4px; font-size: 0; }
   .editor-toolbar:not(.mode-wide) .tools img { width: 30px; height: 9px; margin: 0 auto; }
   .editor-toolbar:not(.mode-wide) > label { gap: 2px; }
-  .editor-toolbar:not(.mode-wide) > label:not([title*="吸附"]) { font-size: 0; }
+  .editor-toolbar:not(.mode-wide) > label:not([data-toolbar-keep-label]) { font-size: 0; }
   .editor-toolbar:not(.mode-wide) > .direct-placement-control { font-size: 12px; }
   .editor-toolbar:not(.mode-wide) > label > input { width: 42px; }
   .editor-toolbar:not(.mode-wide) #y-scale { width: 46px; }
@@ -917,7 +917,7 @@ html.value-dragging, html.value-dragging * { cursor: none !important; user-selec
 .editor.noise-mode label:has(#snap-x), .editor.noise-mode label:has(#camera-x), .editor.noise-mode #mirror { display: none; }
 .noise-export-warning { max-height: 200px; overflow-y: auto; color: #e9be84; font-size: 13px; }
 .editor.noise-mode .tools, .editor.noise-mode .timeline-head > :not(.noise-mode-head), .editor.noise-mode #audio-analysis-overlay, .editor.noise-mode #multi-line-labels, .editor.noise-mode #multi-line-scroll { display: none !important; }
-.editor.noise-mode .timeline-head::before { content: none !important; }
+.editor.noise-mode .timeline-mode-hint { display: none !important; }
 .editor.noise-mode .noise-mode-head { display: grid !important; grid-column: 1 / -1 !important; grid-template-columns: minmax(0, 1fr) 30px repeat(6, minmax(0, 1fr)) 10px; align-items: center; gap: 0 !important; width: 100%; height: 40px; min-width: 0; padding: 0 !important; border: 0 !important; box-sizing: border-box !important; color: var(--rpen-text, #f0f0f0); }
 .editor.noise-mode .noise-mode-primary { display: flex; align-items: center; gap: 8px; min-width: 0; height: 100%; padding: 0 12px; overflow: hidden; border-right: 1px solid var(--rpen-border, #777); white-space: nowrap; }
 .editor.noise-mode .noise-mode-primary > strong { flex: none; color: inherit; font-size: 13px; font-weight: 600; }
@@ -927,8 +927,9 @@ html.value-dragging, html.value-dragging * { cursor: none !important; user-selec
 .editor.noise-mode .canvases { inset: 0; grid-template-columns: minmax(0, 1fr); }
 .editor.noise-mode #notes, .editor.noise-mode #events, .editor.noise-mode .timeline-strip { display: none !important; }
 #noise-editor-canvas { width: 100%; height: 100%; min-width: 0; min-height: 0; grid-column: 1 / -1; grid-row: 1; touch-action: none; }
-.editor.global-events-mode .tools, .editor.global-events-mode .timeline-head > *, .editor.global-events-mode #audio-analysis-overlay, .editor.global-events-mode #multi-line-labels, .editor.global-events-mode #multi-line-scroll { display: none !important; }
-.editor.global-events-mode .timeline-head::before { content: '全局事件 · Q / R 两次放置 · Shift / 中键框选 · 拖动空白处横向浏览'; color: var(--rpen-text, #f0f0f0); padding-left: 12px; grid-column: 1 / -1; }
+.editor.global-events-mode .tools, .editor.global-events-mode .timeline-head > :not(.timeline-mode-hint), .editor.global-events-mode #audio-analysis-overlay, .editor.global-events-mode #multi-line-labels, .editor.global-events-mode #multi-line-scroll { display: none !important; }
+.timeline-mode-hint { display: none; color: var(--rpen-text, #f0f0f0); padding-left: 12px; grid-column: 1 / -1; }
+.editor.global-events-mode .timeline-mode-hint { display: block; }
 .editor.global-events-mode label:has(#snap-x), .editor.global-events-mode label:has(#camera-x), .editor.global-events-mode label:has(#grid-count), .editor.global-events-mode #mirror { display: none; }
 .editor.global-events-mode .canvases { inset: 0; grid-template-columns: minmax(0, 1fr); }
 .editor.global-events-mode #notes, .editor.global-events-mode #events, .editor.global-events-mode .timeline-strip, .global-events-mode .selection-overlay, .global-events-mode .batch-controls { display: none !important; }

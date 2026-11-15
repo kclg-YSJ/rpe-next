@@ -1,4 +1,5 @@
 import { beatValue } from '../core/beat.mjs';
+import { chartDisplayName } from '../core/labels.mjs';
 
 export class ClipboardHistory extends EventTarget {
   constructor(limit = 20) {
@@ -29,7 +30,7 @@ export class ClipboardHistory extends EventTarget {
       const previous = this.entries.find(entry => JSON.stringify({ notes: entry.notes, noteLines: entry.noteLines ?? [], events: entry.events, eventLines: entry.eventLines ?? [], lineOrder: entry.lineOrder ?? [], ...(entry.bounds ? { bounds: entry.bounds } : {}) }) === signature);
       if (previous) this.entries = this.entries.filter(entry => entry !== previous);
       const entry = { ...structuredClone(this.current), id: previous?.id ?? crypto.randomUUID(), pinned: previous?.pinned ?? false,
-        name: previous?.name ?? '', source: session.chart.META.name || '未命名谱面', line: session.lineIndex, created: Date.now() };
+        name: previous?.name ?? '', source: chartDisplayName(session.chart.META.name), line: session.lineIndex, created: Date.now() };
       if (this.entries.length >= this.limit) {
         const oldest = this.entries.findLastIndex(entry => !entry.pinned);
         if (oldest >= 0) this.entries.splice(oldest, 1);

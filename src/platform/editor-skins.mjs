@@ -33,7 +33,7 @@ export async function importEditorSkin(files, directory = false) {
   entries = new Map([...entries].filter(([path]) => !path.endsWith('/')));
   if (!entries.has('skin.json')) {
     const manifests = [...entries.keys()].filter(path => path.endsWith('/skin.json'));
-    if (manifests.length !== 1) throw new Error('皮肤包需要唯一的根目录 skin.json');
+    if (manifests.length !== 1) throw new Error(t('editor-skin.multipleManifests'));
     const prefix = manifests[0].slice(0, -9);
     if ([...entries.keys()].some(path => !path.startsWith(prefix))) throw new Error(t('editor-skins.s4f4abee'));
     entries = new Map([...entries].map(([path, bytes]) => [path.slice(prefix.length), bytes]));

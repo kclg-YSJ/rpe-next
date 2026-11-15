@@ -54,7 +54,18 @@ export async function checkCatalogs({ reference = 'zh-CN', verbose = false } = {
 }
 
 export function translationReport(catalog, keys) {
-  const missing = keys.filter(key => catalog.messages[key] === undefined);
+  // Dynamic concatenations (`t('diag.' + code)`) and plural variants
+  // (`key.one`) are covered when a catalog entry starts with the prefix.
+  const prefixes = new Set();
+  for (const key of Object.keys(catalog.messages)) {
+    const parts = key.split('.');
+    for (let index = 1; index < parts.length; index++) prefixes.add(parts.slice(0, index).join('.'));
+  }
+  const resolves = key => {
+    const normalized = key.replace(/\.+$/, '');
+    return catalog.messages[normalized] !== undefined || prefixes.has(normalized);
+  };
+  const missing = keys.filter(key => !resolves(key));
   const percent = keys.length ? (100 * (keys.length - missing.length) / keys.length) : 100;
   return { missing, percent };
 }

@@ -1,5 +1,5 @@
 import { assignChartImportFiles, chartImportAccept, chartImportFiles, isChartImportFile } from '../platform/chart-import.mjs';
-import { t } from '../i18n.mjs';
+import { joinList, t } from '../i18n.mjs';
 
 export function showImportDialog({ readFiles, onOpen, onError, onLargePreview }) {
   const existing = document.querySelector('#chart-import-dialog');
@@ -29,7 +29,7 @@ export function showImportDialog({ readFiles, onOpen, onError, onLargePreview })
     if (additionalSummary) {
       const files = selected.additional ?? [];
       additionalSummary.hidden = !files.length;
-      additionalSummary.textContent = t('chart-import.additional', { files: files.map(file => file.name).join('、') });
+      additionalSummary.textContent = t('chart-import.additional', { files: joinList(files.map(file => file.name)) });
     }
     for (const [value, { group, radio }] of groups) {
       radio.checked = mode === value; radio.disabled = busy; group.dataset.active = String(mode === value);

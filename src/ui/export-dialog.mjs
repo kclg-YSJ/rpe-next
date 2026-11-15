@@ -28,7 +28,7 @@ export function showExportDialog(chart, assets, chartName, onExport, identifier,
   const hasGlobalEvents = Object.values(chart.globalEvents?.types ?? {}).some(type => Object.values(type.columns).some(column => column.events.length));
   const removeGlobal = document.createElement('input'); removeGlobal.type = 'checkbox';
   const removeGlobalLabel = document.createElement('label'); removeGlobalLabel.className = 'field'; removeGlobalLabel.append(removeGlobal, t('export-dialog.sffad927')); host.append(removeGlobalLabel);
-  if (noiseIssues.length) { const heading = document.createElement('p'); heading.textContent = t('export-dialog.s80ad627') + noiseIssues.length + t('export-dialog.s30ed317'); noiseWarning.append(heading); for (const issue of noiseIssues.slice(0, 20)) { const item = document.createElement('p'); item.textContent = issue.path + '：' + issue.message; noiseWarning.append(item); } }
+  if (noiseIssues.length) { const heading = document.createElement('p'); heading.textContent = t('export-dialog.s80ad627') + noiseIssues.length + t('export-dialog.s30ed317'); noiseWarning.append(heading); for (const issue of noiseIssues.slice(0, 20)) { const item = document.createElement('p'); item.textContent = issue.path + t('common.colon') + issue.message; noiseWarning.append(item); } }
   const name = field(t('export-dialog.s2315651'), document.createElement('input'));
   const defaultStem = chartExportStem(chart, chartName);
   let suggestedStem;

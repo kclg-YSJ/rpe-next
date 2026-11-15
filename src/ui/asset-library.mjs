@@ -4,7 +4,7 @@ import { AUDIO_EXTENSION, libraryAsset, slashPath, pathKey, parentFolder, within
   noiseSkinRoots, skinOwnedPath, libraryMedia, libraryFolders, assertImageFolder, moveLibraryPaths } from '../core/asset-library.mjs';
 import { AssetAudioPlayer } from './asset-audio.mjs';
 import { AssetMetadataReader, formatAssetDuration } from '../platform/asset-metadata.mjs';
-import { t } from '../i18n.mjs';
+import { joinList, t } from '../i18n.mjs';
 
 function createUrl(bytes, name) { return URL.createObjectURL(new Blob([bytes], { type: mediaType(name) })); }
 
@@ -192,7 +192,7 @@ export class AssetLibraryPanel {
       else { const url = createUrl(bytes, name); this.urls.push(url); thumb = document.createElement('img'); thumb.src = url; thumb.alt = file; thumb.loading = 'lazy'; }
       const label = document.createElement('span'); label.className = 'asset-file-name'; label.textContent = file; const bindings = AUDIO_EXTENSION.test(name) ? [] : this.boundLines(name), usage = document.createElement('small'); usage.className = 'asset-usage';
       const info = document.createElement('span'); info.className = 'asset-info'; info.textContent = '…'; info.title = t('asset-library.readingMetadata'); metadataRows.set(row, { bytes, name, info });
-      usage.textContent = AUDIO_EXTENSION.test(name) ? t('asset-library.audioAsset') : bindings.length ? t('asset-library.scc8abc1') + bindings.join('、') : t('asset-library.s3bf179d'); row.append(thumb, label, usage, info); row.title = name;
+      usage.textContent = AUDIO_EXTENSION.test(name) ? t('asset-library.audioAsset') : bindings.length ? t('asset-library.scc8abc1') + joinList(bindings) : t('asset-library.s3bf179d'); row.append(thumb, label, usage, info); row.title = name;
       row.onclick = () => { this.selected = name; this.selectedFolder = null; this.render(); }; return row;
     };
     const countFiles = node => node.files.length + [...node.folders.values()].reduce((sum, child) => sum + countFiles(child), 0);
@@ -240,7 +240,7 @@ export class AssetLibraryPanel {
     const details = document.createElement('div'); details.className = 'asset-details'; const isAudio = AUDIO_EXTENSION.test(name); let image;
     if (!isAudio) { image = document.createElement('img'); const url = createUrl(bytes, name); this.urls.push(url); image.src = url; image.alt = name; }
     const heading = document.createElement('strong'); heading.textContent = name; const usage = document.createElement('p'), lines = isAudio ? [] : this.boundLines(name);
-    usage.textContent = lines.length ? t('asset-library.s239c1de') + lines.join('、') : t('asset-library.s6cc7aa5');
+    usage.textContent = lines.length ? t('asset-library.s239c1de') + joinList(lines) : t('asset-library.s6cc7aa5');
     const actions = document.createElement('div'); actions.className = 'asset-detail-actions';
     this.action(t('asset-library.s1cd80fd'), () => this.renamePath(name), actions); this.action(t('asset-library.sac9d34f'), () => this.moveDialog(name), actions);
     if (isAudio) this.action(t('asset-audio.play'), () => this.audioPlayer.play(bytes, name), actions);

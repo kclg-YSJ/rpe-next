@@ -3,7 +3,7 @@ import { materializeProject, migrationConflicts } from '../platform/migration.mj
 import { listProjects, storeProject, storePreferences, readProjectRevision } from '../platform/library.mjs';
 import { storageFailure } from '../platform/storage.mjs';
 import { download } from '../platform/files.mjs';
-import { t } from '../i18n.mjs';
+import { joinList, t } from '../i18n.mjs';
 
 function resolveConflicts(content, conflicts) {
   return new Promise(resolve => {
@@ -34,7 +34,7 @@ export function migrationDialog(plan, applyPreferences) {
   configLabel.append(configCheck, t('migration-dialog.s48c332a')); content.append(configLabel);
   const summary = document.createElement('p');
   const report = plan.preferences.report;
-  summary.textContent = t('migration-dialog.sc485fa2', { p0: report.appliedHotkeys.length, p1: report.appliedSettings.join('、') || t('migration-dialog.sa885efb'), p2: report.retainedHotkeys.length, p3: report.retainedSettings.length });
+  summary.textContent = t('migration-dialog.sc485fa2', { p0: report.appliedHotkeys.length, p1: joinList(report.appliedSettings) || t('migration-dialog.sa885efb'), p2: report.retainedHotkeys.length, p3: report.retainedSettings.length });
   content.append(summary);
   const choices = [];
   for (const project of plan.projects) {

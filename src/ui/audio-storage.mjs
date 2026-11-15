@@ -47,7 +47,7 @@ export async function showAudioStorage(notify = () => {}, bridge = globalThis.rp
         const initial = state.needsSetup, result = await call(initial ? 'prepare' : 'migrate');
         state = await call('status');
         if (initial && result) { message.textContent = t('audio-storage.sa30f9f0'); notify(message.textContent, 'success'); }
-        else if (result) { message.textContent = t('audio-storage.sea62668') + (result.bytes / 1024 ** 3).toFixed(2) + ' GiB。'; notify(result.warnings.length ? t('audio-storage.se16e781') : t('audio-storage.s5651912'), result.warnings.length ? 'warning' : 'success'); }
+        else if (result) { message.textContent = t('audio-storage.sea62668') + (result.bytes / 1024 ** 3).toFixed(2) + ' GiB' + t('common.period'); notify(result.warnings.length ? t('audio-storage.se16e781') : t('audio-storage.s5651912'), result.warnings.length ? 'warning' : 'success'); }
         else message.textContent = initial ? t('audio-storage.s2eff0ba') : t('audio-storage.sc62fb66');
       } catch (error) { try { state = await call('status'); } catch {} failed(error); }
       finally { working = false; progress.hidden = true; render(); }

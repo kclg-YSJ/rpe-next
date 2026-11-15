@@ -148,7 +148,7 @@ export function parseEditorSkin(files) {
     paths.add(path.toLowerCase()); total += bytes.byteLength;
   }
   if (total > EDITOR_SKIN_LIMITS.bytes) fail(t('editor-skin.sdeb1cf2'));
-  const source = files.get('skin.json'); if (!source) fail('根目录缺少 skin.json');
+  const source = files.get('skin.json'); if (!source) fail(t('editor-skin.missingManifest'));
   let skin; try { skin = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(source)); } catch { fail(t('editor-skin.s6899307')); }
   if (!plain(skin) || skin.protocol !== 'rpen-editor-skin' || skin.version !== 1) fail(t('editor-skin.s2d7b838'));
   if (typeof skin.id !== 'string' || !identifier.test(skin.id) || skin.id === 'default') fail(t('editor-skin.s48be567'));

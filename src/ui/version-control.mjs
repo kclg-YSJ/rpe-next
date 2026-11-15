@@ -4,7 +4,7 @@ import { serializeChart } from '../core/chart.mjs';
 import { createMemoryVersionStore, openVersionStore } from '../platform/version-store.mjs';
 import { download } from '../platform/files.mjs';
 import { showDialog } from './dialog.mjs';
-import { t } from '../i18n.mjs';
+import { joinList, t } from '../i18n.mjs';
 
 const SVG = 'http://www.w3.org/2000/svg';
 const COLORS = ['#FFB000', '#DC267F', '#994F00', '#40B0A6', '#B66DFF', '#72D6A8', '#8CB4FF', '#FF9A8A'];
@@ -493,7 +493,7 @@ export class VersionControlPanel {
     const host = el('div', { className: 'vcs-chart-diff' });
     if (!diff || diff.total === 0) { host.append(el('p', { className: 'vcs-muted', text: t('version-control.saf84743') })); return host; }
     const rows = [
-      ['判定线', diff.lines.added, diff.lines.removed, diff.lines.modified],
+      [t('version-control.lines'), diff.lines.added, diff.lines.removed, diff.lines.modified],
       [t('version-control.s7ac3289'), diff.notes.added, diff.notes.removed, diff.notes.modified],
       [t('version-control.s550e328'), diff.events.added, diff.events.removed, diff.events.modified],
       ['BPM', diff.bpm.added, diff.bpm.removed, diff.bpm.modified]
@@ -515,14 +515,14 @@ export class VersionControlPanel {
     }
     host.append(bars);
     const groups = [
-      ['meta', t('version-control.sd352b59')], ['bpm', 'BPM'], ['line', '判定线'],
+      ['meta', t('version-control.sd352b59')], ['bpm', 'BPM'], ['line', t('version-control.lines')],
       ['note', t('version-control.s7ac3289')], ['event', t('version-control.s550e328')], ['other', t('version-control.s6dc5366')]
     ];
     for (const [kind, label] of groups) {
       const items = (diff.details ?? []).filter(item => item.kind === kind);
       if (!items.length) continue;
       const section = el('details', { className: 'vcs-change-group', attrs: { open: '' } },
-        el('summary', { text: `${label}（${items.length}）` }));
+        el('summary', { text: `${label}${t('common.parenthesized', { text: items.length })}` }));
       const list = el('div', { className: 'vcs-change-list' });
       for (const item of items.slice(0, 60)) list.append(el('div', { className: 'vcs-change-row', text: item.text }));
       if (items.length > 60) list.append(el('p', { className: 'vcs-muted', text: t('version-control.s620e67d', { p0: items.length - 60 }) }));
@@ -539,7 +539,7 @@ export class VersionControlPanel {
       if (samples.length) {
         const list = el('div', { className: 'vcs-samples' });
         for (const [label, values] of samples) {
-          list.append(el('div', { className: 'vcs-sample-row' }, el('strong', { text: label }), el('span', { text: values.join('；') })));
+          list.append(el('div', { className: 'vcs-sample-row' }, el('strong', { text: label }), el('span', { text: values.join(t('common.semicolon')) })));
         }
         host.append(list);
       }
@@ -976,7 +976,7 @@ export class VersionControlPanel {
       } catch (error) {
         if (error.code !== 'STASH_CONFLICT') throw error;
         this.notify(error.message, 'error', 7000);
-        this.error = error.conflicts.map(conflict => conflict.path).join('、');
+        this.error = joinList(error.conflicts.map(conflict => conflict.path));
         this.render();
       }
     });
@@ -991,7 +991,7 @@ export class VersionControlPanel {
       } catch (error) {
         if (error.code !== 'STASH_CONFLICT') throw error;
         this.notify(error.message, 'error', 7000);
-        this.error = error.conflicts.map(conflict => conflict.path).join('、');
+        this.error = joinList(error.conflicts.map(conflict => conflict.path));
         this.render();
       }
     });

@@ -275,7 +275,7 @@ export class EditorSession extends EventTarget {
 
   paste(beat, mirror = false, keepTime = false) {
     if (!this.clipboard.length) return;
-    if (!this.largeDocument && this.clipboard.some(note => note._rpenLargeCopies > 1)) throw Error('请在超大谱工程中粘贴重合音符组，或只复制一个音符。');
+    if (!this.largeDocument && this.clipboard.some(note => note._rpenLargeCopies > 1)) throw Error(t('large-chart.pasteCopiesInProject'));
     const earliest = this.clipboard.reduce((minimum, note) => Math.min(minimum, beatValue(note.startTime)), Infinity);
     const delta = keepTime ? 0 : beat - earliest;
     this.insertNotes(this.clipboard.map(note => ({ ...structuredClone(note),

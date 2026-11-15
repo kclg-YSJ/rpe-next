@@ -101,7 +101,7 @@ export class NoteSkins {
         if(generation!==this.generation){runtime.dispose();return false;}previewSkin.setResourcePack(runtime);this.previewSkin=previewSkin;
       } else this.previewSkin=this.skin.resourcePack?Object.assign(new RpeSkin(()=>{}),{images:this.skin.images}):this.skin;
       if(generation!==this.generation)return false;
-      this.message.textContent=(id===this.current?t('note-skins.s52933df'):t('note-skins.scc459ad'))+(this.draft?.warnings.join('；')??'');
+      this.message.textContent=(id===this.current?t('note-skins.s52933df'):t('note-skins.scc459ad'))+(this.draft?.warnings.join(t('common.semicolon'))??'');
       this.updateButtons();return true;
     } catch(error){if(generation===this.generation){this.valid=false;this.error(error);this.updateButtons();}return false;}
   }
@@ -125,7 +125,7 @@ export class NoteSkins {
     add(fx,t('note-skins.s04fea79'),'hitFxDuration','number',0.01,120,0.01);add(fx,t('note-skins.sd49e653'),'hitFxScale','number',0.01,64,0.01);
     for(const [key,label] of [['hitFxRotate',t('note-skins.sbe01f50')],['hitFxTinted',t('note-skins.s809e349')],['hideParticles',t('note-skins.sbc45d6a')]])add(fx,label,key,'checkbox');
     const colors=group(t('note-skins.s63b1c14'));
-    for(const [key,label] of [['colorPerfect','Perfect'],['colorGood','Good']])this.controls.set(key,this.field(colors,label+'（RGB / ARGB）',key,'text','0x'+this.draft.info[key].toString(16).padStart(8,'0')));
+    for(const [key,label] of [['colorPerfect','Perfect'],['colorGood','Good']])this.controls.set(key,this.field(colors,label+t('note-skins.colorFormat'),key,'text','0x'+this.draft.info[key].toString(16).padStart(8,'0')));
     colors.append(text('p',t('note-skins.s783f3db'),'hint'));
   }
   updateDraft(){

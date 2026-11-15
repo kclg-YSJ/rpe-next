@@ -368,7 +368,7 @@ export class EventSampler {
     drawSnapGuides(context,worldView,this.snapResult);
     const source=eventListAt({chart:this.draftChart,eventLayer:this.session.eventLayer},this.mode.lineIndex,this.mode.type)[this.mode.index];
     this.controls?.updateValues({value:source[this.mode.field],paired:this.mode.paired?eventListAt({chart:this.draftChart,eventLayer:this.mode.layer},this.mode.lineIndex,this.mode.paired.type)[this.mode.paired.index][this.mode.field]:NaN});
-    this.controls?.sync(this.mode.type==='rotateEvents',`${t('spatial.lineNumber',{number:this.mode.lineIndex})} · ${t('spatial.eventLayer',{number:this.mode.layer})} · ${this.mode.field==='end'?t('sampling.end'):t('sampling.start')}\n${t('spatial.position')} ${displayPosition(state)}　${displayNumber(state.rotation)}°`);
+    this.controls?.sync(this.mode.type==='rotateEvents',`${t('spatial.lineNumber',{number:this.mode.lineIndex})} · ${t('spatial.eventLayer',{number:this.mode.layer})} · ${this.mode.field==='end'?t('sampling.end'):t('sampling.start')}\n${t('spatial.position')} ${displayPosition(state)} ${displayNumber(state.rotation)}°`);
     context.save(); context.strokeStyle = '#70efaa'; context.lineWidth = 2; context.beginPath(); context.moveTo(point.x - 16, point.y); context.lineTo(point.x + 16, point.y); context.moveTo(point.x, point.y - 16); context.lineTo(point.x, point.y + 16); context.stroke(); context.restore();
   }
 }

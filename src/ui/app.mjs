@@ -75,7 +75,7 @@ import { readEditorPreferences, writeEditorPreferences } from '../platform/edito
 import { ProjectHome } from './home.mjs';
 import { createSettingsPanel } from './settings.mjs';
 import { DictationInput } from './dictation.mjs';
-import { currentLocale, setLocale, t } from '../i18n.mjs';
+import { currentLocale, joinList, setLocale, t } from '../i18n.mjs';
 import { writeLocalePreference } from '../platform/locale.mjs';
 import { installDomTranslation } from './dom-i18n.mjs';
 import { chartDisplayName } from '../core/labels.mjs';
@@ -664,7 +664,7 @@ const collaboration = new CollaborationPanel(element('#collaboration-panel'), ()
   receiveChart: (chart, owner) => {
     if (owner) { session.history.document = chart; return; }
     collaborationJoining = true;
-    try { replaceChart(chart, '联机谱面.json'); } finally { collaborationJoining = false; }
+    try { replaceChart(chart, t('collaboration.chartFileName')); } finally { collaborationJoining = false; }
     activatePane('collaboration');
   },
   receiveAsset: async (name, bytes) => {
@@ -987,7 +987,7 @@ function persistEditor() {
 }
 
 function activatePane(name) {
-  if (session.largeDocument && ['version-control', 'collaboration', 'assets', 'ai', 'diagnose'].includes(name)) { notify('超大谱工程请使用顶部保存或工程另存为；此工具尚未支持完整的磁盘谱面。', 'warning'); return; }
+  if (session.largeDocument && ['version-control', 'collaboration', 'assets', 'ai', 'diagnose'].includes(name)) { notify(t('large-chart.toolUnavailable'), 'warning'); return; }
   if (diagnosticNavigation && name !== 'diagnose') return;
   if (activePaneName === 'assets' && name !== 'assets') assetLibrary.disposeUrls();
   if (name !== 'notes') disposeNoteProperties();
@@ -1169,7 +1169,7 @@ function renderSession() {
   element('#document-name').textContent = atHome ? t('doc.home') : `${session.history.dirty ? '● ' : ''}${chartDisplayName(session.chart.META.name || chartName)}`;
   timeline.refreshMultiLineExpression();
   renderTimelineMarkers();
-  element('#note-count').textContent = `${session.largeDocument?.summary.lines[session.lineIndex] ?? session.notes.length} notes`;
+  element('#note-count').textContent = t('editor.noteCount', { count: session.largeDocument?.summary.lines[session.lineIndex] ?? session.notes.length });
   const countEvents = line => [...(line.eventLayers ?? []), line.extended ?? {}].reduce((total, layer) => total + Object.entries(layer ?? {}).filter(([type, events]) => type !== 'paintEvents' && Array.isArray(events)).reduce((count, [, events]) => count + events.length, 0), 0) + shaderEvents(session.chart, session.chart.judgeLineList?.indexOf(line) ?? -1).length;
   const totalLines = session.chart.judgeLineList?.length ?? 0;
   const totalNotes = session.largeDocument?.summary.total ?? (session.chart.judgeLineList ?? []).reduce((count, line) => count + (line.notes?.length ?? 0), 0);
@@ -1187,7 +1187,7 @@ function renderSession() {
   const largeMedia = session.largeDocument?.summary.media;
   const missingMedia = [!largeMedia?.music && (!songName || !assets.has(songName)) ? t('app.safb3c40') : '', !largeMedia?.cover && (!backgroundName || !assets.has(backgroundName)) ? t('app.sb8bb31e') : ''].filter(Boolean);
   const materialHint = element('#chart-material-hint');
-  if (materialHint) materialHint.textContent = missingMedia.length ? t('app.s1674bb2', { p0: missingMedia.join('、') }) : '';
+  if (materialHint) materialHint.textContent = missingMedia.length ? t('app.s1674bb2', { p0: joinList(missingMedia) }) : '';
   const mediaStatus = element('#metadata-media-status');
   if (mediaStatus) mediaStatus.textContent = t('app.s40fd2fc', { p0: songName && assets.has(songName) ? songName : t('app.sab8115f'), p1: backgroundName && assets.has(backgroundName) ? backgroundName : t('app.sab8115f') });
   syncProjectFolderButton();
@@ -1280,7 +1280,7 @@ function renderSession() {
     else if (!['multi-line', 'lines', 'assets', 'collaboration', 'version-control'].includes(activePaneName)) activatePane('chart');
   }
   const limits = previewLimitations(session.chart);
-  element('#compatibility').textContent = t('app.s22feffd') + (limits.length ? t('app.s7f51215', { p0: limits.join('、') }) : '');
+  element('#compatibility').textContent = t('app.s22feffd') + (limits.length ? t('app.s7f51215', { p0: joinList(limits) }) : '');
   invalidate();
   globalEvents.syncChrome();
   versionControl?.tick?.();
@@ -1359,12 +1359,12 @@ function replaceChart(chart, name, nextAssets = new Map(), nextFolders = [], opt
 }
 
 async function openLargeChartDocument(summary) {
-  replaceChart(summary.chart, summary.savedPath?.split(/[\\/]/).at(-1) ?? `${summary.chart.META.name || '谱面'}.rpenlarge`);
+  replaceChart(summary.chart, summary.savedPath?.split(/[\\/]/).at(-1) ?? `${summary.chart.META.name || t('large-chart.chartFallback')}.rpenlarge`);
   largeChartWorkspace = new LargeChartWorkspace(session, summary, { timeline, previews: [preview, realtimePreview], audio, playback, invalidate, reportError });
   largeChartWorkspace.document.range = largeChartWorkspace.range();
   await largeChartWorkspace.document.refresh();
   await audio.loadStream(summary.media.music, Math.max(1, summary.endTime + offsetSeconds() + 2)).catch(reportError);
-  element('#music-name').textContent = summary.media.music ? '超大谱音乐（流式播放）' : t('app.sbefb963');
+  element('#music-name').textContent = summary.media.music ? t('large-chart.streamingMusic') : t('app.sbefb963');
   element('#scrubber').max = String(audio.duration);
   if (summary.media.cover) {
     const image = new Image(); image.src = summary.media.cover;
@@ -1498,7 +1498,7 @@ async function togglePlayback() {
 function save() {
   noiseEditor.flush();
   checkpointEditTime();
-  if (session.largeDocument) return session.largeDocument.save().then(summary => { renderSession(); if (summary && !summary.dirty) { status('超大谱工程已保存'); notify('超大谱工程已保存', 'success'); } });
+  if (session.largeDocument) return session.largeDocument.save().then(summary => { renderSession(); if (summary && !summary.dirty) { status(t('large-chart.projectSaved')); notify(t('large-chart.projectSaved'), 'success'); } });
   agentPanel?.flush().catch(reportError);
   if (!persistenceRequested) { persistenceRequested = true; requestPersistence().then(() => storagePanel.refresh()).catch(() => {}); }
   editorSkinSignal('save-started');
@@ -2324,7 +2324,7 @@ function frame(timestamp, recording = false) {
     const draggedLineIndex = Number.isInteger(timeline.drag?.lineIndex) ? timeline.drag.lineIndex : session.lineIndex;
     const draggedSource = session.chart.judgeLineList?.[draggedLineIndex]?.notes?.[timeline.drag?.anchor];
     const draggedNote = ['move', 'startTime', 'endTime'].includes(timeline.drag?.kind) ? timeline.movedNote(draggedSource) : null;
-    const positionInput = element('#properties input[aria-label="X 坐标"]');
+    const positionInput = element('#properties input[data-rpen-field="positionX"]');
     if (draggedNote && positionInput && document.activeElement !== positionInput) positionInput.value = Number(draggedNote.positionX).toFixed(2);
     element('#cursor-position').textContent = draggedNote ? t('app.sd67248b', { p0: draggedNote.positionX.toFixed(2), p1: beatValue(draggedNote.startTime).toFixed(3) }) : timeline.cursor ? t('app.sa1e6c17', { p0: timeline.positionAt(timeline.cursor.x).toFixed(2), p1: timeline.snappedBeat(timeline.cursor.y).toFixed(3) }) : '';
     if (timestamp - lastPaint > 400) {

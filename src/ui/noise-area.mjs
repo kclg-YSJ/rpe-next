@@ -105,7 +105,7 @@ export class NoiseAreaEditor {
     document.querySelector('.editor').classList.toggle('noise-mode', this.active);
     setProperty(this.modeHeader, 'hidden', !this.active);
     setProperty(this.modeCount, 'textContent', t('noise-area.s5d85ca8', { p0: this.areas().length }));
-    setProperty(this.modeOwner, 'textContent', this.area() ? `#${this.selected} ${this.area().Name || '未命名噪域'}` : t('noise-area.sd7b34fd'));
+    setProperty(this.modeOwner, 'textContent', this.area() ? `#${this.selected} ${this.area().Name || t('noise-list.s91c83b5')}` : t('noise-area.sd7b34fd'));
     if (this.active && !this.canvas.hidden) {
       const layout = this.layout();
       const columns = `${layout.split}px 30px repeat(${NOISE_TRACKS.length}, ${layout.eventWidth}px) 10px`;
@@ -636,7 +636,7 @@ export class NoiseAreaEditor {
     const rawRead=this.sampleMode.type?area[this.sampleMode.type][this.sampleMode.index][this.sampleMode.field]:null;const read=typeof rawRead==='number'?rawRead:null;
     this.sampleControls?.updateValues(read===null?rawRead??area[this.sampleMode.field]:{value:read});
     const position=noiseSampleHandle(area,this.context.tempo,this.sampleSeconds,this.sampleMode,view.positionScale);
-    this.sampleControls?.sync(rotation,`${t('spatial.noiseNumber',{number:this.selected})} · ${t('spatial.beatReadout',{beat:displayNumber(this.context.tempo.beat(this.sampleSeconds))})}\n${t('spatial.position')} ${displayPosition(position)}${rotation?'　'+displayNumber(read)+'°':''}`);
+    this.sampleControls?.sync(rotation,`${t('spatial.noiseNumber',{number:this.selected})} · ${t('spatial.beatReadout',{beat:displayNumber(this.context.tempo.beat(this.sampleSeconds))})}\n${t('spatial.position')} ${displayPosition(position)}${rotation?' '+displayNumber(read)+'°':''}`);
     const sample = previewNoiseGeometry(sampleEditingArea(area, this.context.tempo, this.sampleSeconds, this.sampleMode), view.positionScale); const points = sample.points.map(view.screen);
     context.strokeStyle = '#67efa4'; context.lineWidth = 2; context.beginPath(); points.forEach((point, index) => index ? context.lineTo(point.x, point.y) : context.moveTo(point.x, point.y)); context.closePath(); context.stroke();
     const anchor = this.sampleMode.type && noiseHasAnchor(this.sampleMode.type) ? area[this.sampleMode.type][this.sampleMode.index].anchor : null;
@@ -740,7 +740,7 @@ export class NoiseAreaEditor {
     if (this.drag?.kind === 'rectangle') { const start = this.drag.start; const current = this.cursor; context.save(); context.lineWidth = 1; context.fillStyle = '#ffcc4430'; context.strokeStyle = '#ffdd77'; const top = this.y(start.rawBeat); const deltaY = this.y(current.rawBeat) - top; context.fillRect(start.x, top, current.x - start.x, deltaY); context.strokeRect(start.x, top, current.x - start.x, deltaY); context.restore(); }
     if (this.drag?.kind === 'stroke' && this.drag.moved) { context.save(); context.lineWidth = 1; context.strokeStyle = '#80ffff'; context.beginPath(); this.drag.points.forEach((point, index) => index ? context.lineTo(point.x, this.y(point.rawBeat)) : context.moveTo(point.x, this.y(point.rawBeat))); context.stroke(); context.restore(); }
     this.drawOwner(context, layout);
-    const owner = this.area() ? `#${this.selected} ${this.area().Name || '未命名噪域'}` : t('noise-area.sd7b34fd');
+    const owner = this.area() ? `#${this.selected} ${this.area().Name || t('noise-list.s91c83b5')}` : t('noise-area.sd7b34fd');
     const description = t('noise-area.se2f1ca6', { p0: this.areas().length, p1: owner });
     if (description !== this.ariaDescription) { this.canvas.setAttribute('aria-description', description); this.ariaDescription = description; }
     drawEditorJudgement(context, [{ left: 0, right: width, y: this.y(timeline.origin) }], timeline.judgementColor ?? '#ffffff', editorJudgementWidth(timeline, timeline.gridReferenceWidth ?? width), timeline.judgementAlpha);

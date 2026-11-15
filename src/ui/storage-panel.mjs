@@ -70,7 +70,7 @@ export class StoragePanel {
   async refresh() {
     const info = await storageStatus();
     this.status.textContent = info.native ? t('storage-panel.s20f3bd9', { p0: info.root, p1: bytes(info.usage), p2: info.blobs, p3: bytes(info.free), p4: info.projects, p5: info.trash }) : t('storage-panel.s6f81653', { p0: info.persistent === true ? t('storage-panel.s9181c23') : info.supported ? t('storage-panel.see2a1f6') : t('storage-panel.s545749a'), p1: bytes(info.usage), p2: bytes(info.quota) });
-    if (info.native && info.warnings?.length) this.status.textContent += '\n' + [...new Set(info.warnings)].join('；');
+    if (info.native && info.warnings?.length) this.status.textContent += '\n' + [...new Set(info.warnings)].join(t('common.semicolon'));
     this.persist.disabled = info.persistent === true || !globalThis.navigator?.storage?.persist;
     let last = 0, first = 0; try { last = Number(localPreferences.getItem(BACKUP_KEY)) || 0; first = Number(localPreferences.getItem(FIRST_SAVE_KEY)) || 0; } catch {}
     const due = first > 0 && (!last || Date.now() - last > 7 * 86400000) && (await listProjects()).length > 0;
@@ -110,7 +110,7 @@ export class StoragePanel {
     }
   }
   async exportAll() {
-    const result = await exportLibrary({ ...this.fileOptions(), progress: (index, count, name) => { this.status.textContent = t('storage-panel.sb2303fe', { p0: index, p1: count, p2: name ? '：' + name : '' }); } });
+    const result = await exportLibrary({ ...this.fileOptions(), progress: (index, count, name) => { this.status.textContent = t('storage-panel.sb2303fe', { p0: index, p1: count, p2: name ? t('common.colon') + name : '' }); } });
     download(result.blob, `rpe-next-library-${new Date().toISOString().slice(0, 10)}.zip`);
     noteExternalBackup(); this.notify(t('storage-panel.s83a6407', { p0: result.count }), 'success', 7000); await this.refresh();
   }

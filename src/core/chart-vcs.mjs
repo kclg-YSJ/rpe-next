@@ -208,7 +208,7 @@ function formatDiffValue(value) {
   if (value === null) return 'null';
   if (Array.isArray(value)) {
     if (value.length && value.every(item => item && typeof item === 'object' && 'time' in item)) {
-      return value.map(item => t('chart-vcs.sfb88580', { p0: item.name ?? t('chart-vcs.sc515246'), p1: formatDiffValue(item.time) })).join('；');
+      return value.map(item => t('chart-vcs.sfb88580', { p0: item.name ?? t('chart-vcs.sc515246'), p1: formatDiffValue(item.time) })).join(t('common.semicolon'));
     }
     if (value.length === 3 && value.every(Number.isFinite)) return t('chart-vcs.s79ab764', { p0: formatBeat(value) });
     return value.map(formatDiffValue).join(' / ');
@@ -224,10 +224,10 @@ function describeFieldChanges(before, after, labels) {
   const changes = [];
   for (const key of new Set([...Object.keys(before ?? {}), ...Object.keys(after ?? {})])) {
     if (deepEqual(before?.[key], after?.[key])) continue;
-    changes.push(`${labels[key] ?? key}：${formatDiffValue(before?.[key])} → ${formatDiffValue(after?.[key])}`);
+    changes.push(`${labels[key] ?? key}${t('common.colon')}${formatDiffValue(before?.[key])} → ${formatDiffValue(after?.[key])}`);
     if (changes.length >= 6) { changes.push('…'); break; }
   }
-  return changes.join('，');
+  return changes.join(t('common.comma'));
 }
 
 function matchItems(beforeItems, afterItems, keyOf) {
@@ -259,7 +259,7 @@ export function diffCharts(before, after) {
     }
   }
   for (const entry of meta) {
-    details.push({ kind: 'meta', text: `${META_LABELS[entry.key] ?? entry.key}：${formatDiffValue(entry.before)} → ${formatDiffValue(entry.after)}` });
+    details.push({ kind: 'meta', text: `${META_LABELS[entry.key] ?? entry.key}${t('common.colon')}${formatDiffValue(entry.before)} → ${formatDiffValue(entry.after)}` });
   }
 
   const bpm = diffItems(beforeChart.BPMList ?? [], afterChart.BPMList ?? [],
@@ -322,7 +322,7 @@ export function diffCharts(before, after) {
     for (const note of noteChanges.removed) details.push({ kind: 'note', text: t('chart-vcs.s1e664bd', { p0: index + 1, p1: lineName, p2: noteLabel(note) }) });
     for (const change of noteChanges.modified) {
       const fields = describeFieldChanges(change.before, change.after, NOTE_FIELD_LABELS);
-      details.push({ kind: 'note', text: t('chart-vcs.sceec6e2', { p0: index + 1, p1: lineName, p2: noteLabel(change.after), p3: fields ? `（${fields}）` : '' }) });
+      details.push({ kind: 'note', text: t('chart-vcs.sceec6e2', { p0: index + 1, p1: lineName, p2: noteLabel(change.after), p3: fields ? t('common.parenthesized', { text: fields }) : '' }) });
     }
     const beforeLayers = [...(beforeLine.eventLayers ?? []), beforeLine.extended ?? {}];
     const afterLayers = [...(afterLine.eventLayers ?? []), afterLine.extended ?? {}];
@@ -338,7 +338,7 @@ export function diffCharts(before, after) {
         for (const event of eventChanges.removed) details.push({ kind: 'event', text: t('chart-vcs.s2a1f6ef', { p0: index + 1, p1: lineName, p2: eventLabel(type, event) }) });
         for (const change of eventChanges.modified) {
           const fields = describeFieldChanges(change.before, change.after, EVENT_FIELD_LABELS);
-          details.push({ kind: 'event', text: t('chart-vcs.s0f9390f', { p0: index + 1, p1: lineName, p2: eventLabel(type, change.after), p3: fields ? `（${fields}）` : '' }) });
+          details.push({ kind: 'event', text: t('chart-vcs.s0f9390f', { p0: index + 1, p1: lineName, p2: eventLabel(type, change.after), p3: fields ? t('common.parenthesized', { text: fields }) : '' }) });
         }
       }
     }
@@ -360,7 +360,7 @@ export function diffCharts(before, after) {
     if (!deepEqual(beforeChart[key], afterChart[key])) other.push({ key, before: beforeChart[key], after: afterChart[key] });
   }
   for (const entry of other) {
-    details.push({ kind: 'other', text: `${OTHER_LABELS[entry.key] ?? entry.key}：${formatDiffValue(entry.before)} → ${formatDiffValue(entry.after)}` });
+    details.push({ kind: 'other', text: `${OTHER_LABELS[entry.key] ?? entry.key}${t('common.colon')}${formatDiffValue(entry.before)} → ${formatDiffValue(entry.after)}` });
   }
   let detailsTruncated = false;
   if (details.length > 200) {
