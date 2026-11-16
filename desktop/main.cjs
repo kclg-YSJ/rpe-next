@@ -197,14 +197,15 @@ else {
           if (!agentSourceBundle) agentSourceBundle = import(pathToFileURL(resolve(root, 'desktop/agent-source.mjs')).href).then(module => module.createAgentSourceBundle(root)).then(bundle => JSON.stringify(bundle)).catch(error => { agentSourceBundle = null; throw error; });
           const content = await agentSourceBundle; return new Response(request.method === 'HEAD' ? null : content, { headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
         }
-        if (!['index.html', 'styles.css', 'protocols/MOD-PROTOCOL.zh-CN.md', 'protocols/GLOBAL-EVENTS-PROTOCOL.zh-CN.md', 'protocols/ANIMATION-CURVES-PROTOCOL.zh-CN.md', 'protocols/VIDEO-RENDER.zh-CN.md', 'protocols/EDITOR-SKIN-PROTOCOL.zh-CN.md', 'protocols/DESKTOP-STORAGE.zh-CN.md', 'protocols/AUDIO-SEPARATION.zh-CN.md', 'schemas/editor-skin-v1.schema.json', 'schemas/editor-skin-components.v1.json', 'schemas/mod-v1.schema.json', 'schemas/mod-api-v1.d.ts'].includes(relative) && !relative.startsWith('src/') && !relative.startsWith('assets/')) return new Response('Not found', { status: 404 });
+        if (!['index.html', 'styles.css', 'manifest.webmanifest', 'pwa-precache.json', 'sw.js', 'protocols/MOD-PROTOCOL.zh-CN.md', 'protocols/GLOBAL-EVENTS-PROTOCOL.zh-CN.md', 'protocols/ANIMATION-CURVES-PROTOCOL.zh-CN.md', 'protocols/VIDEO-RENDER.zh-CN.md', 'protocols/EDITOR-SKIN-PROTOCOL.zh-CN.md', 'protocols/DESKTOP-STORAGE.zh-CN.md', 'protocols/AUDIO-SEPARATION.zh-CN.md', 'schemas/editor-skin-v1.schema.json', 'schemas/editor-skin-components.v1.json', 'schemas/mod-v1.schema.json', 'schemas/mod-api-v1.d.ts'].includes(relative) && !relative.startsWith('src/') && !relative.startsWith('assets/')) return new Response('Not found', { status: 404 });
         const path = await realpath(resolve(root, relative));
         if (!path.startsWith(root + sep)) return new Response('Not found', { status: 404 });
         const response = await net.fetch(pathToFileURL(path).href);
         const headers = new Headers(response.headers);
         headers.set('Content-Security-Policy', `default-src 'self'; script-src 'self' blob:${relative === 'src/platform/audio-pitch-worker.mjs' ? " 'wasm-unsafe-eval'" : ''}; script-src-elem 'self' blob: 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self' blob:; media-src 'self' blob: data:; connect-src ${connectSources}; object-src 'none'; base-uri 'none'; frame-ancestors 'none'`);
         headers.set('X-Content-Type-Options', 'nosniff');
-        if (path.endsWith('.mjs')) headers.set('Content-Type', 'text/javascript; charset=utf-8');
+        if (path.endsWith('.mjs') || path.endsWith('.js')) headers.set('Content-Type', 'text/javascript; charset=utf-8');
+        if (path.endsWith('.webmanifest')) headers.set('Content-Type', 'application/manifest+json');
         if (path.endsWith('.wasm')) headers.set('Content-Type', 'application/wasm');
         return new Response(request.method === 'HEAD' ? null : response.body, { status: response.status, headers });
       } catch { return new Response('Not found', { status: 404 }); }
