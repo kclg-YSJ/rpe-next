@@ -17,6 +17,7 @@
   "scripts": {
     "start": "node tools/serve.mjs --open",
     "copy-assets": "node tools/copy-rpe-assets.mjs",
+    "pwa:precache": "node tools/build-pwa-precache.mjs",
     "generate-easings": "node tools/generate-easings.mjs",
     "serve": "node tools/serve.mjs",
     "test": "node --test test/*.test.mjs",

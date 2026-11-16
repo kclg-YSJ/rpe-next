@@ -39,6 +39,7 @@ import { AssetLibraryPanel } from './asset-library.mjs';
 import { remapAssetReferences, assetReference } from '../platform/asset-library.mjs';
 import { HELP_TEXT } from './help.mjs';
 import { download } from '../platform/files.mjs';
+import { registerPwa } from '../platform/pwa.mjs';
 import { RpeSkin } from './skin.mjs';
 import { ProjectImages } from '../platform/images.mjs';
 import { HitSounds } from '../platform/hitsounds.mjs';
@@ -2663,3 +2664,5 @@ const aboutUpdates = new AboutUpdates(settingsDialog, {
     if (!nativeStorage && hasDocument && libraryProject?.id) sessionStorage.setItem(LOCALE_REOPEN_KEY, libraryProject.id);
   },
 });
+
+registerPwa();
