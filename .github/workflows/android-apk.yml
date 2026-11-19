@@ -14,6 +14,7 @@ on:
 jobs:
   apk:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -28,12 +29,24 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      - uses: android-actions/setup-android@v3
-
-      - name: Install SDK packages
+      # The runner image ships an Android SDK. Use it instead of a third-party setup action, and
+      # print what is there: if this step ever fails, the log says exactly which piece is missing.
+      - name: Prepare Android SDK
         run: |
-          yes | sdkmanager --licenses > /dev/null || true
-          sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+          set -euo pipefail
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          echo "SDK root: $SDK"
+          echo "SDKMANAGER: $(ls "$SDK"/cmdline-tools/*/bin/sdkmanager 2>/dev/null | head -1 || echo none)"
+          SDKMANAGER="$(ls "$SDK"/cmdline-tools/*/bin/sdkmanager 2>/dev/null | head -1 || true)"
+          if [ -n "$SDKMANAGER" ]; then
+            yes | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
+            "$SDKMANAGER" --install "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+          fi
+          echo "platforms:"; ls "$SDK/platforms" 2>/dev/null || true
+          echo "build-tools:"; ls "$SDK/build-tools" 2>/dev/null || true
+          test -f "$SDK/platforms/android-35/android.jar" || { echo "::error::platforms;android-35 is missing"; exit 1; }
+          test -x "$SDK/build-tools/35.0.0/aapt2" || { echo "::error::build-tools;35.0.0 is missing"; exit 1; }
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
 
       - name: Build the web bundle
         run: node tools/build.mjs --pages
@@ -47,15 +60,21 @@ jobs:
         run: |
           node tools/patch-web.mjs
           npx cap sync android
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > android/local.properties
 
+      # The wrapper points at a mirror that is fast in China but slow everywhere else; use the
+      # official distribution here instead.
       - name: Assemble debug APK
         working-directory: android-shell/android
         run: |
+          sed -i 's|^distributionUrl=.*|distributionUrl=https\\://services.gradle.org/distributions/gradle-8.11.1-bin.zip|' gradle/wrapper/gradle-wrapper.properties
+          sed -i 's|^validateDistributionUrl=.*|validateDistributionUrl=true|' gradle/wrapper/gradle-wrapper.properties
           chmod +x gradlew
-          ./gradlew assembleDebug --console=plain
+          ./gradlew assembleDebug --console=plain --stacktrace
 
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: rpe-next-debug-apk
           path: android-shell/android/app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
+          if-no-files-found: warn
