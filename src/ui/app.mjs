@@ -730,6 +730,9 @@ timeline.onWheel = event => {
   if (event.ctrlKey) switchLineWithWheel(event.deltaY);
   else previewWheel(event);
 };
+// Touch drags pan the timeline by seeking; the timeline origin follows the playhead.
+timeline.onSeekBeat = beat => seekBeat(beat);
+globalEvents.timeline.onSeekBeat = beat => seekBeat(beat);
 function switchLineWithWheel(direction) {
   if (!direction) return;
   if (lineSwitcher.enabled) { lineSwitcher.step(direction); if (!preview.visible) lineSwitcher.show(); }

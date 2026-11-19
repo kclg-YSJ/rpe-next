@@ -14,6 +14,7 @@ import { trajectoryEventValue } from '../core/curve-trajectory.mjs';
 import { editorSkinContext, editorCanvasRevision } from './editor-skin-canvas.mjs';
 import { EditorNotePainter } from './editor-note-painter.mjs';
 import { drawEditorJudgement, editorJudgementWidth } from './editor-judgement.mjs';
+import { isTouchPointer, touchMoveGesture, touchGestureMoved, panTimeline } from './touch-pan.mjs';
 import { drawEventCurve, drawEventCurveBatch } from './event-curve.mjs';
 import { eventDisplayIndex, selectedEventGroups } from './event-display-index.mjs';
 import { intervalSelection, extendIntervalSelection } from '../core/selection-interval.mjs';
@@ -69,6 +70,9 @@ export class Timeline {
     this.tempo = new TempoMap(getSession().chart.BPMList);
     this.onWheel = () => {};
     this.onNoteHover = () => {};
+    // Set by the editor to move the playhead; a finger drag pans the view through it.
+    this.onSeekBeat = () => {};
+    this.touchMove = null;
     this.curvePick = null;
     this.eventRects = [];
     this.eventInteraction = new EventInteraction(this, reportError);
@@ -98,7 +102,7 @@ export class Timeline {
     notesCanvas.addEventListener('pointerleave', () => { if (!this.drag) this.cursor = null; this.onNoteHover?.(null); changed(); });
     notesCanvas.addEventListener('pointerdown', event => this.down(event));
     notesCanvas.addEventListener('pointerup', event => this.up(event));
-    notesCanvas.addEventListener('pointercancel', event => { if (this.guideTool?.drag) { this.guideTool.drag = null; this.guideTool.cancelDraft(); } if (this.endRectanglePan(event)) return; const tracing = this.drag?.kind === 'stroke' && this.drag.tracing; this.drag = null; if (tracing) this.getSession().notify(); changed(); });
+    notesCanvas.addEventListener('pointercancel', event => { if (this.guideTool?.drag) { this.guideTool.drag = null; this.guideTool.cancelDraft(); } if (this.touchMove?.pointerId === event.pointerId) this.touchMove = null; if (this.endRectanglePan(event)) return; const tracing = this.drag?.kind === 'stroke' && this.drag.tracing; this.drag = null; if (tracing) this.getSession().notify(); changed(); });
   }
 
   point(event, canvas = this.notesCanvas) {
@@ -432,7 +436,7 @@ export class Timeline {
     }
   }
 
-  cancelPlacement() { this.endRectanglePan(); this.pendingHold = null; this.eventInteraction.pending = null; this.drag = null; this.eventInteraction.drag = null; this.changed(); }
+  cancelPlacement() { this.endRectanglePan(); this.pendingHold = null; this.eventInteraction.pending = null; this.drag = null; this.eventInteraction.drag = null; this.touchMove = null; this.eventInteraction.touchMove = null; this.changed(); }
 
   holdEndpointTarget() {
     if (!this.rpeEventDrag || !this.eventEndpointDragHeld || this.pendingHold || this.rectangleSelection()) return null;
@@ -564,6 +568,7 @@ export class Timeline {
   }
 
   move(event) {
+    if (this.moveTouch(event)) return;
     if (this.rectangleSelection()?.drag.pan) this.updateRectangle(event);
     this.cursor = this.point(event);
     this.cursorLineIndex = this.lineIndexAt(this.cursor.x, this.notesCanvas.clientWidth, 'notes');
@@ -663,7 +668,12 @@ export class Timeline {
     const multiMode = session.multiLineActive;
     const multiPanel = multiMode && this.panelCount('notes') > 1;
     const panBlank = multiPanel && !hit && !this.tool && !this.pendingHold;
-    if (event.button === 0 && (this.pendingHold || this.tool && !event.shiftKey && !event.ctrlKey) && !panBlank) { this.addAtCursor(this.pendingHold ? 2 : this.tool); return; }
+    if (event.button === 0 && (this.pendingHold || this.tool && !event.shiftKey && !event.ctrlKey) && !panBlank) {
+      // A finger cannot hover, so a tap has to wait for pointerup: dragging afterwards pans the
+      // view instead of dropping a note at the touch-down point.
+      if (isTouchPointer(event)) { this.beginTouchMove(event, position, () => { this.cursor = position; this.addAtCursor(this.pendingHold ? 2 : this.tool); }); return; }
+      this.addAtCursor(this.pendingHold ? 2 : this.tool); return;
+    }
     if (multiMode && (event.shiftKey || event.button === 1)) {
       const worldX = position.x + this.multiLineViewportOffset(this.notesCanvas.clientWidth, 'notes');
       this.drag = { kind: 'rectangle', area: 'notes', start: position, startWorldX: worldX, startFactor: this.factorForLine(this.cursorLineIndex ?? session.lineIndex), startSeconds: this.timeAt(position.y), current: position, currentWorldX: worldX, append: true, remove: false };
@@ -694,12 +704,14 @@ export class Timeline {
       this.drag = { kind, selecting: event.ctrlKey || !wasSelected, collapseSelection: this.clickSelectedToSingle !== false && !event.ctrlKey && wasSelected, start: position, current: position, anchor: hit.index, lineIndex: hit.lineIndex, originSeconds: this.tempo.seconds(this.origin, this.factorForLine(hit.lineIndex ?? session.lineIndex)) };
       if (this.noteView?.flow) { this.drag.side = side; this.drag.distanceOffset = this.noteView.distanceAt(hit.item[kind === 'endTime' ? 'endTime' : 'startTime']) - this.noteView.pointerDistance(position.y, side); }
       session.notify();
-    } else if (!multiMode) { this.drag = { kind: 'stroke', start: position, current: position, points: [position], remove: event.button === 2 }; session.notify(); }
+    } else if (isTouchPointer(event)) { this.beginTouchMove(event, position, null); return; }
+    else if (!multiMode) { this.drag = { kind: 'stroke', start: position, current: position, points: [position], remove: event.button === 2 }; session.notify(); }
     if (this.drag?.kind === 'rectangle' && this.noteView?.flow) this.drag.side = this.noteView.sideAt(position.y);
     this.changed();
   }
 
   up(event) {
+    if (this.endTouchMove(event)) return;
     if (this.guideTool?.drag) { try { this.guideTool.up(event); } catch (error) { this.reportError(error); } return; }
     if (this.endRectanglePan(event)) return;
     if (!this.drag) return;
@@ -795,6 +807,37 @@ export class Timeline {
     if (drag.kind === 'stroke' && drag.tracing || drag.selecting && !drag.scrolled && Math.hypot(drag.current.x - drag.start.x, drag.current.y - drag.start.y) <= 4) this.completeSelection('notes', event);
     if (drag.kind === 'stroke' && drag.tracing) session.notify();
     this.changed();
+  }
+
+  // --- finger gestures -------------------------------------------------------------------
+  // A touch on empty timeline space waits here until pointerup: a tap runs `onTap`, a drag pans
+  // the view through time. Mouse input never reaches these three methods.
+
+  beginTouchMove(event, point, onTap) {
+    try { this.notesCanvas.setPointerCapture?.(event.pointerId); } catch { /* not capturable */ }
+    this.touchMove = touchMoveGesture(event, point, onTap);
+    this.changed();
+  }
+
+  moveTouch(event) {
+    const gesture = this.touchMove;
+    if (!gesture || gesture.pointerId !== event.pointerId) return false;
+    if (touchGestureMoved(gesture, event)) {
+      const dy = event.clientY - gesture.lastY; gesture.lastY = event.clientY;
+      panTimeline(this, dy);
+    }
+    this.changed();
+    return true;
+  }
+
+  endTouchMove(event) {
+    const gesture = this.touchMove;
+    if (!gesture || gesture.pointerId !== event.pointerId) return false;
+    this.touchMove = null;
+    try { this.notesCanvas.releasePointerCapture?.(event.pointerId); } catch { /* already released */ }
+    if (!gesture.moved && typeof gesture.onTap === 'function') gesture.onTap();
+    this.changed();
+    return true;
   }
 
   addAtCursor(type) {
