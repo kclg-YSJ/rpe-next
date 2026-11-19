@@ -1,0 +1,61 @@
+# Builds a debug APK for every push to this branch, so testers do not need an Android toolchain.
+#
+# Release builds are signed with a local key and are therefore built by hand
+# (see android-shell/README.md); this workflow only produces the debug artefact.
+name: Android APK
+
+on:
+  push:
+    branches: [android-apk]
+  pull_request:
+    branches: [android-apk]
+  workflow_dispatch:
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: android-shell/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install SDK packages
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+
+      - name: Build the web bundle
+        run: node tools/build.mjs --pages
+
+      - name: Install shell dependencies
+        working-directory: android-shell
+        run: npm ci
+
+      - name: Stage www and sync Capacitor
+        working-directory: android-shell
+        run: |
+          node tools/patch-web.mjs
+          npx cap sync android
+
+      - name: Assemble debug APK
+        working-directory: android-shell/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --console=plain
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rpe-next-debug-apk
+          path: android-shell/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
