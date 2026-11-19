@@ -1,0 +1,14 @@
+﻿{
+  "appId": "com.rpen.next",
+  "appName": "Re:PhiEdit Next",
+  "webDir": "www",
+  "bundledWebRuntime": false,
+  "android": {
+    "allowMixedContent": true,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": true
+  },
+  "server": {
+    "androidScheme": "https"
+  }
+}

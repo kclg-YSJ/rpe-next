@@ -1,0 +1,25 @@
+# Generated web payload and build output
+www/
+android/app/build/
+android/build/
+android/.gradle/
+android/local.properties
+android/capacitor-cordova-android-plugins/
+android/app/src/main/assets/public/
+android/app/src/main/assets/capacitor.config.json
+
+# Dependencies
+node_modules/
+
+# Local signing material — never commit this
+keystore/
+*.jks
+*.keystore
+keystore.properties
+
+# Built packages
+*.apk
+*.aab
+
+# Tooling scratch
+.chrome-profile/
