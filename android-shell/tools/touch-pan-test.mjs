@@ -43,7 +43,22 @@ await new Promise(done => server.listen(0, '127.0.0.1', done));
 const url = `http://127.0.0.1:${server.address().port}/`;
 
 const debugPort = 9413;
-const browser = spawn('C:/Program Files (x86)/Google/Chrome/Application/chrome.exe', [
+// Any Chromium build works; override with CHROME_PATH when the browser lives somewhere else.
+const candidates = [
+  process.env.CHROME_PATH,
+  'C:/Program Files/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe',
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+  '/usr/bin/google-chrome',
+  '/usr/bin/chromium',
+  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+].filter(Boolean);
+let browserPath = null;
+for (const candidate of candidates) {
+  try { await readFile(candidate); browserPath = candidate; break; } catch { /* try the next one */ }
+}
+if (!browserPath) throw new Error('No Chromium browser found; set CHROME_PATH');
+const browser = spawn(browserPath, [
   '--headless=new', `--remote-debugging-port=${debugPort}`,
   `--user-data-dir=${join(here, '.chrome-profile')}`,
   '--no-first-run', '--disable-extensions', '--hide-scrollbars', 'about:blank'
