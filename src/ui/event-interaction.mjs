@@ -8,14 +8,15 @@ import { eventDisplayIndex } from './event-display-index.mjs';
 import { intervalSelection, extendIntervalSelection } from '../core/selection-interval.mjs';
 import { t } from '../i18n.mjs';
 import { expandXyEntries, xyOtherAxis } from '../application/xy-binding.mjs';
+import { isTouchPointer, touchMoveGesture, touchGestureMoved, panTimeline } from './touch-pan.mjs';
 
 export class EventInteraction {
   constructor(timeline, reportError) {
-    this.timeline = timeline; this.canvas = timeline.eventsCanvas; this.reportError = reportError; this.drag = null; this.pending = null;
+    this.timeline = timeline; this.canvas = timeline.eventsCanvas; this.reportError = reportError; this.drag = null; this.pending = null; this.touchMove = null;
     this.canvas.addEventListener('pointerdown', event => this.down(event));
     this.canvas.addEventListener('pointermove', event => this.move(event));
     this.canvas.addEventListener('pointerup', event => this.up(event));
-    this.canvas.addEventListener('pointercancel', event => { if (timeline.endRectanglePan(event)) return; const tracing = this.drag?.kind === 'stroke' && this.drag.tracing; this.drag = null; if (tracing) timeline.getSession().notify(); timeline.changed(); });
+    this.canvas.addEventListener('pointercancel', event => { if (this.touchMove?.pointerId === event.pointerId) this.touchMove = null; if (timeline.endRectanglePan(event)) return; const tracing = this.drag?.kind === 'stroke' && this.drag.tracing; this.drag = null; if (tracing) timeline.getSession().notify(); timeline.changed(); });
     this.canvas.addEventListener('pointerleave', () => { if (!this.drag) this.timeline.eventCursor = null; });
   }
 
@@ -130,6 +131,37 @@ export class EventInteraction {
     this.timeline.changed(); return true;
   }
 
+  // --- finger gestures (see touch-pan.mjs) ------------------------------------------------
+  // A touch on empty event space waits here until pointerup: a tap replaces the desktop click,
+  // a drag pans the view through time. Mouse input never reaches these methods.
+
+  beginTouchMove(event, point, onTap) {
+    try { this.canvas.setPointerCapture?.(event.pointerId); } catch { /* not capturable */ }
+    this.touchMove = touchMoveGesture(event, point, onTap);
+    this.timeline.changed();
+  }
+
+  moveTouch(event) {
+    const gesture = this.touchMove;
+    if (!gesture || gesture.pointerId !== event.pointerId) return false;
+    if (touchGestureMoved(gesture, event)) {
+      const dy = event.clientY - gesture.lastY; gesture.lastY = event.clientY;
+      panTimeline(this.timeline, dy);
+    }
+    this.timeline.changed();
+    return true;
+  }
+
+  endTouchMove(event) {
+    const gesture = this.touchMove;
+    if (!gesture || gesture.pointerId !== event.pointerId) return false;
+    this.touchMove = null;
+    try { this.canvas.releasePointerCapture?.(event.pointerId); } catch { /* already released */ }
+    if (!gesture.moved && typeof gesture.onTap === 'function') gesture.onTap();
+    this.timeline.changed();
+    return true;
+  }
+
   down(event) {
     if (![0, 1, 2].includes(event.button)) return;
     event.preventDefault?.();
@@ -154,10 +186,12 @@ export class EventInteraction {
       ? this.timeline.lineIndexAt(point.x, this.canvas.clientWidth, 'events')
       : session.lineIndex;
     if (event.button === 0 && this.timeline.tool && !rectangle && !event.shiftKey && !event.ctrlKey) {
+      if (isTouchPointer(event)) { this.beginTouchMove(event, point, () => { this.timeline.eventCursor = point; try { this.place(null); } catch (error) { this.timeline.notify?.(error.message, 'error'); } }); return; }
       try { this.place(null); } catch (error) { this.timeline.notify?.(error.message, 'error'); }
       return;
     }
     if (this.pending) {
+      if (isTouchPointer(event)) { this.beginTouchMove(event, point, () => { this.timeline.eventCursor = point; try { this.place(); } catch (error) { this.timeline.notify?.(error.message, 'error'); } }); return; }
       try { this.place(); } catch (error) { this.timeline.notify?.(error.message, 'error'); }
       return;
     }
@@ -167,6 +201,8 @@ export class EventInteraction {
     const multiMode = session.multiLineActive;
     const multiPanel = multiMode && this.timeline.panelCount('events') > 1;
     const panColumns = typeof this.timeline.panEventColumns === 'function';
+    // A finger on empty event space pans time; taps that never move still place events above.
+    if (!rectangle && event.button === 0 && isTouchPointer(event)) { this.beginTouchMove(event, point, null); return; }
     if ((multiPanel || panColumns) && (event.shiftKey || event.button === 1)) {
       const worldX = point.x + this.timeline.multiLineViewportOffset(this.canvas.clientWidth, 'events');
       this.drag = { kind: 'rectangle', area: 'events', start: point, startWorldX: worldX, current: point, currentWorldX: worldX, startFactor: this.timeline.factorForLine(panelLineIndex), startSeconds: this.timeline.timeAt(point.y), append: true, remove: false };
@@ -184,6 +220,7 @@ export class EventInteraction {
   }
 
   move(event) {
+    if (this.moveTouch(event)) return;
     if (this.timeline.rectangleSelection()?.drag.pan) this.timeline.updateRectangle(event);
     const point = this.timeline.point(event, this.canvas);
     this.timeline.eventCursor = point;
@@ -226,6 +263,7 @@ export class EventInteraction {
   }
 
   up(event) {
+    if (this.endTouchMove(event)) return;
     if (this.timeline.endRectanglePan(event)) return;
     if (!this.drag) return;
     if (this.drag.endpoint) {

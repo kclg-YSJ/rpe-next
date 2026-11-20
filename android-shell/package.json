@@ -1,0 +1,22 @@
+{
+  "name": "rpe-next-android-shell",
+  "version": "0.14.1",
+  "private": true,
+  "type": "module",
+  "description": "Android (Capacitor) shell for Re:PhiEdit Next",
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "scripts": {
+    "build:web": "node tools/build-web.mjs",
+    "prepare:www": "node tools/patch-web.mjs",
+    "sync": "node tools/patch-web.mjs && cap sync android",
+    "icons": "powershell -ExecutionPolicy Bypass -File tools/gen-icons.ps1",
+    "apk": "powershell -ExecutionPolicy Bypass -File tools/build-apk.ps1",
+    "test:smoke": "node tools/smoke.mjs",
+    "test:touch": "node tools/touch-pan-test.mjs"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^7.6.10",
+    "@capacitor/cli": "^7.6.10",
+    "@capacitor/core": "^7.6.10"
+  }
+}
